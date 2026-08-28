@@ -1,0 +1,26 @@
+# Config-driven outlet list for RSS ingestion.
+#
+# IMPORTANT: I could not reach any of these hosts from this build environment
+# to verify the feed URLs live - outbound network access here is restricted
+# to a small allowlist (package registries, github, anthropic) and these
+# news domains are not on it (confirmed via 403 from the egress proxy, not a
+# feed-side problem). These three URLs are the outlets' documented/
+# long-standing RSS endpoints, but you MUST verify them yourself before
+# relying on this in Phase 1 - run:
+#
+#   python -m app.ingestion.verify_feeds
+#
+# from a machine with normal internet access. If a URL below is stale, just
+# fix it here - no code changes needed.
+
+- name: The Hindu
+  rss_feed_url: https://www.thehindu.com/news/national/feeder/default.rss
+  is_active: true
+
+- name: The Indian Express
+  rss_feed_url: https://indianexpress.com/feed/
+  is_active: true
+
+- name: NDTV
+  rss_feed_url: https://feeds.feedburner.com/ndtvnews-top-stories
+  is_active: true
