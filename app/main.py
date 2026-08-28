@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import articles, clusters, health, ingestion, processing
+from app.routers import admin_data, articles, clusters, health, ingestion, processing
 
 app = FastAPI(
     title="News Framing Platform API",
@@ -14,3 +14,4 @@ app.include_router(articles.router)
 app.include_router(ingestion.router)
 app.include_router(processing.router)
 app.include_router(clusters.router)
+app.include_router(admin_data.router)

@@ -557,7 +557,9 @@ python -m app.cli process               # cluster + classify all unprocessed art
 python -m app.cli show-clusters         # inspect results
 ```
 
-Or via the API: `POST /process/run` (mirrors `/ingest/run`),
+Or via the API — this matters on Render's free tier specifically, which has
+no shell access to run CLI commands: `POST /admin-data/seed-jurisdictions`,
+`POST /process/run` (mirrors `/ingest/run`),
 `GET /clusters?needs_review_only=true`, and `/articles` now includes
 `cluster_id`, `entity_trigger_override`, and the nested `system_tag`.
 
