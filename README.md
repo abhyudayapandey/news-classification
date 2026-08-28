@@ -137,7 +137,7 @@ Migrations: `alembic/versions/`
 2. `4195c7a673a2_initial_schema.py` — all seven tables, generated via
    `alembic revision --autogenerate` from the models and verified by
    actually applying it to a local Postgres 16 + pgvector instance during
-   development (this sandbox can't reach Neon directly — see §6).
+   development (this sandbox can't reach Neon directly — see §7).
 
 ## 4. RSS ingestion + dedup
 
@@ -206,9 +206,85 @@ confirmed the FastAPI endpoints and CLI both work end-to-end. That's a
 proxy for the pipeline logic being correct; it doesn't substitute for you
 confirming the three real feed URLs above are currently live.
 
-## 6. Setup
+This was confirmed to be a sandbox network policy restriction (a 403 from
+the build environment's egress proxy on every attempt, including to
+`render.com` itself), not a feed problem or a config mistake. §6 below
+covers deploying to Render specifically to get real network access for
+testing this.
 
-### 6.1 Create the free Postgres database (Neon)
+## 6. Deploying to Render (to test ingestion with real network access)
+
+The build environment this project was developed in cannot reach outside
+domains other than a small dev-infra allowlist, so RSS feeds could never be
+fetched live during development (§5). Render's free tier gives the app
+itself a real internet connection to test against.
+
+**Render over Railway**: Railway removed its unconditional free tier in
+August 2024 — new accounts now get a one-time $5 trial credit (30 days),
+after which continued use needs a paid Hobby plan. Render still has a
+genuine, ongoing free tier: a free web service (512 MB RAM, 750 instance
+hours/month shared across your account, no credit card required to sign
+up), and cron jobs are natively supported on the free plan too if you later
+want scheduled ingestion. The only Render free-tier limitation that
+matters here: the web service spins down after 15 minutes idle and takes
+up to ~60s to wake on the next request — fine for manual testing, not
+something to build a real-time product on.
+
+**Important caveat before you start**: this Claude Code session's sandbox
+cannot reach `render.com` either (same policy block, confirmed by testing
+it directly) — so once deployed, I can't hit the deployed URL, trigger
+ingestion, or inspect results myself. You'll need to do the actual
+triggering/checking (browser, curl, or the Render dashboard logs) and paste
+results back here if you'd like help interpreting them. What deploying does
+give us is an environment where the *app* has unrestricted outbound access,
+which is the actual blocker — I just can't self-verify it from inside this
+session.
+
+### 6.1 One-time setup
+
+1. Push this branch to GitHub (already done if you're reading this from the
+   repo).
+2. Sign up at [render.com](https://render.com) — no credit card needed for
+   the free tier.
+3. Dashboard → **New +** → **Blueprint** → connect this GitHub repo. Render
+   will detect `render.yaml` at the repo root and propose the
+   `news-classification-api` web service on the free plan.
+4. Before the first deploy, set these environment variables in the Render
+   dashboard (they're marked `sync: false` in `render.yaml`, meaning Render
+   won't ask you to hardcode them in the file — you set them once, in the
+   dashboard):
+   - `DATABASE_URL` — your Neon connection string, with the `+psycopg`
+     driver suffix, same format as local `.env` (§7.3). Pointing this at
+     the **same** Neon database you use locally is fine and probably what
+     you want — ingested articles land in one place either way. If you'd
+     rather keep deployed-test data separate, create a Neon branch first
+     and use its connection string here instead.
+   - `OPENAI_API_KEY` / `GEMINI_API_KEY` — leave blank, unused in Phase 1.
+5. Deploy. Render runs `pip install -r requirements.txt && alembic upgrade
+   head` as the build step (see the comment in `render.yaml` for why
+   migrations run here instead of a pre-deploy command — that feature
+   needs a paid instance type), then starts the API with `uvicorn`.
+
+### 6.2 Verify against real feeds
+
+Once the deploy finishes, open `https://<your-service>.onrender.com/docs`
+in a browser (the first hit after idle takes up to ~60s to wake up):
+
+1. Try `GET /health` — confirms the deployed app can reach Neon.
+2. Try `POST /ingest/run` — this is the real test: the deployed instance
+   fetches all three configured feeds with unrestricted network access. The
+   response is the same per-outlet summary the CLI prints
+   (`fetched`/`inserted_new`/`inserted_duplicate`/`skipped_existing`/`error`)
+   — an `error` field on any outlet means that specific feed URL is
+   actually broken, not a network policy artifact.
+3. Try `GET /articles?limit=20` — confirms real articles landed in Neon.
+
+If you want me to help interpret the results, paste the `/ingest/run`
+response (or a Render log excerpt) back into this conversation.
+
+## 7. Setup
+
+### 7.1 Create the free Postgres database (Neon)
 
 1. Sign up at [neon.tech](https://neon.tech) (free tier).
 2. Create a project. Note the connection string from the dashboard — it
@@ -216,7 +292,7 @@ confirming the three real feed URLs above are currently live.
 3. `pgvector` ships with Neon; you don't need to install anything, just run
    the migration in step 6.3 (it runs `CREATE EXTENSION IF NOT EXISTS vector`).
 
-### 6.2 Install dependencies
+### 7.2 Install dependencies
 
 ```bash
 python3 -m venv .venv
@@ -224,7 +300,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 6.3 Configure and migrate
+### 7.3 Configure and migrate
 
 ```bash
 cp .env.example .env
@@ -236,7 +312,7 @@ cp .env.example .env
 alembic upgrade head
 ```
 
-### 6.4 Verify feed URLs, then ingest
+### 7.4 Verify feed URLs, then ingest
 
 ```bash
 python -m app.ingestion.verify_feeds   # confirm the 3 configured feeds are live
@@ -244,7 +320,7 @@ python -m app.cli ingest               # run ingestion once
 python -m app.cli show-articles        # confirm articles landed in the DB
 ```
 
-### 6.5 Run the API (optional, for Phase 1 verification)
+### 7.5 Run the API (optional, for Phase 1 verification)
 
 ```bash
 uvicorn app.main:app --reload
@@ -258,7 +334,7 @@ This is **not** the admin review API — that's Phase 3, and it must blind
 the outlet from admins per Section 5. `/articles` is an unauthenticated
 debug endpoint for confirming Phase 1 works, nothing more.
 
-## 7. What's deliberately not here yet
+## 8. What's deliberately not here yet
 
 - Clustering (Phase 2)
 - Establishment pre-filter / pro-anti-apolitical classification (Phase 2)
@@ -268,7 +344,7 @@ debug endpoint for confirming Phase 1 works, nothing more.
 - End-user website (later)
 - Any auth (Admin table has no password/session fields yet)
 
-## 8. Known gaps carried over from the planning doc
+## 9. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology
