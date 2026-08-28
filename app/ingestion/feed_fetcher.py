@@ -11,7 +11,9 @@ otherwise.
 """
 
 import logging
+import socket
 from calendar import timegm
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -19,6 +21,24 @@ import feedparser
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _bounded_socket_timeout(seconds: float):
+    """feedparser has no timeout argument of its own - the documented
+    workaround is scoping the process-wide socket default around the call.
+    Without this, a feed that accepts the connection but never responds (or
+    responds very slowly) hangs the fetch indefinitely, which - since
+    outlets are ingested sequentially in one request - can stall the whole
+    /ingest/run call. Not thread-safe against concurrent fetches, which is
+    fine for the POC's single-worker, one-request-at-a-time ingestion path.
+    """
+    previous = socket.getdefaulttimeout()
+    socket.setdefaulttimeout(seconds)
+    try:
+        yield
+    finally:
+        socket.setdefaulttimeout(previous)
 
 
 @dataclass
@@ -50,7 +70,8 @@ def _extract_published_at(entry: feedparser.FeedParserDict) -> datetime | None:
 
 
 def parse_feed_entries(feed_url: str, timeout_seconds: int = 20) -> list[FetchedEntry]:
-    parsed = feedparser.parse(feed_url, request_headers={"User-Agent": "news-classification-poc/0.1"})
+    with _bounded_socket_timeout(timeout_seconds):
+        parsed = feedparser.parse(feed_url, request_headers={"User-Agent": "news-classification-poc/0.1"})
 
     if parsed.bozo and not parsed.entries:
         # bozo=True with entries present is often just a minor XML quirk feedparser
