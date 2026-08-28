@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,6 +14,20 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     database_url: str
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalize_driver(cls, v: str) -> str:
+        """Neon/Supabase dashboards hand out plain postgresql:// (or
+        postgres://) connection strings with no driver suffix, which makes
+        SQLAlchemy default to psycopg2 - not installed here, since this
+        project standardized on psycopg3. Normalize both to +psycopg so a
+        pasted-as-is connection string just works.
+        """
+        for prefix in ("postgresql://", "postgres://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix) :]
+        return v
 
     app_env: str = "development"
     log_level: str = "INFO"

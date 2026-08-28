@@ -253,12 +253,12 @@ session.
    dashboard (they're marked `sync: false` in `render.yaml`, meaning Render
    won't ask you to hardcode them in the file — you set them once, in the
    dashboard):
-   - `DATABASE_URL` — your Neon connection string, with the `+psycopg`
-     driver suffix, same format as local `.env` (§7.3). Pointing this at
-     the **same** Neon database you use locally is fine and probably what
-     you want — ingested articles land in one place either way. If you'd
-     rather keep deployed-test data separate, create a Neon branch first
-     and use its connection string here instead.
+   - `DATABASE_URL` — your Neon connection string, pasted exactly as Neon
+     gives it to you (§7.3 explains why you don't need to add `+psycopg`
+     by hand). Pointing this at the **same** Neon database you use locally
+     is fine and probably what you want — ingested articles land in one
+     place either way. If you'd rather keep deployed-test data separate,
+     create a Neon branch first and use its connection string here instead.
    - `OPENAI_API_KEY` / `GEMINI_API_KEY` — leave blank, unused in Phase 1.
 5. Deploy. Render runs `pip install -r requirements.txt && alembic upgrade
    head` as the build step (see the comment in `render.yaml` for why
@@ -304,10 +304,13 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env: paste your Neon connection string into DATABASE_URL.
-# IMPORTANT: SQLAlchemy needs the +psycopg driver suffix, e.g.
-#   DATABASE_URL=postgresql+psycopg://user:pass@host/dbname?sslmode=require
-# (Neon's dashboard gives you a plain `postgresql://` string — just add `+psycopg`.)
+# Edit .env: paste your Neon connection string into DATABASE_URL, exactly as
+# Neon's dashboard gives it to you (plain postgresql://...). app/config.py
+# normalizes postgresql:// and postgres:// to the +psycopg driver
+# automatically, so you don't need to edit the string by hand - this project
+# standardized on psycopg3, and a bare postgresql:// URL would otherwise
+# make SQLAlchemy default to psycopg2 (not installed), which fails loudly
+# ("No module named 'psycopg2'") the first time anything touches the DB.
 
 alembic upgrade head
 ```
