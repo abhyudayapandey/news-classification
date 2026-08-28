@@ -175,42 +175,36 @@ is fragile and arguably against some outlets' terms — that's a real
 decision to make before Phase 3's admin review (which needs full body
 text), not something to quietly paper over now.
 
-## 5. Outlet feed URLs — verify before relying on them
+## 5. Outlet feed URLs
 
 `config/outlets.yaml` ships with The Hindu, The Indian Express, and NDTV.
 
-**I could not verify these live.** This build environment's outbound
-network is restricted to an allowlist (package registries, GitHub,
-Anthropic) that doesn't include news domains — every attempt to reach
-`thehindu.com`, `indianexpress.com`, or `feedburner.com` (NDTV's feed host)
-came back as a policy-level 403 from the network's egress proxy, not a
-feed-side error. So these three URLs are the outlets' documented,
-long-standing feed endpoints, not URLs I fetched and confirmed during this
-session.
+**Verified live** (2026-08-28) via the Render deployment described in §6,
+since this project's build environment has no outbound access to news
+domains (confirmed as a 403 policy denial, not a feed or config issue).
+`POST /ingest/run` against the deployed instance returned `error: null` for
+all three outlets and ingested real articles into Neon — see §6.2 for how
+to re-run this check yourself. If a URL goes stale later (outlets do
+restructure feeds occasionally), you'll see it as a non-null `error` on
+that outlet in the `/ingest/run` response; fix it directly in
+`config/outlets.yaml`, nothing else needs to change.
 
-Run this yourself before your first real ingestion run, from a machine with
-normal internet access:
+You can also check feed health without touching the database:
 
 ```bash
 python -m app.ingestion.verify_feeds
 ```
 
-It fetches each configured feed (no DB writes) and reports OK/FAIL/EMPTY
-plus the newest headline for each. If a URL is stale, fix it directly in
-`config/outlets.yaml` — nothing else needs to change.
+It fetches each configured feed and reports OK/FAIL/EMPTY plus the newest
+headline for each — useful for a quick check from any machine with normal
+internet access, without going through the deployed API.
 
-I *did* fully verify the ingestion pipeline itself — fetch → parse →
-dedup → persist → idempotent re-run — against two local mock RSS feeds
-(one deliberately containing a duplicate "PTI wire copy" item), and
-confirmed the FastAPI endpoints and CLI both work end-to-end. That's a
-proxy for the pipeline logic being correct; it doesn't substitute for you
-confirming the three real feed URLs above are currently live.
-
-This was confirmed to be a sandbox network policy restriction (a 403 from
-the build environment's egress proxy on every attempt, including to
-`render.com` itself), not a feed problem or a config mistake. §6 below
-covers deploying to Render specifically to get real network access for
-testing this.
+The ingestion pipeline itself — fetch → parse → dedup → persist →
+idempotent re-run — was also fully verified against two local mock RSS
+feeds (one deliberately containing a duplicate "PTI wire copy" item) during
+development, and separately confirmed idempotent against the real feeds
+above: a second `/ingest/run` call correctly skipped already-ingested
+articles rather than duplicating them.
 
 ## 6. Deploying to Render (to test ingestion with real network access)
 
@@ -281,6 +275,15 @@ in a browser (the first hit after idle takes up to ~60s to wake up):
 
 If you want me to help interpret the results, paste the `/ingest/run`
 response (or a Render log excerpt) back into this conversation.
+
+**Status**: done — deployed at `news-classification-api-qp8a.onrender.com`,
+`/ingest/run` returned `error: null` for all three outlets, and a repeat
+call correctly no-op'd on already-seen articles (idempotent re-ingestion
+confirmed against real feeds, not just local mocks). One real bug was
+caught and fixed along the way: the feed fetcher accepted a
+`timeout_seconds` parameter that was never actually applied, so a feed
+that hung without erroring could have stalled `/ingest/run` indefinitely —
+see the "Fix: actually enforce the feed fetch timeout" commit.
 
 ## 7. Setup
 
