@@ -1,20 +1,23 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.constants import EMBEDDING_DIM
 from app.db import Base
 
 
 class Article(Base):
-    """Section 6: Article.
+    """Section 6: Article, extended in Phase 2 with embedding/clustering
+    fields not present in the original spec.
 
-    cluster_id and system_tag stay nullable in Phase 1 - nothing populates
-    them until Phase 2 (clustering) and the classifier exist. duplicate_of_id
-    implements the Section 5 wire-copy dedup: a non-null value means "this
-    row is a verbatim duplicate of another outlet's copy of the same wire
-    story", and Phase 2/3 queries should filter WHERE duplicate_of_id IS NULL
-    to get one canonical article per story before clustering/review.
+    duplicate_of_id implements the Section 5 wire-copy dedup: a non-null
+    value means "this row is a verbatim duplicate of another outlet's copy
+    of the same wire story". Clustering/classification (Phase 2) and review
+    (Phase 3) should filter WHERE duplicate_of_id IS NULL to work on one
+    canonical article per story - the pipeline in app/processing never
+    processes a duplicate row directly.
     """
 
     __tablename__ = "articles"
@@ -40,8 +43,39 @@ class Article(Base):
 
     # Copy of the winning review's final_tag once published (Section 6:
     # "POC = copy of the single review; future = e.g. majority vote of
-    # reviews[]"). Null until an admin has reviewed the article.
+    # reviews[]"). Null until an admin has reviewed the article - EXCEPT for
+    # apolitical articles, which the pipeline sets directly (Section 4.3:
+    # apolitical skips straight to publish, no review needed).
     published_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # --- Phase 2 additions (not in the original Section 6 spec) ---
+
+    # Local MiniLM embedding of (headline + body_text), used for clustering
+    # and as the substrate for embedding-similarity zero-shot classification
+    # (see app/llm/local_classification.py). Fixed dimension because only
+    # one embedding provider is active at a time in this schema - adding a
+    # second provider's embeddings (different dimension) would need a new
+    # column or table, not a resize of this one. Not indexed (no ivfflat/
+    # hnsw) - POC-scale full-scan cosine distance via pgvector's <=>
+    # operator is fast enough and needs no index maintenance.
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
+    # Which model produced `embedding`, e.g. "local:sentence-transformers/
+    # all-MiniLM-L6-v2" - recorded for provenance/debugging. Only one
+    # embedding provider is active at a time (see EMBEDDING_PROVIDER in
+    # config), so clustering never actually compares embeddings from two
+    # different models today; if a second provider is ever added, this
+    # column is what a mixed-model guard in app/processing/clustering.py
+    # would need to check against - not implemented now since it can't
+    # happen yet.
+    embedding_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    # Section 4.3's entity-trigger net fired: the classifier's first pass
+    # called this article apolitical, but it mentions a political entity
+    # (MLA/MP, ministry, party, government tender), so the apolitical tag
+    # was overridden and it was routed through pro/anti classification
+    # instead. Recorded so a future admin queue can prioritize/flag these -
+    # they're exactly the cases Section 4.3 says need a second look.
+    entity_trigger_override: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

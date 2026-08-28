@@ -32,6 +32,14 @@ class SystemTag(Base):
     jurisdiction: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ruling_party: Mapped[str | None] = mapped_column(String(128), nullable=True)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    # Which ClassificationProvider produced this tag, e.g. "local",
+    # "openai:gpt-4o-mini", "gemini:gemini-1.5-flash". This table stays
+    # strictly 1:1 with Article per Section 6 (system_tag is singular in the
+    # spec, unlike reviews[]) - re-classifying an article with a different
+    # provider overwrites this row rather than adding a second one. Manual
+    # side-by-side provider comparison is a separate CLI utility
+    # (`python -m app.cli compare-providers`) that does not write here.
+    provider: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     article: Mapped["Article"] = relationship(back_populates="system_tag")

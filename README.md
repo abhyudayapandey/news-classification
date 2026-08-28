@@ -6,10 +6,12 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**This is Phase 1 only**: project scaffolding, the full database schema,
-and RSS ingestion with basic wire-copy dedup. No clustering, no
-classification, no admin UI, no website yet. Everything here is built so
-those later phases slot in without a schema rewrite.
+**Phases 1 and 2 are built**: project scaffolding, the full database schema,
+RSS ingestion with wire-copy dedup (Phase 1), and embedding-based topic
+clustering + pro/anti/apolitical classification with jurisdiction/ruling-
+party resolution (Phase 2 — see §9). No admin UI, no website yet — those
+are Phase 3. Everything here is built so that phase slots in without a
+schema rewrite.
 
 ---
 
@@ -52,27 +54,22 @@ in Phase 1 calls either API. If Phase 2 needs something paid beyond what
 you already have credit for, I'll flag it before adding it, with the free
 alternative I considered and why it fell short.
 
-### Provider-swappable by design, for Phase 2
+### Provider-swappable by design (built in Phase 1, populated in Phase 2)
 
-Phase 2 (clustering + classification) needs embeddings and an LLM call.
-Per your instruction, the seam for that is built now even though nothing
-uses it yet:
+Phase 1 built the seam - `app/llm/base.py`'s `EmbeddingProvider` and
+`ClassificationProvider` interfaces, plus `EMBEDDING_PROVIDER`/
+`LLM_PROVIDER` config - before either provider existed, specifically so
+Phase 2 could implement providers without redesigning how calling code
+reaches them. Phase 2 (§9) delivered on that: `app/llm/factory.py` now
+returns a concrete provider per config, calling code never hardcodes one,
+and OpenAI/Gemini are real, working implementations behind the same
+interface as the local model - flipping `LLM_PROVIDER` is the entire
+difference between free and billed. See §9.3 for the resource tradeoffs
+behind which provider does what.
 
-- `app/llm/base.py` defines `EmbeddingProvider` and `ClassificationProvider`
-  as abstract interfaces, plus factory functions that will read
-  `settings.embedding_provider` / `settings.llm_provider`.
-- `.env` / `app/config.py` already carry `EMBEDDING_PROVIDER`,
-  `LLM_PROVIDER` (`local` / `openai` / `gemini`), plus model name and API
-  key fields for all three.
-- Phase 2 work is then: implement one class per provider per interface, and
-  the factory picks the right one from config. Calling code (the classifier,
-  the clustering job) never hardcodes a provider — you'll be able to run the
-  free local model and either paid API side-by-side by flipping an env var.
-- The `vector` Postgres extension is enabled now (see migration
-  `1f76f92005cd_enable_pgvector_extension.py`) so Phase 2 can add an
-  embedding column without a fresh extension migration. No embedding
-  columns exist yet — that's Phase 2's job once clustering is actually being
-  built.
+The `vector` Postgres extension enabled in Phase 1 is now in active use:
+`articles.embedding` (pgvector, 384 dimensions) stores the local model's
+output - see §9.1.
 
 ---
 
@@ -80,21 +77,37 @@ uses it yet:
 
 ```
 app/
-  main.py              FastAPI app (health, articles, manual ingest trigger)
+  main.py              FastAPI app (health, articles, ingestion, processing, clusters)
   config.py            Settings from .env (pydantic-settings)
   db.py                SQLAlchemy engine/session, declarative Base
-  cli.py                Manual CLI: `python -m app.cli ingest|show-articles`
-  models/               SQLAlchemy models — one file per Section 6 entity
-  schemas/              Pydantic response models for the API
-  routers/               FastAPI routers (health, articles, ingestion)
-  ingestion/
-    outlets_config.py   Loads config/outlets.yaml, upserts into `outlets`
-    feed_fetcher.py      Fetches + parses one RSS feed into normalized entries
-    dedup.py             Section 5 wire-copy dedup (content hashing)
-    pipeline.py          Orchestrates one full ingestion run
-    verify_feeds.py      Standalone feed health check (no DB) — see below
-  llm/
-    base.py              Phase 2 provider interfaces (not used yet)
+  constants.py         Fixed technical constants (e.g. EMBEDDING_DIM)
+  cli.py               Manual CLI - ingest, process, show-*, seed-jurisdictions, etc.
+  models/              SQLAlchemy models — one file per Section 6 entity (+ Phase 2 fields)
+  schemas/             Pydantic response models for the API
+  routers/             FastAPI routers (health, articles, ingestion, processing, clusters)
+  ingestion/           Phase 1: RSS fetch, dedup, ingestion pipeline
+    outlets_config.py  Loads config/outlets.yaml, upserts into `outlets`
+    feed_fetcher.py    Fetches + parses one RSS feed into normalized entries
+    dedup.py           Section 5 wire-copy dedup (content hashing)
+    pipeline.py        Orchestrates one full ingestion run
+    verify_feeds.py    Standalone feed health check (no DB)
+  processing/          Phase 2: clustering + classification orchestration
+    clustering.py      Incremental nearest-neighbor clustering (pgvector)
+    topics.py          Topic label assignment (embedding similarity)
+    entity_triggers.py Section 4.3 entity-trigger safety net (keyword/regex)
+    jurisdiction.py    Jurisdiction guessing + ruling-party lookup
+    pipeline.py         Orchestrates one full processing run
+  llm/                 Embedding + classification providers
+    base.py            Provider interfaces (EmbeddingProvider, ClassificationProvider)
+    factory.py         Selects concrete provider from config
+    local_embedding.py Local, free (fastembed/onnxruntime, no PyTorch)
+    local_classification.py  Local, free (embedding-similarity zero-shot)
+    openai_provider.py Paid, opt-in
+    gemini_provider.py Paid, opt-in
+    schema.py          Shared structured-output schema/prompt (OpenAI + Gemini)
+    similarity.py       Cosine similarity / softmax helpers
+  data/
+    jurisdiction_seed.py  Section 4.2 lookup table seed data
 alembic/                 Migrations (env.py wired to app's models/settings)
 config/
   outlets.yaml           Config-driven outlet list (name + RSS URL)
@@ -102,17 +115,17 @@ config/
 
 ## 3. Database schema (Section 6, implemented as-is)
 
-All seven entities from the planning doc's Section 6 are modeled now, even
-though Phase 1 only ever populates `Outlet` and `Article`:
+All seven entities from the planning doc's Section 6 are modeled now. As of
+Phase 2, everything except `reviews` and `admins` is populated:
 
-| Table | Populated in Phase 1? | Notes |
+| Table | Populated as of | Notes |
 |---|---|---|
-| `outlets` | Yes | Synced from `config/outlets.yaml` on every ingestion run |
-| `articles` | Yes | `cluster_id`, `published_tag` stay NULL until later phases |
-| `system_tags` | No (table exists, empty) | 1:1 with `articles`; Phase 2's classifier writes here |
+| `outlets` | Phase 1 | Synced from `config/outlets.yaml` on every ingestion run |
+| `articles` | Phase 1 (+ Phase 2 fields) | `published_tag` stays NULL until Phase 3 review, except apolitical articles (Phase 2 sets it directly) |
+| `story_clusters` | Phase 2 | Populated by `app/processing/clustering.py` |
+| `system_tags` | Phase 2 | 1:1 with `articles`; written by `app/processing/pipeline.py` |
+| `jurisdiction_ruling_parties` | Phase 2 (seeded) | Manually maintained lookup table — see §9.4 for what's seeded and what needs verification |
 | `reviews` | No (table exists, empty) | One-to-many now so multi-admin reconciliation can be added later without a migration; Phase 3 only ever inserts one row per article |
-| `story_clusters` | No (table exists, empty) | Phase 2's clustering job populates this |
-| `jurisdiction_ruling_parties` | No (table exists, empty) | Manually maintained lookup table — see the planning doc's warning about keeping it current as governments change |
 | `admins` | No (table exists, empty) | No auth fields yet; those land with the Phase 3 admin UI |
 
 Two fields you specifically asked to keep intact:
@@ -342,15 +355,262 @@ debug endpoint for confirming Phase 1 works, nothing more.
 
 ## 8. What's deliberately not here yet
 
-- Clustering (Phase 2)
-- Establishment pre-filter / pro-anti-apolitical classification (Phase 2)
 - Admin review queue, blinding, self-reference redaction (Phase 3)
 - Super-admin analytics dashboard (Phase 3) — the `system_tags` and
   `reviews` schema is ready for it, nothing more
 - End-user website (later)
 - Any auth (Admin table has no password/session fields yet)
+- OpenAI/Gemini *embedding* providers (only classification has paid
+  providers so far — see §11)
 
-## 9. Known gaps carried over from the planning doc
+## 9. Phase 2: Clustering + Classification
+
+Builds Section 7 pipeline stages 3-5 (embed, cluster, establishment
+pre-filter, pro/anti/apolitical classification + jurisdiction/ruling-party)
+and both Section 4.3 safety nets (entity-trigger override, cluster
+re-evaluation). Still no admin UI, no website — this phase makes the
+pipeline produce correct, queryable rows in the database; Phase 3 is what
+puts a human and a UI in front of them.
+
+### 9.1 Embeddings + clustering
+
+- **Local embedding provider**: `app/llm/local_embedding.py`, via
+  [fastembed](https://github.com/qdrant/fastembed) running
+  `sentence-transformers/all-MiniLM-L6-v2` (384-dim) through **onnxruntime,
+  not PyTorch**. This is the one deliberate substitution from what was
+  asked: `sentence-transformers`-the-library pulls in PyTorch, which alone
+  needs several hundred MB of RAM even for a small model — tight to
+  nonviable inside Render's free-tier 512MB web service. fastembed runs the
+  *exact same model weights* through a much lighter runtime (onnxruntime is
+  ~66MB installed, no PyTorch at all) — same model, same output vectors,
+  different execution engine. `LOCAL_EMBEDDING_MODEL` in `.env` still names
+  the model in the usual Hugging Face format.
+- **Storage**: `articles.embedding` (`pgvector`, fixed at 384 dimensions —
+  see `app/constants.py`) plus `articles.embedding_model` recording which
+  model produced it. Not indexed (no ivfflat/hnsw) — at POC scale, a full
+  scan with pgvector's `<=>` cosine-distance operator is fast enough and
+  needs no index tuning.
+- **Clustering algorithm**: incremental nearest-neighbor, not HDBSCAN.
+  Articles arrive continuously via ingestion, not as one static batch to
+  cluster at once — "does this new article match an existing cluster?" is
+  the actual shape of the problem, and re-running a batch algorithm like
+  HDBSCAN from scratch on every ingestion run doesn't fit that. For each
+  new article, `app/processing/clustering.py` finds the nearest other
+  canonical article (`duplicate_of_id IS NULL`) published within
+  `CLUSTERING_TIME_WINDOW_HOURS` (default 48h) and joins its cluster if
+  cosine similarity clears `CLUSTERING_SIMILARITY_THRESHOLD` (default
+  0.55), else starts a new cluster. **Both defaults are untuned
+  starting points** — this build environment can't download the embedding
+  model (see §10), so there was no way to run real articles through this
+  and calibrate the threshold against actual clustering quality. Expect to
+  adjust it after looking at real output.
+- **Topic labeling**: `app/processing/topics.py` assigns each new cluster
+  one of a fixed set of topic labels (Politics, Economy & Business, Sports,
+  ...) via the same embedding-similarity zero-shot technique described
+  below — compare the cluster's triggering article embedding to each
+  topic's description embedding, take the closest. Edit `TOPIC_LABELS` to
+  change the taxonomy; no other code changes needed.
+
+### 9.2 Establishment pre-filter + entity-trigger net (Section 4.3)
+
+Two independent layers, deliberately not merged into one:
+
+1. **Pre-filter**: the classification provider's own political-vs-apolitical
+   call (see §9.3) — this is the "is this article establishment-relevant at
+   all?" question from Section 7 stage 4.
+2. **Entity-trigger net** (`app/processing/entity_triggers.py`): a plain
+   keyword/regex list — political titles (MLA, MP, Chief Minister, ...),
+   `Ministry of ...` patterns, government tender/contract phrases, and
+   ~25 national/state party names. When the pre-filter says "apolitical"
+   but this net finds a hit anyway, the apolitical call is overridden and
+   the article is routed through `classify_forcing_establishment_relevant()`
+   instead (implemented on every provider — see `app/llm/base.py`), which
+   must return pro/anti + jurisdiction, never apolitical. This is
+   deliberately *not* an ML/NER model: Section 4.3 specifies this net as a
+   safety net independent of the classifier's own judgment, so it should
+   fail differently than the classifier does — a transparent, zero-cost,
+   trivially-editable list does that better than a second model would.
+   `Article.entity_trigger_override` records when this fired, so a future
+   admin queue can prioritize exactly the cases Section 4.3 flags as
+   needing a second look.
+
+### 9.3 Pro/anti/apolitical classification — the honest resource writeup
+
+You asked directly whether a local classifier is realistically deployable
+on Render's free tier. Here's the straight answer:
+
+**A separate local zero-shot/NLI model, stacked on top of the embedding
+model, is not realistically viable inside Render's 512MB free container.**
+That's two ML models competing for RAM that isn't there — even a "small"
+NLI model would push total memory well past what's available alongside
+FastAPI, SQLAlchemy, and the embedding model already resident.
+
+Instead, `app/llm/local_classification.py` implements the local provider as
+**embedding-similarity zero-shot classification**, reusing the exact
+MiniLM model already loaded for clustering: compare the article's
+embedding to a handful of reference-phrase embeddings ("this article
+criticizes the government" vs. "this article praises the government",
+etc.) and take the closer one, with a temperature-scaled softmax over the
+similarities for `confidence_score`. This is a real, working technique —
+not a fake placeholder — and it costs **zero additional RAM**, which is
+what actually makes local classification Render-viable at all.
+
+The tradeoff, stated plainly: this is fundamentally a topical/semantic-
+similarity signal, not a reasoning one. It's reasonably suited to the
+establishment-relevance split (political-vs-not is close to a topic
+distinction) but meaningfully weaker at pro-vs-anti framing, which is a
+subtler stance judgment than embeddings are naturally good at. Treat the
+local provider as a free, always-available baseline for exercising the
+pipeline correctly — not as a fair quality comparison against what OpenAI
+or Gemini will produce. If you want real local-LLM-quality classification
+without paying, that needs a model with actual reasoning capability run on
+a machine with normal RAM (your own laptop, not this Render container) —
+that's a real option, just not one this deployment target can host.
+
+**OpenAI and Gemini providers** (`app/llm/openai_provider.py`,
+`app/llm/gemini_provider.py`) are fully implemented — structured JSON
+output via each SDK's native schema support (`chat.completions.parse` /
+`GenerateContentConfig(response_schema=...)`), same prompt and output
+shape for both so results are directly comparable. Neither is called
+unless `LLM_PROVIDER=openai` or `gemini` **and** the matching API key is
+set — with `LLM_PROVIDER=local` (the default), no code path can reach
+either SDK, so there's no risk of an accidental charge. Every call once
+enabled is billed by your account.
+
+**Comparing providers**: `system_tags` stays strictly one row per article
+(the planning doc's Section 6 specifies `system_tag` as singular, not an
+array like `reviews[]`), so it can't hold multiple providers' opinions on
+the same article side by side. For genuine comparison once you've funded
+OpenAI/Gemini, use:
+
+```bash
+python -m app.cli compare-providers --providers local,openai,gemini --limit 10
+```
+
+This runs every named provider on the same sample of articles and prints
+results side by side — it does **not** write to the database, so comparing
+never affects what's actually classified.
+
+Every classification produces `classification` + `jurisdiction` +
+`confidence_score`; `ruling_party` is resolved separately and
+deterministically (next section), never guessed by the classifier.
+
+### 9.4 Jurisdiction → ruling party lookup (Section 4.2)
+
+`app/processing/jurisdiction.py` splits this into two genuinely different
+tasks:
+
+- **Guessing which jurisdiction an article concerns** requires
+  understanding the text - a real classification task. The local provider
+  does this with a keyword match against Indian state names (`centre` if
+  none found); OpenAI/Gemini determine it as part of their own structured
+  output, which should be more accurate since it's contextual rather than
+  keyword-based. One deliberate special case: "Delhi"/"New Delhi" alone is
+  treated as a Centre reference (it's the national capital and appears
+  constantly as a dateline), not a Delhi-state signal — only phrases like
+  "Delhi government" or "Delhi Chief Minister" count as a state:Delhi
+  match.
+- **Resolving the ruling party for a known jurisdiction + date** is a pure
+  lookup against `jurisdiction_ruling_parties`, exactly as Section 4.2
+  specifies ("resolved via a date-ranged lookup table, not hardcoded").
+
+**Seed data — please read before trusting it.** `app/data/jurisdiction_seed.py`
+seeds Centre + the ~20 most populous states. Run it once:
+
+```bash
+python -m app.cli seed-jurisdictions
+```
+
+This data has a real, specific accuracy problem worth calling out rather
+than glossing over: my knowledge of Indian politics has a training cutoff
+of January 2026, and this was built in a session dated August 2026 — a
+seven-month gap. Assembly elections were expected in that window for
+**West Bengal, Kerala, Tamil Nadu, Assam, and Bihar** — those five rows are
+flagged `STALE RISK` directly in the seed file and are likely already
+wrong by the time you read this. Every other row reflects my best
+knowledge as of the cutoff and is more likely still current (most state
+governments run fixed 5-year terms with nothing due), but "more likely
+current" is not "verified" — this table is explicitly designed to be
+hand-maintained (per the planning doc's own warning about silent
+mislabeling as governments change), and seeding it once doesn't change
+that upkeep is on you going forward. Add a new row with its own
+`effective_from` rather than editing an existing one when something
+changes, so date-ranged lookups on older articles stay correct.
+
+### 9.5 Cluster re-evaluation (Section 4.3)
+
+Implemented in `app/processing/pipeline.py`: when a newly-processed article
+**joins an existing cluster** (not one it just created) and its
+classification is not apolitical, the whole cluster's `needs_review` is set
+`True` — not just the new article — exactly as Section 4.3 specifies,
+since clustering and tagging aren't fully independent stages. Verified with
+a scripted test: a second, differently-framed article joining an existing
+cluster correctly flags the cluster, while an article starting a brand new
+cluster does not.
+
+### 9.6 Running it
+
+```bash
+python -m app.cli seed-jurisdictions    # once, before first use
+python -m app.cli verify-local-models   # confirms the embedding model downloads/loads (see §10)
+python -m app.cli process               # cluster + classify all unprocessed articles
+python -m app.cli show-clusters         # inspect results
+```
+
+Or via the API: `POST /process/run` (mirrors `/ingest/run`),
+`GET /clusters?needs_review_only=true`, and `/articles` now includes
+`cluster_id`, `entity_trigger_override`, and the nested `system_tag`.
+
+## 10. What's verified vs. what needs checking on real infrastructure
+
+Same situation as Phase 1's RSS feeds (§5), for the same reason: this build
+environment's network is restricted to a small dev-infra allowlist and
+cannot reach Hugging Face Hub (confirmed via direct test — a 403 from the
+egress proxy) or the OpenAI/Gemini APIs with real credentials.
+
+**Fully verified locally** (against a real Postgres 16 + pgvector instance,
+using synthetic embeddings and mocked providers so the model download
+isn't required to test the logic around it):
+
+- The clustering algorithm's decision logic — same-story articles join a
+  cluster, unrelated ones don't, articles outside the time window don't,
+  via real pgvector cosine-distance queries
+- The full pipeline's orchestration — embed → cluster → classify → entity-
+  trigger override → jurisdiction/ruling-party resolution → SystemTag
+  persistence → apolitical publish-skip → cluster re-evaluation — as one
+  scripted scenario covering all of the above together
+- Idempotency: a second `process` run touches zero already-processed
+  articles
+- Graceful failure: when a provider call fails (tested for real, by
+  actually hitting the network-blocked Hugging Face download inside a live
+  API request), the error is caught per-article and reported in the
+  response rather than crashing the endpoint
+- The entity-trigger net's keyword matching, including two real regex bugs
+  caught and fixed during testing (see the "Fix:" prefixed commits) —
+  short acronyms like "mp" false-matching inside ordinary words, and `\b`
+  silently failing to match terms ending in punctuation like "CPI(M)"
+- OpenAI/Gemini provider construction and structured-output schema
+  building (both SDKs accept the shared Pydantic schema without error)
+
+**Not verified — needs a real deploy or your own machine, same as §5**:
+
+- The local embedding model actually downloading and producing real
+  vectors (`python -m app.cli verify-local-models` is the check to run)
+- Real clustering/classification *quality* on actual articles — the
+  algorithm's logic is proven, but `CLUSTERING_SIMILARITY_THRESHOLD` and
+  the local classifier's confidence calibration are untuned defaults, not
+  validated against real embeddings
+- Whether the local embedding model's RAM footprint actually fits Render's
+  512MB in practice, alongside the rest of the app — the ~66MB onnxruntime
+  install size supports the case that it should, but "should fit" isn't
+  "confirmed to fit"
+- Live OpenAI/Gemini API calls (no real keys, and this sandbox can't reach
+  `api.openai.com` regardless — `generativelanguage.googleapis.com`
+  happened to respond, likely because `*.googleapis.com` is allowlisted for
+  unrelated cloud-tooling reasons, but no real key was available to test an
+  authenticated call)
+
+## 11. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology

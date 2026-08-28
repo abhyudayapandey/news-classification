@@ -5,10 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Central app config, populated from environment variables / .env.
 
-    Phase 2 fields (embedding_provider, llm_provider, and the provider API
-    keys/models) are read here but not consumed by any code yet - they exist
-    so the config surface is stable across phases. See app/llm/base.py for
-    the interface that will read them.
+    embedding_provider/llm_provider select which app/llm implementation the
+    factory functions in app/llm/factory.py return - see that module for
+    what each value means.
     """
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -32,7 +31,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
 
-    # Phase 2 - not used in Phase 1
+    # Provider selection - "local" costs nothing and needs no key. "openai"/
+    # "gemini" require the matching *_api_key below and will make billed API
+    # calls once selected - never flip these without meaning to.
     embedding_provider: str = "local"
     llm_provider: str = "local"
     local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-1.5-flash"
+
+    # Clustering (Section 7 stage 3). Both are starting points, not
+    # validated thresholds - this build environment can't download the
+    # embedding model to tune them against real data (see README Phase 2
+    # section), so expect to adjust similarity_threshold after looking at
+    # real clustering output.
+    clustering_time_window_hours: int = 48
+    clustering_similarity_threshold: float = 0.55
 
 
 settings = Settings()
