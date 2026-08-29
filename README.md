@@ -514,28 +514,37 @@ tasks:
   lookup against `jurisdiction_ruling_parties`, exactly as Section 4.2
   specifies ("resolved via a date-ranged lookup table, not hardcoded").
 
-**Seed data — please read before trusting it.** `app/data/jurisdiction_seed.py`
-seeds Centre + the ~20 most populous states. Run it once:
+**Seed data.** `app/data/jurisdiction_seed.py` seeds Centre + the ~20 most
+populous states:
 
 ```bash
-python -m app.cli seed-jurisdictions
+python -m app.cli seed-jurisdictions       # or POST /admin-data/seed-jurisdictions
 ```
 
-This data has a real, specific accuracy problem worth calling out rather
-than glossing over: my knowledge of Indian politics has a training cutoff
-of January 2026, and this was built in a session dated August 2026 — a
-seven-month gap. Assembly elections were expected in that window for
-**West Bengal, Kerala, Tamil Nadu, Assam, and Bihar** — those five rows are
-flagged `STALE RISK` directly in the seed file and are likely already
-wrong by the time you read this. Every other row reflects my best
-knowledge as of the cutoff and is more likely still current (most state
-governments run fixed 5-year terms with nothing due), but "more likely
-current" is not "verified" — this table is explicitly designed to be
-hand-maintained (per the planning doc's own warning about silent
-mislabeling as governments change), and seeding it once doesn't change
-that upkeep is on you going forward. Add a new row with its own
-`effective_from` rather than editing an existing one when something
-changes, so date-ranged lookups on older articles stay correct.
+My knowledge of Indian politics has a training cutoff of January 2026, and
+this was originally built in a session dated August 2026 — a seven-month
+gap that made five rows (West Bengal, Kerala, Tamil Nadu, Assam, Bihar)
+outright guesses about elections I couldn't have known the outcome of.
+**All five have since been corrected against user-verified, current
+results**: West Bengal (BJP), Tamil Nadu (TVK — a new party, also added to
+the entity-trigger net's party list since it postdates this model's
+training data too), and Kerala (Congress-led UDF) all changed hands in the
+May 4, 2026 elections; Assam (BJP) and Bihar (JD(U)-led NDA, confirmed
+against the Nov 2025 result) did not. The old rows for the three states
+that changed were closed out with a matching `effective_to` rather than
+edited in place, per Section 4.2's date-ranged design — an article from
+2023 still correctly resolves to the government that was actually in power
+then. `seed_jurisdictions()` is idempotent and handles both inserting new
+rows and closing out existing ones automatically; re-running it is safe.
+
+Every other row reflects my best knowledge as of the cutoff and is more
+likely still current (most state governments run fixed 5-year terms with
+nothing due), but "more likely current" is not "verified" — this table is
+explicitly designed to be hand-maintained (per the planning doc's own
+warning about silent mislabeling as governments change), and correcting it
+once doesn't change that upkeep is on you going forward. Add a new row
+with its own `effective_from` (and close out the old one) rather than
+editing a row in place when something changes next.
 
 ### 9.5 Cluster re-evaluation (Section 4.3)
 

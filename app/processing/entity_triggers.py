@@ -102,6 +102,14 @@ _POLITICAL_PARTIES = [
     "lok janshakti party",
     "jd(u)",
     "janata dal (united)",
+    # Tamilaga Vettri Kazhagam - founded too recently to be in this model's
+    # training data; added after winning the May 2026 Tamil Nadu election
+    # (see app/data/jurisdiction_seed.py). A reminder that this list needs
+    # the same "did a new party show up" maintenance as the ruling-party
+    # lookup table - a new/regional party won't be in any pretrained
+    # model's knowledge until well after it matters.
+    "tvk",
+    "tamilaga vettri kazhagam",
 ]
 _PARTY_PATTERNS = [_boundary_pattern(party) for party in _POLITICAL_PARTIES]
 

@@ -117,11 +117,11 @@ def cmd_seed_jurisdictions(_args: argparse.Namespace) -> int:
 
     db = SessionLocal()
     try:
-        inserted = seed_jurisdictions(db)
+        inserted, updated = seed_jurisdictions(db)
     finally:
         db.close()
-    print(f"Inserted {inserted} new jurisdiction-ruling-party row(s).")
-    print("Review app/data/jurisdiction_seed.py's module docstring - several rows are flagged as needing verification.")
+    print(f"Inserted {inserted} new row(s), updated (closed out) {updated} existing row(s).")
+    print("Review app/data/jurisdiction_seed.py's module docstring for what's confirmed vs. still needs verification.")
     return 0
 
 

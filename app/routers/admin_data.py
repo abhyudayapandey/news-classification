@@ -15,8 +15,9 @@ router = APIRouter(prefix="/admin-data", tags=["admin-data"])
 
 @router.post("/seed-jurisdictions")
 def trigger_seed_jurisdictions(db: Session = Depends(get_db)) -> dict:
-    inserted = seed_jurisdictions(db)
+    inserted, updated = seed_jurisdictions(db)
     return {
         "inserted": inserted,
-        "note": "Some rows are flagged STALE RISK in app/data/jurisdiction_seed.py - verify before trusting them.",
+        "updated": updated,
+        "note": "See app/data/jurisdiction_seed.py's module docstring for what's confirmed vs. still needs verification.",
     }
