@@ -811,10 +811,33 @@ paragraphs were kept intact.
 - **Graceful fallback, not a silent gap.** If a scrape fails (blocked,
   timed out, extraction found nothing), `scrape_error` records why, and
   the review/compare pages fall back to the RSS teaser with the failure
-  reason shown — verified for both "teaser exists, scrape failed" and
-  "neither exists" cases. The scraped text (when present) goes through
-  the same blinding as the RSS teaser — verified a self-reference inside
-  scraped text ("this newspaper") is correctly redacted.
+  reason shown — verified for the "teaser exists, scrape failed" case.
+  The scraped text (when present) goes through the same blinding as the
+  RSS teaser — verified a self-reference inside scraped text ("this
+  newspaper") is correctly redacted.
+- **Rejects extraction that looks like an author bio, not an article.**
+  Some outlets embed a prominent "About the author" credibility block
+  (name, years of experience, beat coverage — an SEO/E-E-A-T pattern)
+  that can outrank the real article under `trafilatura`'s content-block
+  selection, producing confident-looking but entirely wrong text. A
+  heuristic (`looks_like_author_bio` in `app/review/scraping.py`) rejects
+  extracted text shaped like a bio opening ("`<Name> is a/an
+  <editor/correspondent/...>`" plus career-history phrasing) and records
+  an honest `scrape_error` instead. `POST /queue/heal-bio-scrapes` /
+  `python -m app.cli heal-bio-scrapes` is a one-time cleanup for articles
+  scraped before this check existed.
+- **"Neither exists" never reaches a regular admin's queue at all.** An
+  article where the scrape failed *and* the RSS teaser is empty — genuinely
+  nothing to show — is diverted to the super-admin-only Manual Review
+  bucket (`/admin/manual-review`, `Article.needs_manual_link_review`)
+  instead of sitting in a regular admin's blinded queue with nothing to
+  read. That page shows the raw source URL (blinding is a regular-admin
+  protection, not applicable when a human has to visit the link directly)
+  so a super admin can read the real article externally and classify it
+  from there. `POST /queue/divert-unreviewable` /
+  `python -m app.cli divert-unreviewable` is a one-time cleanup for
+  articles already stuck in a regular admin's queue from before this
+  existed.
 - **Bounded per call, same lesson as Phase 2's `/process/run`.** Each
   scrape is a real network fetch (up to a 15s timeout) that now runs
   inside `/queue/assign`, so a large batch would take a genuinely long

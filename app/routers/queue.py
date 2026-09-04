@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.review.assignment import assign_pending_articles, heal_bio_scrapes
+from app.review.assignment import (
+    assign_pending_articles,
+    divert_unreviewable_articles,
+    heal_bio_scrapes,
+    retry_failed_scrapes,
+)
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -29,9 +34,12 @@ def trigger_assignment(
     as /process/run. Also retries scraping for already-assigned articles
     that never got a scrape attempt (e.g. ones queued before this feature
     existed) - `rescraped` counts those separately from `assigned`.
+    `diverted` counts articles with no usable text at all (scrape failed
+    and the RSS teaser was empty too) that were sent to the super-admin
+    Manual Review bucket instead of a regular admin's queue.
     """
     result = assign_pending_articles(db, limit=limit)
-    return {"assigned": result.assigned, "rescraped": result.rescraped}
+    return {"assigned": result.assigned, "rescraped": result.rescraped, "diverted": result.diverted}
 
 
 @router.post("/heal-bio-scrapes")
@@ -52,3 +60,43 @@ def trigger_bio_scrape_healing(
     """
     result = heal_bio_scrapes(db, limit=limit)
     return {"matched": result.matched, "rescraped": result.rescraped}
+
+
+@router.post("/divert-unreviewable")
+def trigger_divert_unreviewable(db: Session = Depends(get_db)) -> dict:
+    """One-time cleanup, not part of the regular pipeline: moves articles
+    already stuck in a regular admin's queue with no usable text at all
+    (from before assign_pending_articles started checking this *before*
+    assigning) to the super-admin Manual Review bucket instead. Pure DB
+    operation, no network calls - safe to call with no limit, and safe to
+    call again later (a no-op once nothing matches).
+    """
+    result = divert_unreviewable_articles(db)
+    return {"diverted": result.diverted}
+
+
+@router.post("/retry-failed-scrapes")
+def trigger_retry_failed_scrapes(
+    limit: int = Query(
+        default=20,
+        le=50,
+        description="Max unreviewed articles with a scrape_error to re-attempt this call - "
+        "see retry_failed_scrapes() for what this does.",
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Re-attempts scraping for every unreviewed article that currently has
+    a scrape_error on record (rejected as a bio, fetch failed, no text
+    found, etc.), regardless of whether it's assigned to a regular admin
+    or sitting in the Manual Review bucket - the one gap neither /assign's
+    retry pass (never-attempted only) nor /heal-bio-scrapes (wrongly-
+    accepted text only) covers. Use this after a scraping.py improvement
+    ships, to give already-failed articles (like #238) another shot with
+    the better code - e.g. the JSON-LD articleBody path and bio-container
+    stripping. `recovered` counts how many left the Manual Review bucket
+    because the retry found real text - call /queue/assign afterwards to
+    actually queue those to an admin. Call repeatedly until `matched` is
+    0.
+    """
+    result = retry_failed_scrapes(db, limit=limit)
+    return {"matched": result.matched, "rescraped": result.rescraped, "recovered": result.recovered}
