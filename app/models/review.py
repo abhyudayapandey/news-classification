@@ -19,10 +19,16 @@ class Review(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     article_id: Mapped[int] = mapped_column(ForeignKey("articles.id"), nullable=False)
-    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"), nullable=False)
+    # Indexed: Phase 3's filterable review listing (app/review/queries.py)
+    # and the future super-admin analytics dashboard both filter/group by
+    # admin, decision, and time range - this is groundwork explicitly asked
+    # to be query-efficient, not premature optimization.
+    admin_id: Mapped[int] = mapped_column(ForeignKey("admins.id"), nullable=False, index=True)
     final_tag: Mapped[str] = mapped_column(String(64), nullable=False)
-    decision: Mapped[ReviewDecision] = mapped_column(SAEnum(ReviewDecision, name="review_decision"), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    decision: Mapped[ReviewDecision] = mapped_column(
+        SAEnum(ReviewDecision, name="review_decision"), nullable=False, index=True
+    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     article: Mapped["Article"] = relationship(back_populates="reviews")
     admin: Mapped["Admin"] = relationship(back_populates="reviews")

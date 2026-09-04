@@ -8,9 +8,12 @@ Usage:
     python -m app.cli seed-jurisdictions  # Phase 2: upsert app/data/jurisdiction_seed.py
     python -m app.cli verify-local-models # Phase 2: confirm the embedding model downloads/loads
     python -m app.cli compare-providers   # Phase 2: run multiple providers on the same articles, side by side
+    python -m app.cli assign-queue        # Phase 3: assign classified articles to admin queues
+    python -m app.cli create-admin        # Phase 3: create an admin/super_admin account
 """
 
 import argparse
+import getpass
 import logging
 import sys
 
@@ -197,6 +200,47 @@ def cmd_compare_providers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_assign_queue(args: argparse.Namespace) -> int:
+    from app.review.assignment import assign_pending_articles
+
+    db = SessionLocal()
+    try:
+        assigned = assign_pending_articles(db, limit=args.limit)
+    finally:
+        db.close()
+    print(f"Assigned {assigned} article(s) to admin queues.")
+    return 0
+
+
+def cmd_create_admin(args: argparse.Namespace) -> int:
+    from app.auth.security import hash_password
+    from app.models import Admin
+    from app.models.enums import AdminRole
+
+    password = getpass.getpass("Password: ")
+    confirm = getpass.getpass("Confirm password: ")
+    if password != confirm:
+        print("Passwords did not match.")
+        return 1
+
+    db = SessionLocal()
+    try:
+        if db.query(Admin).filter(Admin.username == args.username).one_or_none() is not None:
+            print(f"Username {args.username!r} is already taken.")
+            return 1
+        try:
+            password_hash = hash_password(password)
+        except ValueError as exc:
+            print(str(exc))
+            return 1
+        db.add(Admin(username=args.username, name=args.name, password_hash=password_hash, role=AdminRole(args.role)))
+        db.commit()
+    finally:
+        db.close()
+    print(f"Created {args.role} account {args.username!r}.")
+    return 0
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -228,6 +272,14 @@ def main() -> int:
     )
     compare_parser.add_argument("--limit", type=int, default=10)
 
+    assign_parser = subparsers.add_parser("assign-queue", help="Assign classified articles to admin queues")
+    assign_parser.add_argument("--limit", type=int, default=None, help="Max articles to assign (default: no limit)")
+
+    create_admin_parser = subparsers.add_parser("create-admin", help="Create an admin/super_admin account")
+    create_admin_parser.add_argument("--username", required=True)
+    create_admin_parser.add_argument("--name", required=True)
+    create_admin_parser.add_argument("--role", choices=["admin", "super_admin"], default="admin")
+
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -244,6 +296,10 @@ def main() -> int:
         return cmd_verify_local_models(args)
     if args.command == "compare-providers":
         return cmd_compare_providers(args)
+    if args.command == "assign-queue":
+        return cmd_assign_queue(args)
+    if args.command == "create-admin":
+        return cmd_create_admin(args)
 
     parser.print_help()
     return 1

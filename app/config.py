@@ -50,5 +50,16 @@ class Settings(BaseSettings):
     clustering_time_window_hours: int = 48
     clustering_similarity_threshold: float = 0.55
 
+    # Phase 3: admin session auth. No default on purpose - signing session
+    # cookies with a hardcoded/well-known key would let anyone forge a
+    # logged-in session, so this must be set explicitly (a long random
+    # string) rather than silently falling back to something insecure.
+    # Generate one with: python -c "import secrets; print(secrets.token_hex(32))"
+    secret_key: str
+    # Section 5's staleness SLA - configurable in case it needs adjusting
+    # without a code change; still no auto-escalation on breach (Section 11,
+    # deferred), just the visual "overdue" flag in the admin queue.
+    review_sla_hours: int = 48
+
 
 settings = Settings()

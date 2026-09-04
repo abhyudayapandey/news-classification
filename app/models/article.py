@@ -77,6 +77,21 @@ class Article(Base):
     # they're exactly the cases Section 4.3 says need a second look.
     entity_trigger_override: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
+    # --- Phase 3 additions: Section 7 stage 6 (queue) ---
+
+    # Section 5: "Each admin has their own queue (no overlap)". Set by
+    # app/review/assignment.py once an article is establishment-relevant
+    # and classified; NULL means "not yet queued" (still apolitical,
+    # unclassified, or a duplicate that never enters review at all).
+    assigned_admin_id: Mapped[int | None] = mapped_column(ForeignKey("admins.id"), nullable=True, index=True)
+    # When this article entered its assigned admin's queue - the clock the
+    # 48-hour SLA (Section 5) is measured against. Deliberately not
+    # published_at: an article can sit unclassified for a while after
+    # publication (ingestion/processing lag), and the SLA is about review
+    # turnaround, not how old the underlying news is. Queue *order* is
+    # still oldest published_at first per Section 5's literal wording.
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -84,6 +99,7 @@ class Article(Base):
 
     outlet: Mapped["Outlet"] = relationship(back_populates="articles")
     cluster: Mapped["StoryCluster | None"] = relationship(back_populates="articles")
+    assigned_admin: Mapped["Admin | None"] = relationship(back_populates="assigned_articles")
     duplicate_of: Mapped["Article | None"] = relationship(remote_side=[id])
     system_tag: Mapped["SystemTag | None"] = relationship(
         back_populates="article", uselist=False, cascade="all, delete-orphan"

@@ -16,17 +16,7 @@ precisely.
 
 import re
 
-
-def _boundary_pattern(term: str) -> re.Pattern:
-    """\\b requires a transition between a word char and a non-word char, so
-    it silently fails to match at all when a term itself ends in a
-    non-word character - e.g. r"\\bcpi\\(m\\)\\b" never matches "CPI(M)"
-    because both ")" and the space after it are non-word, so there's no
-    \\W-\\w transition for the trailing \\b to anchor on. Lookarounds that
-    check "not preceded/followed by an alphanumeric" avoid that trap and
-    work correctly at string boundaries too.
-    """
-    return re.compile(r"(?<![A-Za-z0-9])" + re.escape(term) + r"(?![A-Za-z0-9])", re.IGNORECASE)
+from app.text_utils import boundary_pattern as _boundary_pattern
 
 
 _POLITICAL_TITLES = [

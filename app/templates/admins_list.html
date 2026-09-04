@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Admin Accounts{% endblock %}
+{% block content %}
+<h1>Admin accounts</h1>
+<p><a class="btn btn-primary" href="/admin/admins/new">+ New admin</a></p>
+
+{% if message %}<div class="success">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<div class="card" style="padding:0;">
+  <table>
+    <thead>
+      <tr><th>Username</th><th>Name</th><th>Role</th><th>Status</th><th>Created</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in admins %}
+      <tr>
+        <td>{{ a.username }}</td>
+        <td>{{ a.name }}</td>
+        <td>{{ a.role.value }}</td>
+        <td>
+          {% if a.is_active %}<span class="badge badge-ok">active</span>
+          {% else %}<span class="badge badge-overdue">inactive</span>{% endif %}
+        </td>
+        <td class="muted">{{ a.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <a class="btn" href="/admin/admins/{{ a.id }}/edit">Edit</a>
+          {% if a.is_active %}
+          <form class="inline" method="post" action="/admin/admins/{{ a.id }}/deactivate">
+            <button class="btn btn-danger" type="submit" onclick="return confirm('Deactivate {{ a.username }}? Their pending queue will be reassigned.');">Deactivate</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

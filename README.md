@@ -1,4 +1,4 @@
-# News Framing Platform — POC (Phase 1: Foundation)
+# News Framing Platform — POC
 
 India-focused news aggregation POC that classifies articles by topic and by
 pro-establishment / anti-establishment framing, with a human-in-the-loop
@@ -6,12 +6,13 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**Phases 1 and 2 are built**: project scaffolding, the full database schema,
-RSS ingestion with wire-copy dedup (Phase 1), and embedding-based topic
-clustering + pro/anti/apolitical classification with jurisdiction/ruling-
-party resolution (Phase 2 — see §9). No admin UI, no website yet — those
-are Phase 3. Everything here is built so that phase slots in without a
-schema rewrite.
+**Phases 1-3 are built**: project scaffolding and the full database schema
+plus RSS ingestion with wire-copy dedup (Phase 1); embedding-based topic
+clustering and pro/anti/apolitical classification with jurisdiction/ruling-
+party resolution (Phase 2 — see §9); and the login-gated admin/super-admin
+review UI - queueing, blinding, confirm/override, account management, and
+oversight views (Phase 3 — see §12). No public end-user website yet —
+that's Phase 4.
 
 ---
 
@@ -77,14 +78,19 @@ output - see §9.1.
 
 ```
 app/
-  main.py              FastAPI app (health, articles, ingestion, processing, clusters)
+  main.py              FastAPI app - session middleware + all routers
   config.py            Settings from .env (pydantic-settings)
   db.py                SQLAlchemy engine/session, declarative Base
   constants.py         Fixed technical constants (e.g. EMBEDDING_DIM)
-  cli.py               Manual CLI - ingest, process, show-*, seed-jurisdictions, etc.
-  models/              SQLAlchemy models — one file per Section 6 entity (+ Phase 2 fields)
-  schemas/             Pydantic response models for the API
-  routers/             FastAPI routers (health, articles, ingestion, processing, clusters)
+  text_utils.py        Shared boundary-matching regex (entity detection + redaction)
+  cli.py               Manual CLI - ingest, process, assign-queue, create-admin, etc.
+  models/              SQLAlchemy models — one file per Section 6 entity (+ Phase 2/3 fields)
+  schemas/             Pydantic response models for the JSON APIs
+  routers/             FastAPI routers - JSON APIs (health/articles/ingestion/processing/
+                       clusters/admin-data/queue) plus admin_ui.py (the Phase 3 HTML UI)
+  templates/           Jinja2 templates for the admin/super-admin UI (Phase 3)
+  auth/                Phase 3: bcrypt hashing, session-based auth dependencies
+  review/              Phase 3: blinding, queue assignment, review-listing queries
   ingestion/           Phase 1: RSS fetch, dedup, ingestion pipeline
     outlets_config.py  Loads config/outlets.yaml, upserts into `outlets`
     feed_fetcher.py    Fetches + parses one RSS feed into normalized entries
@@ -116,17 +122,17 @@ config/
 ## 3. Database schema (Section 6, implemented as-is)
 
 All seven entities from the planning doc's Section 6 are modeled now. As of
-Phase 2, everything except `reviews` and `admins` is populated:
+Phase 3, all seven are populated:
 
 | Table | Populated as of | Notes |
 |---|---|---|
 | `outlets` | Phase 1 | Synced from `config/outlets.yaml` on every ingestion run |
-| `articles` | Phase 1 (+ Phase 2 fields) | `published_tag` stays NULL until Phase 3 review, except apolitical articles (Phase 2 sets it directly) |
+| `articles` | Phase 1 (+ Phase 2/3 fields) | `published_tag` set directly for apolitical (Phase 2) or from a `Review` (Phase 3); `assigned_admin_id`/`queued_at` added in Phase 3 |
 | `story_clusters` | Phase 2 | Populated by `app/processing/clustering.py` |
 | `system_tags` | Phase 2 | 1:1 with `articles`; written by `app/processing/pipeline.py` |
 | `jurisdiction_ruling_parties` | Phase 2 (seeded) | Manually maintained lookup table — see §9.4 for what's seeded and what needs verification |
-| `reviews` | No (table exists, empty) | One-to-many now so multi-admin reconciliation can be added later without a migration; Phase 3 only ever inserts one row per article |
-| `admins` | No (table exists, empty) | No auth fields yet; those land with the Phase 3 admin UI |
+| `admins` | Phase 3 | `username`/`password_hash`/`is_active` added for login (§12.1) |
+| `reviews` | Phase 3 | One-to-many so multi-admin reconciliation can be added later without a migration; only one row is ever created per article today |
 
 Two fields you specifically asked to keep intact:
 
@@ -266,7 +272,12 @@ session.
      is fine and probably what you want — ingested articles land in one
      place either way. If you'd rather keep deployed-test data separate,
      create a Neon branch first and use its connection string here instead.
-   - `OPENAI_API_KEY` / `GEMINI_API_KEY` — leave blank, unused in Phase 1.
+   - `OPENAI_API_KEY` / `GEMINI_API_KEY` — leave blank unless you're
+     testing paid classification providers (§9.3).
+   - `SECRET_KEY` — **required as of Phase 3, the app refuses to start
+     without it** (signs the admin UI's session cookies). Generate one
+     with `python -c "import secrets; print(secrets.token_hex(32))"` and
+     paste the output in. Don't reuse a key you've shared anywhere else.
 5. Deploy. Render runs `pip install -r requirements.txt && alembic upgrade
    head` as the build step (see the comment in `render.yaml` for why
    migrations run here instead of a pre-deploy command — that feature
@@ -355,13 +366,18 @@ debug endpoint for confirming Phase 1 works, nothing more.
 
 ## 8. What's deliberately not here yet
 
-- Admin review queue, blinding, self-reference redaction (Phase 3)
-- Super-admin analytics dashboard (Phase 3) — the `system_tags` and
-  `reviews` schema is ready for it, nothing more
-- End-user website (later)
-- Any auth (Admin table has no password/session fields yet)
+- End-user website (Phase 4)
+- Full analytics *visualizations* (Phase 3's §12 built the underlying
+  queries cleanly; charts on top of them are a later phase)
+- Auto-escalation when the 48-hour review SLA is breached (Section 11,
+  deferred) — just the visual "overdue" flag
+- Multi-admin reconciliation / tie-breaking (Section 11, deferred) —
+  `reviews[]` is modeled as one-to-many for this, but only one review is
+  ever created per article today
 - OpenAI/Gemini *embedding* providers (only classification has paid
   providers so far — see §11)
+- Self-service password change for admins (a super admin resets a
+  password via the edit form; there's no "change my own password" flow)
 
 ## 9. Phase 2: Clustering + Classification
 
@@ -621,7 +637,195 @@ isn't required to test the logic around it):
   unrelated cloud-tooling reasons, but no real key was available to test an
   authenticated call)
 
-## 11. Known gaps carried over from the planning doc
+## 12. Phase 3: Admin & Super Admin Review UI
+
+Builds Sections 3, 5, and 10: a login-gated review queue (Section 5), the
+super-admin oversight views (Section 3), and the account management that
+makes those roles real. Still server-rendered in this same FastAPI app —
+no separate frontend framework, no build step — because this is an
+internal tool for 2-3 known people, not the public site (Phase 4).
+
+### 12.1 Stack choices and what they trade away
+
+- **Jinja2 templates, not a JS framework.** `app/templates/*.html`,
+  rendered via `fastapi.templating.Jinja2Templates`. No `npm`, no build
+  pipeline, no separate deploy target — the whole UI ships as part of the
+  same Render service Phases 1-2 already deploy to.
+- **Session cookies, not JWTs or OAuth.** `Admin.username`/`password_hash`
+  (bcrypt) plus Starlette's `SessionMiddleware` (a signed cookie holding
+  `{"admin_id": ...}`) is the entire auth system. No server-side session
+  store needed at this scale. `SECRET_KEY` (`.env`/Render env var) signs
+  the cookie and has **no default on purpose** — a hardcoded or
+  well-known signing key would let anyone forge a logged-in session, so
+  the app refuses to start without one being set explicitly. Generate one
+  with `python -c "import secrets; print(secrets.token_hex(32))"`.
+- **What a public-facing app would need that this doesn't have**: CSRF
+  tokens (mitigated instead by `SameSite=Lax` cookies, a reasonable
+  POC-level protection, not a substitute for real tokens on something
+  with untrusted users), rate-limiting on `/admin/login`, and self-service
+  password reset via email. All reasonable to skip for 2-3 people you
+  personally provisioned accounts for; revisit before this is anything
+  more than that.
+
+### 12.2 Queueing — Section 7's stage 6, which Phase 2 stopped short of
+
+Phase 2 ended at classification (stage 5). Assigning a classified article
+to a specific admin's queue is its own step, matching how ingestion and
+processing each got their own trigger:
+
+```bash
+python -m app.cli assign-queue      # or POST /queue/assign
+```
+
+`app/review/assignment.py` assigns each pending (classified,
+non-apolitical, not-yet-assigned) article to whichever **active** admin
+currently has the fewest unreviewed articles — load-balanced by
+recomputing queue depth from the DB each call, rather than a stateless
+round-robin counter that could drift out of sync across repeated small
+batches. Apolitical articles never enter this queue at all — Section 4.3
+already published them directly in Phase 2.
+
+Two new `Article` fields support this: `assigned_admin_id` and
+`queued_at`. `queued_at` — not `published_at` — is what the 48-hour SLA
+(§12.3) is measured against: an article can sit unclassified for a while
+after publication (ingestion/processing lag), and the SLA is about review
+turnaround, not the news' own age. Queue *order* is still oldest
+`published_at` first, per Section 5's literal wording.
+
+### 12.3 Blinding (Section 5)
+
+`app/review/blinding.py` redacts two things to the same
+`[self-reference removed]` placeholder:
+
+1. **The outlet's own name**, wherever it appears in the headline/body —
+   e.g. "The Hindu has learnt that..." would otherwise defeat the
+   outlet-hidden rule even though `outlet_id` itself is never rendered,
+   since the name is sitting right there in the text.
+2. **Generic self-referential phrases** ("this newspaper", "this
+   publication", "this website", ...) that identify the piece as
+   self-reported without using the outlet's name directly.
+
+Left untouched, per spec: bylines/reporter names, and PTI/ANI wire-copy
+attribution (recognizing unedited wire copy — or its absence — is part of
+what the review is meant to surface, not something to hide from it).
+
+One judgment call worth flagging: outlet names are matched exactly as
+configured (`config/outlets.yaml`) — "The Hindu", not a stripped "Hindu".
+Stripping "The " would make bare "Hindu" a redaction target, which
+collides with an unrelated, extremely common word (the religion) and
+would over-redact real content. Verified directly: "Hindu devotees
+gathered for the festival" stays untouched, while "The Hindu has learnt"
+and "as this newspaper reported" both correctly redact. If you add an
+outlet whose bare name is similarly ambiguous, don't "fix" this by adding
+automatic prefix-stripping — it's a correctness trap, not a coverage gap.
+
+The 48-hour SLA (`REVIEW_SLA_HOURS`, default 48) shows as a simple
+overdue/hours-remaining badge in the queue and on the review page — no
+auto-escalation on breach, exactly as Section 11 says to defer.
+
+### 12.4 Review decision -> Section 6's `Review` + `published_tag`
+
+Confirming or overriding is one form: two radio options (pro/anti-
+establishment), pre-selected to the system tag. Submitting the
+pre-selected option records `decision=agreed_with_system`; picking the
+other records `decision=overrode` — derived by comparing the choice to
+`system_tag.classification`, not a separate manual field, so there's no
+way for the two to disagree with each other. This creates the `Review`
+row (`admin_id`, `final_tag`, `decision`, `timestamp`) and sets
+`Article.published_tag` directly, exactly per Section 6.
+
+### 12.5 Super admin: account CRUD, deactivate-don't-delete
+
+`Admin` gained `username`, `password_hash`, `is_active`. Deactivating
+(never hard-deleting, so `Review.admin_id` history stays intact) also
+reassigns that admin's unreviewed queue to remaining active admins
+(`reassign_admin_queue`) rather than leaving it orphaned.
+
+Two safety guards, both verified: an admin can't deactivate their own
+account, and the last active super admin can't be removed — **not just
+via deactivation**. Testing surfaced a real gap here worth calling out
+rather than glossing over: the initial guard only checked
+`is_active`, which missed a second way to lose the last super admin —
+demoting their *role* to `admin` while leaving them active. Both paths
+are now blocked by the same check.
+
+### 12.6 Bootstrapping the first super admin
+
+Nothing can log in to create the first account, and an always-open
+"create super admin" endpoint would be a real vulnerability if left
+reachable. `POST /admin-data/bootstrap-super-admin` splits the
+difference: it only works while the `admins` table is completely empty,
+and returns 403 forever after the first account exists — solving
+Render's no-shell problem (same reason `/admin-data/seed-jurisdictions`
+exists) without leaving a permanent open door. Verified: works once,
+403s on every attempt after. Locally, `python -m app.cli create-admin`
+(password entered via `getpass`, never a CLI argument or shell history)
+works for the first account and every one after.
+
+### 12.7 Super admin: oversight + review-listing groundwork
+
+- `GET /admin/articles/{id}/compare` — system tag vs. admin decision side
+  by side, labeled, per Section 3.
+- `GET /admin/reviews` — filterable by admin/decision/date range. You
+  asked for this to be groundwork for a real analytics dashboard later,
+  not charts now: `app/review/queries.py`'s `query_reviews()` and
+  `decision_counts_by_admin()` are plain, reusable functions (eager-
+  loading article+admin to avoid N+1 queries per row), not logic baked
+  into the route handler — the dashboard phase can call the same
+  functions instead of re-deriving this query layer. `Review.admin_id`,
+  `.decision`, and `.timestamp` are now indexed for exactly this filtering
+  pattern.
+
+### 12.8 The Phase 1/2 debug endpoints are all still here
+
+Per your instruction, nothing from `/health`, `/articles`,
+`/ingest/run`, `/process/run`, `/clusters`, `/clusters/stats`, or
+`/admin-data/seed-jurisdictions` was touched or gated behind login — they
+remain open JSON endpoints, useful for internal testing independent of
+the authenticated HTML admin UI, and for feeding the super-admin
+dashboards later. `/queue/assign` (new this phase) follows the same
+pattern.
+
+### 12.9 Verified end-to-end
+
+Full integration tests via FastAPI's `TestClient` (real HTTP requests,
+real session cookies, against actual Postgres — no mocking of the routes
+themselves): bootstrap → login → create admin → assign queue
+(load-balanced) → queue page → blinding on the review page (outlet name
+and self-reference both redacted, confirmed "Hindu devotees" stays
+untouched) → submit both an agreement and an override → `published_tag` +
+`Review` row correct in both cases → SLA overdue badge (backdating
+`queued_at`, since the SLA clock starts at queueing, not publication) →
+super-admin compare view → reviews listing + filters → 403 for a regular
+admin on super-admin pages → wrong-password and deactivated-account login
+rejected identically (no account-enumeration signal) → unauthenticated
+access redirected to login → self-deactivation blocked → last-super-admin
+guard verified for **both** deactivation and role-demotion, isolated from
+the self-deactivation case with a second super-admin account →
+deactivation's queue reassignment. Not yet exercised: an actual browser
+session (you logging in on Render) — the same "needs a real deploy"
+caveat as every prior phase.
+
+### 12.10 Running it
+
+```bash
+# One-time setup
+# .env / Render env vars need SECRET_KEY set - see §12.1
+python -m app.cli create-admin --username you --name "Your Name" --role super_admin
+# or, on Render (no shell): POST /admin-data/bootstrap-super-admin
+#   {"username": "you", "name": "Your Name", "password": "..."}
+
+# Regular use
+python -m app.cli assign-queue     # or POST /queue/assign - after each `process` run
+```
+
+Then visit `/admin/login` in a browser (not `/docs` — this is real HTML,
+not a JSON API to test through Swagger). Log in, review what's in your
+queue, and — as super admin — visit `/admin/admins` to create accounts for
+the other 1-2 people, and `/admin/reviews` to see everything reviewed so
+far.
+
+## 13. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology

@@ -38,3 +38,8 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Phase 3 admin UI - signs session cookies. Required, no default: a
+      # hardcoded/known key would let anyone forge a logged-in session.
+      # Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+      - key: SECRET_KEY
+        sync: false

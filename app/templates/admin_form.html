@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit Admin" if admin else "New Admin" }}{% endblock %}
+{% block content %}
+<p><a href="/admin/admins">&larr; Back to admin accounts</a></p>
+<div class="card" style="max-width: 420px;">
+  <h1>{{ "Edit admin" if admin else "New admin" }}</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/admin/admins/' ~ admin.id ~ '/edit' if admin else '/admin/admins/new' }}">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" value="{{ admin.username if admin else '' }}"
+      {% if admin %}readonly{% endif %} required>
+
+    <label for="name">Full name</label>
+    <input type="text" id="name" name="name" value="{{ admin.name if admin else '' }}" required>
+
+    <label for="role">Role</label>
+    <select id="role" name="role">
+      <option value="admin" {% if admin and admin.role.value == "admin" %}selected{% endif %}>admin</option>
+      <option value="super_admin" {% if admin and admin.role.value == "super_admin" %}selected{% endif %}>super_admin</option>
+    </select>
+
+    {% if admin %}
+    <label><input type="checkbox" name="is_active" value="1" {% if admin.is_active %}checked{% endif %} style="width:auto; display:inline;"> Active</label>
+    {% endif %}
+
+    <label for="password">{{ "New password (leave blank to keep current)" if admin else "Password" }}</label>
+    <input type="password" id="password" name="password" {% if not admin %}required{% endif %}>
+
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">{{ "Save changes" if admin else "Create admin" }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
