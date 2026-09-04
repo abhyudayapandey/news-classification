@@ -97,11 +97,21 @@ def trigger_retry_failed_scrapes(
     the better code - e.g. the JSON-LD articleBody path and bio-container
     stripping. `recovered` counts how many left the Manual Review bucket
     because the retry found real text - call /queue/assign afterwards to
-    actually queue those to an admin. Call repeatedly until `matched` is
-    0.
+    actually queue those to an admin. `diverted` counts how many were
+    confirmed to still have nothing to review (like #37: a dead link with
+    no RSS teaser) and were newly moved to the Manual Review bucket, even
+    if they hadn't been assigned there before - covers the same #238-
+    shaped gap as /queue/divert-unreviewable, for articles that also
+    happen to have a scrape_error on record. Call repeatedly until
+    `matched` is 0.
     """
     result = retry_failed_scrapes(db, limit=limit)
-    return {"matched": result.matched, "rescraped": result.rescraped, "recovered": result.recovered}
+    return {
+        "matched": result.matched,
+        "rescraped": result.rescraped,
+        "recovered": result.recovered,
+        "diverted": result.diverted,
+    }
 
 
 @router.get("/failed-scrapes")
