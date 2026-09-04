@@ -237,11 +237,16 @@ August 2024 — new accounts now get a one-time $5 trial credit (30 days),
 after which continued use needs a paid Hobby plan. Render still has a
 genuine, ongoing free tier: a free web service (512 MB RAM, 750 instance
 hours/month shared across your account, no credit card required to sign
-up), and cron jobs are natively supported on the free plan too if you later
-want scheduled ingestion. The only Render free-tier limitation that
-matters here: the web service spins down after 15 minutes idle and takes
-up to ~60s to wake on the next request — fine for manual testing, not
-something to build a real-time product on.
+up). The only Render free-tier limitation that matters here: the web
+service spins down after 15 minutes idle and takes up to ~60s to wake on
+the next request — fine for manual testing, not something to build a
+real-time product on.
+
+**Correction**: an earlier version of this doc claimed Render's Cron Jobs
+were free-tier too. That was wrong and was never actually verified against
+Render's pricing - Cron Jobs require a paid plan (billed per execution
+minute, ~$1/month minimum per job). See §6.3 for how scheduled ingestion
+is actually done here instead, at $0.
 
 **Important caveat before you start**: this Claude Code session's sandbox
 cannot reach `render.com` either (same policy block, confirmed by testing
@@ -308,6 +313,40 @@ caught and fixed along the way: the feed fetcher accepted a
 `timeout_seconds` parameter that was never actually applied, so a feed
 that hung without erroring could have stalled `/ingest/run` indefinitely —
 see the "Fix: actually enforce the feed fetch timeout" commit.
+
+### 6.3 Scheduled ingestion (GitHub Actions, not Render Cron Jobs)
+
+None of `/ingest/run`, `/process/run`, or `/queue/assign` run on their own
+— they're manual-trigger endpoints, by design, through Phases 1-3. Without
+something calling them periodically, the app just sits still: no new
+articles, no new classifications, no new queue items, no matter how much
+time passes.
+
+Render does offer Cron Jobs, but they are **not** part of the free tier
+(billed per execution-minute, ~$1/month minimum per job) — using one here
+would be this project's first paid dependency. Instead,
+`.github/workflows/scheduled-pipeline.yml` runs the same three calls every
+4 hours via a free GitHub Actions scheduled workflow:
+
+1. `POST /ingest/run` once (covers all configured outlets).
+2. `POST /process/run?limit=50`, looped until `remaining_unprocessed` hits
+   0 — matches the same "call again if there's more" pattern documented on
+   the endpoint itself, just automated.
+3. `POST /queue/assign?limit=30`, looped until both `assigned` and
+   `rescraped` hit 0 — same idea, covers both new assignment and the
+   scrape-retry healing pass (see `app/review/assignment.py`).
+
+Each step is capped at 20 loop iterations as a safety net against an
+infinite loop if something's actually broken, and fails the workflow run
+(visible in the repo's Actions tab) on any HTTP error response, rather
+than silently doing nothing.
+
+The target URL is a repository variable, `RENDER_APP_URL` (Settings →
+Secrets and variables → Actions → Variables), defaulting to
+`news-classification-api-qp8a.onrender.com` if unset — update the variable
+rather than the workflow file if the deployed URL ever changes. You can
+also trigger a run on demand from the Actions tab (`workflow_dispatch`)
+instead of waiting for the schedule.
 
 ## 7. Setup
 
