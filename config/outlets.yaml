@@ -41,14 +41,21 @@
   rss_feed_url: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
   is_active: true
 
+- name: Scroll.in
+  rss_feed_url: https://feeds.feedburner.com/ScrollinArticles.rss
+  is_active: true
+
+# The Wire and The Print are disabled, not deleted: /ingest/run confirmed
+# via a live IngestOutletResult.error ("syntax error" at line 2) that their
+# /feed URLs just redirect to the homepage, and checking page source by
+# hand turned up no rss+xml <link> for The Wire and one for The Print that
+# also redirects to a webpage rather than serving XML - i.e. not blocked,
+# just no discoverable working feed right now. Flip is_active back to true
+# if either publishes one later; no code change needed either way.
 - name: The Wire
   rss_feed_url: https://thewire.in/feed
-  is_active: true
+  is_active: false
 
 - name: The Print
   rss_feed_url: https://theprint.in/feed/
-  is_active: true
-
-- name: Scroll.in
-  rss_feed_url: https://scroll.in/feed
-  is_active: true
+  is_active: false
