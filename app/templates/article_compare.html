@@ -31,7 +31,7 @@
         <td><span class="badge badge-{{ 'pro' if system_tag.classification.value == 'pro-establishment' else ('anti' if system_tag.classification.value == 'anti-establishment' else 'apolitical') }}">{{ system_tag.classification.value }}</span></td>
         <td>
           {% if review %}
-            <span class="badge badge-{{ 'pro' if review.final_tag == 'pro-establishment' else 'anti' }}">{{ review.final_tag }}</span>
+            <span class="badge badge-{{ 'pro' if review.final_tag == 'pro-establishment' else ('anti' if review.final_tag == 'anti-establishment' else 'apolitical') }}">{{ review.final_tag }}</span>
           {% else %}
             <span class="muted">not yet reviewed</span>
           {% endif %}

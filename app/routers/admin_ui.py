@@ -159,13 +159,17 @@ def submit_review(
     if article is None or article.assigned_admin_id != current_admin.id or article.reviews or article.system_tag is None:
         return RedirectResponse("/admin/queue", status_code=303)
 
-    if final_tag not in (ClassificationTag.PRO_ESTABLISHMENT.value, ClassificationTag.ANTI_ESTABLISHMENT.value):
+    if final_tag not in (
+        ClassificationTag.PRO_ESTABLISHMENT.value,
+        ClassificationTag.ANTI_ESTABLISHMENT.value,
+        ClassificationTag.APOLITICAL.value,
+    ):
         blinded_headline, blinded_body, body_source = _blind_article(article)
         return render(
             request, "review.html", current_admin, status_code=400,
             article=article, blinded_headline=blinded_headline, blinded_body=blinded_body,
             body_source=body_source, system_tag=article.system_tag, overdue=False,
-            error="Choose one of the two tags.",
+            error="Choose one of the tags.",
         )
 
     decision = (
