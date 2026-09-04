@@ -4,14 +4,22 @@
 # to verify the feed URLs live - outbound network access here is restricted
 # to a small allowlist (package registries, github, anthropic) and these
 # news domains are not on it (confirmed via 403 from the egress proxy, not a
-# feed-side problem). These three URLs are the outlets' documented/
-# long-standing RSS endpoints, but you MUST verify them yourself before
-# relying on this in Phase 1 - run:
+# feed-side problem). Every URL below (original three and the ones added
+# after) is the outlet's documented/long-standing RSS endpoint, but you MUST
+# verify all of them yourself before relying on this - run:
 #
 #   python -m app.ingestion.verify_feeds
 #
-# from a machine with normal internet access. If a URL below is stale, just
-# fix it here - no code changes needed.
+# from a machine with normal internet access. Ingestion is fault-isolated
+# per outlet (see IngestOutletResult.error), so a stale URL here won't break
+# the others - it'll just show up as a per-outlet error you can fix by
+# editing this file, no code changes or deploy needed.
+#
+# Deliberately mixes legacy broadsheets, digital-native outlets, and outlets
+# across the general editorial spectrum - the point of the pro-/anti-
+# establishment classifier is to judge individual articles' framing, not to
+# pre-sort outlets by assumed leaning, so source diversity here matters more
+# than picking outlets that "agree" with each other.
 
 - name: The Hindu
   rss_feed_url: https://www.thehindu.com/news/national/feeder/default.rss
@@ -23,4 +31,24 @@
 
 - name: NDTV
   rss_feed_url: https://feeds.feedburner.com/ndtvnews-top-stories
+  is_active: true
+
+- name: Times of India
+  rss_feed_url: https://timesofindia.indiatimes.com/rssfeedstopstories.cms
+  is_active: true
+
+- name: Hindustan Times
+  rss_feed_url: https://www.hindustantimes.com/feeds/rss/india-news/rssfeed.xml
+  is_active: true
+
+- name: The Wire
+  rss_feed_url: https://thewire.in/feed
+  is_active: true
+
+- name: The Print
+  rss_feed_url: https://theprint.in/feed/
+  is_active: true
+
+- name: Scroll.in
+  rss_feed_url: https://scroll.in/feed
   is_active: true
