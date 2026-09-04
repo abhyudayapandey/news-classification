@@ -17,9 +17,18 @@ bound operation now, same caveat as Phase 2's /process/run: one bad or
 slow site shouldn't be able to stall the whole batch, so each scrape is
 wrapped and a failure just leaves scraped_body_text NULL (the review UI
 falls back to the RSS teaser) rather than blocking assignment.
+
+Since scraping was added after assignment already existed, articles
+queued before that point are stuck in a real gap: already assigned (so
+_pending_articles no longer sees them) but never scraped
+(scrape_attempted_at IS NULL). assign_pending_articles() heals these too
+on every call, not just newly-pending ones - see
+_articles_needing_scrape_retry - so nothing queued before this feature
+shipped is permanently stuck without a scrape attempt.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -30,6 +39,12 @@ from app.models.enums import ClassificationTag
 from app.review.scraping import scrape_article_text
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AssignmentResult:
+    assigned: int = 0  # newly assigned to a queue this call
+    rescraped: int = 0  # already-assigned articles given a first scrape attempt this call
 
 
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
@@ -71,35 +86,65 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
     return list(db.scalars(stmt))
 
 
-def assign_pending_articles(db: Session, limit: int | None = None) -> int:
-    """Assigns up to `limit` pending articles to active admins, load-
-    balanced. Returns the number assigned. A no-op (returns 0) if there are
-    no active admins - articles stay unassigned until one exists, they
-    aren't dropped.
+def _articles_needing_scrape_retry(db: Session, limit: int | None) -> list[Article]:
+    """Already-assigned, unreviewed articles with no scrape attempt on
+    record - either queued before scraping existed, or a prior attempt
+    never got recorded for some other reason. Oldest-queued first.
     """
+    stmt = (
+        select(Article)
+        .where(
+            Article.assigned_admin_id.is_not(None),
+            Article.scrape_attempted_at.is_(None),
+            ~Article.reviews.any(),
+        )
+        .order_by(Article.queued_at.asc())
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return list(db.scalars(stmt))
+
+
+def _scrape_and_record(article: Article) -> None:
+    try:
+        result = scrape_article_text(article.url)
+        article.scraped_body_text = result.text
+        article.scrape_error = result.error
+    except Exception as exc:  # noqa: BLE001 - one bad site shouldn't stall the whole batch
+        logger.exception("Scraping crashed unexpectedly for article %s", article.id)
+        article.scrape_error = f"unexpected error: {exc}"[:255]
+    article.scrape_attempted_at = datetime.now(timezone.utc)
+
+
+def assign_pending_articles(db: Session, limit: int | None = None) -> AssignmentResult:
+    """Assigns up to `limit` pending articles to active admins, load-
+    balanced, then spends any remaining budget re-scraping already-assigned
+    articles that never got a scrape attempt (see module docstring). A
+    no-op for the assignment half if there are no active admins - pending
+    articles stay unassigned until one exists, they aren't dropped; the
+    rescrape half still runs regardless, since it doesn't need an admin.
+    """
+    result = AssignmentResult()
     depths = _active_admin_queue_depths(db)
-    if not depths:
-        return 0
 
-    assigned = 0
-    for article in _pending_articles(db, limit):
-        target_admin_id = min(depths, key=lambda admin_id: (depths[admin_id], admin_id))
-        article.assigned_admin_id = target_admin_id
-        article.queued_at = datetime.now(timezone.utc)
-        depths[target_admin_id] += 1
-        assigned += 1
+    if depths:
+        for article in _pending_articles(db, limit):
+            target_admin_id = min(depths, key=lambda admin_id: (depths[admin_id], admin_id))
+            article.assigned_admin_id = target_admin_id
+            article.queued_at = datetime.now(timezone.utc)
+            depths[target_admin_id] += 1
+            result.assigned += 1
+            _scrape_and_record(article)
+        db.commit()
 
-        try:
-            result = scrape_article_text(article.url)
-            article.scraped_body_text = result.text
-            article.scrape_error = result.error
-        except Exception as exc:  # noqa: BLE001 - one bad site shouldn't stall the whole batch
-            logger.exception("Scraping crashed unexpectedly for article %s", article.id)
-            article.scrape_error = f"unexpected error: {exc}"[:255]
-        article.scrape_attempted_at = datetime.now(timezone.utc)
+    remaining_budget = None if limit is None else max(0, limit - result.assigned)
+    if remaining_budget != 0:
+        for article in _articles_needing_scrape_retry(db, remaining_budget):
+            _scrape_and_record(article)
+            result.rescraped += 1
+        db.commit()
 
-    db.commit()
-    return assigned
+    return result
 
 
 def reassign_admin_queue(db: Session, admin_id: int) -> int:
@@ -114,6 +159,11 @@ def reassign_admin_queue(db: Session, admin_id: int) -> int:
     for article in orphaned:
         article.assigned_admin_id = None
         article.queued_at = None
+        # Deliberately NOT clearing scraped_body_text/scrape_attempted_at/
+        # scrape_error: the scraped content is a property of the article's
+        # URL, not of who's reviewing it - re-scraping on every reassignment
+        # would waste a network call and could turn yesterday's successful
+        # scrape into a failure over nothing but transient site flakiness.
     db.commit()
 
-    return assign_pending_articles(db, limit=len(orphaned))
+    return assign_pending_articles(db, limit=len(orphaned)).assigned

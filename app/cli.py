@@ -205,10 +205,11 @@ def cmd_assign_queue(args: argparse.Namespace) -> int:
 
     db = SessionLocal()
     try:
-        assigned = assign_pending_articles(db, limit=args.limit)
+        result = assign_pending_articles(db, limit=args.limit)
     finally:
         db.close()
-    print(f"Assigned {assigned} article(s) to admin queues.")
+    print(f"Assigned {result.assigned} article(s) to admin queues.")
+    print(f"Re-scraped {result.rescraped} already-assigned article(s) that had no prior scrape attempt.")
     return 0
 
 

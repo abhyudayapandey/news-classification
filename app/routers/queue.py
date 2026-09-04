@@ -26,7 +26,9 @@ def trigger_assignment(
     per-item network cost) - assignment now also attempts a full-text
     scrape per article (app/review/scraping.py), so a large batch here can
     genuinely take a while. Call repeatedly for a big backlog, same pattern
-    as /process/run.
+    as /process/run. Also retries scraping for already-assigned articles
+    that never got a scrape attempt (e.g. ones queued before this feature
+    existed) - `rescraped` counts those separately from `assigned`.
     """
-    assigned = assign_pending_articles(db, limit=limit)
-    return {"assigned": assigned}
+    result = assign_pending_articles(db, limit=limit)
+    return {"assigned": result.assigned, "rescraped": result.rescraped}
