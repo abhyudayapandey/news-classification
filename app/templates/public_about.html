@@ -1,12 +1,12 @@
 {% extends "public_base.html" %}
 {% block title %}About{% endblock %}
-{% block nav_about_active %}text-accent{% endblock %}
+{% block nav_about_attr %}data-active="true"{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
 
-  <p class="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-faint mb-2">About</p>
-  <h1 class="font-serif text-3xl sm:text-4xl font-semibold text-ink text-balance leading-tight mb-6">
+  <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">About</p>
+  <h1 class="font-display text-3xl sm:text-4xl font-bold text-ink text-balance leading-tight mb-6">
     News should just tell you what happened.
   </h1>
 
@@ -18,15 +18,15 @@
   <div class="space-y-12">
 
     <section class="pt-10 border-t border-line">
-      <h2 class="font-serif text-xl font-semibold text-ink mb-3">How it works</h2>
+      <h2 class="font-display text-xl font-bold text-ink mb-3">How it works</h2>
       <div class="space-y-4 text-[15px] leading-relaxed text-ink-muted">
         <p>For every story, we pull coverage from multiple outlets and tag it: pro-establishment, anti-establishment, or apolitical &mdash; based on the government it&rsquo;s actually about (Centre or a specific state, whoever&rsquo;s in power right now). Not left vs. right. That&rsquo;s a US framework and it doesn&rsquo;t really map onto Indian politics.</p>
-        <p>If there&rsquo;s an original source behind a story &mdash; an official statement, data, a speech &mdash; we link straight to it. That&rsquo;s the <strong class="font-semibold text-ink">Primary Source</strong> tag. Go check it yourself, don&rsquo;t take our word for it either.</p>
+        <p>If there&rsquo;s an original source behind a story &mdash; an official statement, data, a speech &mdash; we link straight to it. That&rsquo;s the <strong class="font-semibold text-accent">Primary Source</strong> tag. Go check it yourself, don&rsquo;t take our word for it either.</p>
       </div>
     </section>
 
     <section class="pt-10 border-t border-line">
-      <h2 class="font-serif text-xl font-semibold text-ink mb-3">Who&rsquo;s doing the tagging</h2>
+      <h2 class="font-display text-xl font-bold text-ink mb-3">Who&rsquo;s doing the tagging</h2>
       <div class="space-y-4 text-[15px] leading-relaxed text-ink-muted">
         <p>First pass: an algorithm. Second pass: a real, trained journalist, reading the article blind &mdash; no outlet name attached, just the words &mdash; who either agrees or overrides it. Nothing goes live without a human checking it.</p>
         <p>We keep our reviewers anonymous. Not for mystery points &mdash; because the second people know who&rsquo;s tagging what, they get pressure, backlash, DMs. Anonymity is what lets them actually call it straight.</p>
@@ -34,14 +34,14 @@
     </section>
 
     <section class="pt-10 border-t border-line">
-      <h2 class="font-serif text-xl font-semibold text-ink mb-3">We&rsquo;re not pretending to be neutral robots either</h2>
+      <h2 class="font-display text-xl font-bold text-ink mb-3">We&rsquo;re not pretending to be neutral robots either</h2>
       <div class="space-y-4 text-[15px] leading-relaxed text-ink-muted">
         <p>Deciding what counts as &ldquo;establishment,&rdquo; where a story lands, when a random accident story turns political &mdash; that&rsquo;s judgment. Ours. We&rsquo;re not going to pretend we&rsquo;re above the thing we&rsquo;re calling out in everyone else. What we can promise: we do it the same way every time, a human&rsquo;s always in the loop, and we&rsquo;ll tell you how it works instead of asking you to just trust the label.</p>
       </div>
     </section>
 
     <section class="pt-10 border-t border-line">
-      <h2 class="font-serif text-xl font-semibold text-ink mb-3">Where we&rsquo;re at</h2>
+      <h2 class="font-display text-xl font-bold text-ink mb-3">Where we&rsquo;re at</h2>
       <div class="space-y-4 text-[15px] leading-relaxed text-ink-muted">
         <p>Early. Indian news, English language, a handful of outlets to start, more coming.</p>
       </div>

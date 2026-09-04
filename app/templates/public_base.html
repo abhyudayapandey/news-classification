@@ -8,7 +8,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
@@ -19,20 +19,19 @@
         colors: {
           paper: 'var(--paper)',
           surface: 'var(--surface)',
+          'surface-hover': 'var(--surface-hover)',
           ink: 'var(--ink)',
           'ink-muted': 'var(--ink-muted)',
           'ink-faint': 'var(--ink-faint)',
           line: 'var(--line)',
           accent: 'var(--accent)',
+          'accent-hover': 'var(--accent-hover)',
+          'accent-soft': 'var(--accent-soft)',
           'accent-ink': 'var(--accent-ink)',
-          'mark-pro': 'var(--mark-pro)',
-          'mark-anti': 'var(--mark-anti)',
-          'mark-apolitical': 'var(--mark-apolitical)',
         },
         fontFamily: {
-          serif: ['"Source Serif 4"', 'Georgia', '"Times New Roman"', 'serif'],
+          display: ['"Sora"', 'system-ui', 'sans-serif'],
           sans: ['"Public Sans"', '-apple-system', 'system-ui', 'sans-serif'],
-          mono: ['"IBM Plex Mono"', 'ui-monospace', '"SF Mono"', 'monospace'],
         },
       },
     },
@@ -40,44 +39,61 @@
 </script>
 
 <style>
-  /* Deliberately monochrome + one interaction accent - see /about. The
-     three column marks (pro/anti/apolitical) are desaturated on purpose:
-     a platform whose whole point is that it doesn't bake framing into its
-     own presentation shouldn't color-code "pro" and "anti" in hues that
-     read as party colors (saffron/green/blue all carry real political
-     meaning in India) or as good/bad (red/green). These are structural
-     labels, not verdicts. */
+  /* One confident accent (violet) carries every interactive/branded moment -
+     nav highlights, primary buttons, and the tag label under each of the
+     three columns. It is deliberately the SAME accent for Pro-Establishment,
+     Anti-Establishment, and Apolitical - see public_home.html's comment for
+     why the three columns still aren't color-coded against each other even
+     in this warmer, "confident app" palette. */
   :root {
-    --paper: #F3F3EF;
+    --paper: #F7F7FB;
     --surface: #FFFFFF;
-    --ink: #1C1B19;
-    --ink-muted: #5B5850;
-    --ink-faint: #8C887D;
-    --line: #DEDBD3;
-    --accent: #3B4C7A;
-    --accent-ink: #F6F5F1;
-    --mark-pro: #8A6A2E;
-    --mark-anti: #4C5A73;
-    --mark-apolitical: #6B6F63;
+    --surface-hover: #FBFAFF;
+    --ink: #17151F;
+    --ink-muted: #625F78;
+    --ink-faint: #9793AC;
+    --line: #E7E5F2;
+    --accent: #6E56CF;
+    --accent-hover: #5B45BD;
+    --accent-soft: #F1EDFC;
+    --accent-ink: #FFFFFF;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --paper: #15140F;
-      --surface: #1C1B16;
-      --ink: #EDEBE3;
-      --ink-muted: #A8A399;
-      --ink-faint: #726D61;
-      --line: #2E2C24;
-      --accent: #93A6DB;
-      --accent-ink: #10131F;
-      --mark-pro: #C9A55B;
-      --mark-anti: #8CA0C4;
-      --mark-apolitical: #9AA08D;
+      --paper: #121017;
+      --surface: #1B1826;
+      --surface-hover: #221F30;
+      --ink: #F1EFFA;
+      --ink-muted: #A9A6C2;
+      --ink-faint: #726E8C;
+      --line: #2C2939;
+      --accent: #9B87F5;
+      --accent-hover: #B4A3FF;
+      --accent-soft: #241F3D;
+      --accent-ink: #17111F;
     }
   }
   html { color-scheme: light dark; }
   body { background: var(--paper); }
   .text-balance { text-wrap: balance; }
+
+  /* Subtle animated-underline hover for nav links - the one "alive" touch
+     in the header, not a color swap alone. */
+  .nav-link { position: relative; }
+  .nav-link::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: -3px;
+    height: 2px; border-radius: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 180ms ease-out;
+  }
+  .nav-link:hover::after, .nav-link[data-active="true"]::after { transform: scaleX(1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-link::after { transition: none; }
+  }
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -85,13 +101,13 @@
 
 <header class="border-b border-line">
   <div class="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-6 flex-wrap">
-    <a href="/" class="flex items-baseline gap-3 no-underline group">
-      <span class="font-serif text-2xl font-semibold text-ink tracking-tight group-hover:text-accent transition-colors">News Framing Platform</span>
-      <span class="hidden sm:inline font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-faint">India &middot; Framing Tracker</span>
+    <a href="/" class="flex items-center gap-2.5 no-underline group">
+      <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-accent text-accent-ink font-display font-bold text-sm shrink-0 transition-transform duration-200 group-hover:-rotate-6">NF</span>
+      <span class="font-display text-xl font-bold text-ink tracking-tight">News Framing Platform</span>
     </a>
-    <nav class="flex items-center gap-6 text-sm">
-      <a href="/" class="text-ink hover:text-accent transition-colors {% block nav_home_active %}{% endblock %}">Home</a>
-      <a href="/about" class="text-ink hover:text-accent transition-colors {% block nav_about_active %}{% endblock %}">About</a>
+    <nav class="flex items-center gap-7 text-[15px] font-medium">
+      <a href="/" class="nav-link text-ink hover:text-accent transition-colors" {% block nav_home_attr %}{% endblock %}>Home</a>
+      <a href="/about" class="nav-link text-ink hover:text-accent transition-colors" {% block nav_about_attr %}{% endblock %}>About</a>
     </nav>
   </div>
 </header>
@@ -102,12 +118,12 @@
 
 <footer class="border-t border-line mt-16">
   <div class="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-    <p class="text-xs leading-relaxed text-ink-faint max-w-prose">
+    <p class="text-sm leading-relaxed text-ink-faint max-w-prose">
       Every classification shown here is confirmed or overridden by a human reviewer before publication - see
-      <a href="/about" class="underline decoration-line hover:text-accent hover:decoration-accent">About</a> for methodology.
+      <a href="/about" class="nav-link font-medium text-ink-muted hover:text-accent transition-colors">About</a> for methodology.
       We link to original reporting; we never republish it.
     </p>
-    <p class="font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-faint whitespace-nowrap">Proof of concept</p>
+    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-ink-faint whitespace-nowrap">Proof of concept</p>
   </div>
 </footer>
 
