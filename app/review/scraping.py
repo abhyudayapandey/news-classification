@@ -27,12 +27,14 @@ actual legal review before scaling or publicizing use of scraped content,
 not an assumption that the Phase 3 posture still applies.
 """
 
+import json
 import logging
 import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
 
+import lxml.html
 import requests
 import trafilatura
 
@@ -40,6 +42,76 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "news-classification-poc/0.1 (+internal admin review tool, not for redistribution)"
 REQUEST_TIMEOUT_SECONDS = 15
+
+# Many publishers embed the full article text as schema.org NewsArticle
+# JSON-LD structured data, for search-engine indexing. Confirmed on a real
+# article (#238, Indian Express): the *visible* content div was truncated
+# after two paragraphs by an inline paywall block ("container-wall-
+# exclusive"), which likely diluted trafilatura's text-density scoring
+# for that block enough that it picked the page's author-bio block
+# instead (see looks_like_author_bio below) - but the JSON-LD articleBody
+# had the complete, untruncated text regardless of the paywall, since
+# that's served to crawlers independent of the rendered page. Trying this
+# first sidesteps trafilatura's heuristic content-block guessing (and the
+# paywall) entirely whenever a publisher provides it, rather than only
+# guarding against a wrong guess after the fact.
+_JSON_LD_PATTERN = re.compile(
+    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.DOTALL | re.IGNORECASE
+)
+_ARTICLE_LD_TYPES = {"Article", "NewsArticle", "ReportageNewsArticle", "AnalysisNewsArticle", "BackgroundNewsArticle"}
+
+
+def _extract_json_ld_article_body(html: str) -> str | None:
+    for match in _JSON_LD_PATTERN.finditer(html):
+        try:
+            data = json.loads(match.group(1))
+        except (json.JSONDecodeError, ValueError):
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+            types = candidate.get("@type")
+            types = types if isinstance(types, list) else [types]
+            if _ARTICLE_LD_TYPES.intersection(types):
+                body = candidate.get("articleBody")
+                if isinstance(body, str) and body.strip():
+                    return body.strip()
+    return None
+
+
+# Confirmed on the same real article: the bio block's own class names are
+# unambiguous ("author-bio-all", "author-bio") - a much more precise
+# signal than guessing from the text shape after the fact. Stripped from
+# the HTML before trafilatura ever sees it, so it can't win a text-density
+# comparison it was never a candidate for. This is a proactive layer on
+# top of (not a replacement for) looks_like_author_bio below, which still
+# catches outlets that don't use identifiable class/id names.
+_BIO_CONTAINER_PATTERN = re.compile(
+    r"author[-_]?bio|bio[-_]?box|about[-_]?author|writer[-_]?bio", re.IGNORECASE
+)
+
+
+def _strip_bio_containers(html: str) -> str:
+    try:
+        tree = lxml.html.fromstring(html)
+    except Exception:  # noqa: BLE001 - best-effort cleanup, never block extraction over it
+        return html
+
+    to_remove = [
+        el
+        for el in tree.iter()
+        if _BIO_CONTAINER_PATTERN.search(el.get("class", "") or "")
+        or _BIO_CONTAINER_PATTERN.search(el.get("id", "") or "")
+    ]
+    if not to_remove:
+        return html
+    for el in to_remove:
+        try:
+            el.drop_tree()
+        except Exception:  # noqa: BLE001 - e.g. already removed as a descendant of another match
+            continue
+    return lxml.html.tostring(tree, encoding="unicode")
 
 # Some outlets place a long "About the author" credibility block (name,
 # years of experience, beat coverage - an increasingly common SEO/E-E-A-T
@@ -130,8 +202,23 @@ def scrape_article_text(url: str) -> ScrapeResult:
         logger.info("Scrape fetch failed for %s: %s", url, exc)
         return ScrapeResult(text=None, error=f"fetch failed: {exc}"[:255])
 
+    # requests only trusts the HTTP Content-Type header's charset, which
+    # many real sites omit (relying on an HTML <meta charset> tag instead,
+    # which requests does not read) - it then silently defaults to
+    # ISO-8859-1 per the HTTP spec, producing mojibake for any non-ASCII
+    # character. apparent_encoding sniffs the actual bytes instead, which
+    # is what a real browser effectively does. Caught by testing against
+    # a local mock server that (like many real responses) didn't declare
+    # a charset - curly quotes came back corrupted until this was added.
+    response.encoding = response.apparent_encoding
+    html = response.text
+
+    json_ld_body = _extract_json_ld_article_body(html)
+    if json_ld_body and not looks_like_author_bio(json_ld_body):
+        return ScrapeResult(text=json_ld_body, error=None)
+
     text = trafilatura.extract(
-        response.text, url=url, include_comments=False, favor_precision=True, output_format="txt"
+        _strip_bio_containers(html), url=url, include_comments=False, favor_precision=True, output_format="txt"
     )
     if not text or not text.strip():
         return ScrapeResult(text=None, error="extraction produced no text")
