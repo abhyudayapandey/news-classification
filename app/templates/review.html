@@ -56,7 +56,11 @@
         {% if system_tag.classification.value == "anti-establishment" %}checked{% endif %} style="width:auto; display:inline;">
       Anti-establishment
     </label>
-    <p class="muted">Leaving the pre-selected option and submitting confirms the system tag; picking the other overrides it.</p>
+    <label>
+      <input type="radio" name="final_tag" value="apolitical" style="width:auto; display:inline;">
+      Apolitical
+    </label>
+    <p class="muted">Leaving the pre-selected option and submitting confirms the system tag; picking a different one overrides it. Choose Apolitical if you don't think this article leans either way, even though the system routed it here.</p>
     <button class="btn btn-primary" type="submit" style="margin-top:0.5rem;">Submit decision</button>
   </form>
 </div>
