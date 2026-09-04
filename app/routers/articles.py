@@ -20,9 +20,12 @@ router = APIRouter(prefix="/articles", tags=["articles"])
 def list_articles(
     limit: int = Query(default=20, le=200),
     include_duplicates: bool = Query(default=True),
+    cluster_id: int | None = Query(default=None, description="Filter to one cluster's member articles"),
     db: Session = Depends(get_db),
 ) -> list[Article]:
     query = db.query(Article)
     if not include_duplicates:
         query = query.filter(Article.duplicate_of_id.is_(None))
+    if cluster_id is not None:
+        query = query.filter(Article.cluster_id == cluster_id)
     return query.order_by(Article.ingested_at.desc()).limit(limit).all()

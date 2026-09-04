@@ -34,7 +34,8 @@ def cluster_stats(db: Session = Depends(get_db)) -> dict:
         .subquery()
     )
     multi_article_clusters = db.query(func.count()).select_from(cluster_sizes).filter(cluster_sizes.c.size > 1).scalar()
-    largest_cluster_size = db.query(func.max(cluster_sizes.c.size)).scalar() or 0
+    largest = db.query(cluster_sizes.c.cluster_id, cluster_sizes.c.size).order_by(cluster_sizes.c.size.desc()).first()
+    largest_cluster_id, largest_cluster_size = (largest.cluster_id, largest.size) if largest else (None, 0)
 
     total_classified = db.query(func.count(SystemTag.article_id)).scalar()
     classification_counts = dict(
@@ -51,6 +52,7 @@ def cluster_stats(db: Session = Depends(get_db)) -> dict:
     return {
         "total_clusters": total_clusters,
         "multi_article_clusters": multi_article_clusters,
+        "largest_cluster_id": largest_cluster_id,
         "largest_cluster_size": largest_cluster_size,
         "clusters_needing_review": needs_review_clusters,
         "total_classified_articles": total_classified,
