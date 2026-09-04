@@ -4,9 +4,11 @@ itself, just a way to trigger the queueing step manually/via cron.
 """
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
+from app.models import Article
 from app.review.assignment import (
     assign_pending_articles,
     divert_unreviewable_articles,
@@ -100,3 +102,38 @@ def trigger_retry_failed_scrapes(
     """
     result = retry_failed_scrapes(db, limit=limit)
     return {"matched": result.matched, "rescraped": result.rescraped, "recovered": result.recovered}
+
+
+@router.get("/failed-scrapes")
+def list_failed_scrapes(
+    limit: int = Query(default=50, le=200),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Debug/verification endpoint, same category as GET /articles - not
+    the admin UI. Surfaces the actual scrape_error text for every
+    unreviewed article that still has one, since retry_failed_scrapes()'s
+    `matched`/`recovered` counts alone don't say *why* a given article is
+    still failing (robots.txt, a fetch error, honestly-empty extraction,
+    still-detected-as-a-bio, etc.), and most of these articles are sitting
+    unblinded in a regular admin's queue - not the Manual Review list -
+    since they still have an RSS teaser, so there's no other unauthenticated
+    way to see the error text without opening that admin's session.
+    """
+    stmt = (
+        select(Article)
+        .where(Article.scrape_error.is_not(None), ~Article.reviews.any())
+        .order_by(Article.id.asc())
+        .limit(limit)
+    )
+    return [
+        {
+            "id": article.id,
+            "headline": article.headline,
+            "url": article.url,
+            "scrape_error": article.scrape_error,
+            "has_rss_teaser": bool(article.body_text and article.body_text.strip()),
+            "assigned_admin_id": article.assigned_admin_id,
+            "needs_manual_link_review": article.needs_manual_link_review,
+        }
+        for article in db.scalars(stmt)
+    ]
