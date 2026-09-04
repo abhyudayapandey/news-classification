@@ -37,21 +37,26 @@ class ProcessResult:
     entity_trigger_overrides: int = 0
     clusters_flagged_needs_review: int = 0
     unresolved_ruling_party: int = 0
+    remaining_unprocessed: int = 0
     errors: list[str] = field(default_factory=list)
 
 
-def _unprocessed_articles(db: Session) -> list[Article]:
+def _unprocessed_articles(db: Session, limit: int | None) -> list[Article]:
     """Articles not yet embedded/clustered/classified. Duplicates
     (duplicate_of_id set) are excluded - Phase 1's dedup already marks them
     as non-canonical, so they never enter clustering/classification, per
     Section 5's "before it reaches clustering/review". Oldest-first so a
-    long backlog processes in publish order.
+    long backlog processes in publish order, and so a `limit` always
+    finishes the oldest, longest-waiting articles first rather than an
+    arbitrary subset.
     """
     stmt = (
         select(Article)
         .where(Article.embedding.is_(None), Article.duplicate_of_id.is_(None))
         .order_by(Article.published_at.asc())
     )
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return list(db.scalars(stmt))
 
 
@@ -153,13 +158,23 @@ def process_articles(
     db: Session,
     embedding_provider: EmbeddingProvider | None = None,
     classification_provider: ClassificationProvider | None = None,
+    limit: int | None = None,
 ) -> ProcessResult:
+    """`limit` caps how many unprocessed articles this call handles - each
+    one costs two model calls (embedding + local classification) plus a DB
+    round-trip, which adds up fast on a CPU-constrained free-tier instance.
+    Without a limit, a large backlog can turn one HTTP request into a
+    many-minute call - technically fine (Render's request timeout is 100
+    minutes), but a bad way to find that out interactively. Call repeatedly
+    (`remaining_unprocessed` on the result tells you when to stop) instead
+    of processing an unbounded backlog in one shot.
+    """
     embedding_provider = embedding_provider or get_embedding_provider()
     classification_provider = classification_provider or get_classification_provider()
     topic_assigner = TopicAssigner(embedding_provider)
 
     result = ProcessResult()
-    for article in _unprocessed_articles(db):
+    for article in _unprocessed_articles(db, limit):
         try:
             _process_one(db, article, embedding_provider, classification_provider, topic_assigner, result)
             db.commit()
@@ -168,5 +183,7 @@ def process_articles(
             logger.exception("Failed to process article %s", article.id)
             db.rollback()
             result.errors.append(f"article {article.id}: {exc}")
+
+    result.remaining_unprocessed = len(_unprocessed_articles(db, limit=None))
 
     return result

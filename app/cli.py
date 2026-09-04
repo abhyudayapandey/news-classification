@@ -65,12 +65,12 @@ def cmd_show_articles(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_process(_args: argparse.Namespace) -> int:
+def cmd_process(args: argparse.Namespace) -> int:
     from app.processing.pipeline import process_articles
 
     db = SessionLocal()
     try:
-        result = process_articles(db)
+        result = process_articles(db, limit=args.limit)
     finally:
         db.close()
 
@@ -85,6 +85,7 @@ def cmd_process(_args: argparse.Namespace) -> int:
     print(f"entity-trigger overrides:     {result.entity_trigger_overrides}")
     print(f"clusters flagged needs_review:{result.clusters_flagged_needs_review}")
     print(f"unresolved ruling party:      {result.unresolved_ruling_party}")
+    print(f"remaining unprocessed:        {result.remaining_unprocessed}")
     print("-" * 60)
     if result.errors:
         print(f"{len(result.errors)} article(s) failed:")
@@ -207,7 +208,10 @@ def main() -> int:
     show_parser = subparsers.add_parser("show-articles", help="List recently ingested articles")
     show_parser.add_argument("--limit", type=int, default=20)
 
-    subparsers.add_parser("process", help="Cluster + classify all unprocessed articles")
+    process_parser = subparsers.add_parser("process", help="Cluster + classify unprocessed articles")
+    process_parser.add_argument(
+        "--limit", type=int, default=None, help="Max articles to process this run (default: no limit)"
+    )
 
     show_clusters_parser = subparsers.add_parser("show-clusters", help="List story clusters")
     show_clusters_parser.add_argument("--limit", type=int, default=20)

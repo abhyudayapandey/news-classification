@@ -62,4 +62,5 @@ class ProcessRunResult(BaseModel):
     entity_trigger_overrides: int
     clusters_flagged_needs_review: int
     unresolved_ruling_party: int
+    remaining_unprocessed: int
     errors: list[str]
