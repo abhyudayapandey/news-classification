@@ -41,6 +41,14 @@ jobs:
       # changes - this default matches README.md section 6.2's "Status".
       APP_URL: ${{ vars.RENDER_APP_URL || 'https://news-classification-api-qp8a.onrender.com' }}
     steps:
+      # Needed for scripts/ci_curl_retry.sh, sourced by every step below -
+      # this job doesn't touch app code, but it does need that one file off
+      # the repo checkout. Missing this step is exactly what broke the
+      # first run after ci_curl_retry.sh was added: "No such file or
+      # directory", since a fresh runner has nothing checked out by default.
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Ingest new articles from RSS feeds
         run: |
           source scripts/ci_curl_retry.sh
