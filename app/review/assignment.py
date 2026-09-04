@@ -25,6 +25,19 @@ _pending_articles no longer sees them) but never scraped
 on every call, not just newly-pending ones - see
 _articles_needing_scrape_retry - so nothing queued before this feature
 shipped is permanently stuck without a scrape attempt.
+
+An article with genuinely no text at all - scrape failed/rejected AND
+the RSS teaser (body_text) is also empty - never reaches a regular
+admin's queue at all, blinded or not: there'd be nothing for them to
+read. assign_pending_articles() checks this before assigning (not just
+after), flags such an article's needs_manual_link_review instead, and
+leaves assigned_admin_id NULL - see _needs_manual_review. Those surface
+in the super-admin-only Manual Review list (app/routers/admin_ui.py),
+which shows the raw source URL (blinding doesn't apply there) so a
+human can visit the link directly and classify it. See
+divert_unreviewable_articles() for the one-time cleanup that catches
+articles already stuck in a regular admin's queue from before this
+existed.
 """
 
 import logging
@@ -45,12 +58,18 @@ logger = logging.getLogger(__name__)
 class AssignmentResult:
     assigned: int = 0  # newly assigned to a queue this call
     rescraped: int = 0  # already-assigned articles given a first scrape attempt this call
+    diverted: int = 0  # flagged needs_manual_link_review instead of being assigned/reassigned
 
 
 @dataclass
 class BioHealResult:
     matched: int = 0  # articles whose *currently stored* scrape still looks like an author bio
     rescraped: int = 0  # how many of those this call actually re-attempted (bounded by limit)
+
+
+@dataclass
+class DivertResult:
+    diverted: int = 0  # already-assigned articles moved to the Manual Review bucket this call
 
 
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
@@ -72,10 +91,22 @@ def _active_admin_queue_depths(db: Session) -> dict[int, int]:
     return depths
 
 
+def _needs_manual_review(article: Article) -> bool:
+    """True when there is genuinely no text for a human to review at all -
+    the scrape failed/was rejected AND the RSS teaser is also empty. An
+    article like this shouldn't sit in a regular admin's (blinded) queue
+    showing nothing; it belongs in the super-admin Manual Review list
+    instead, with a raw link a human can actually follow.
+    """
+    has_scraped = bool(article.scraped_body_text and article.scraped_body_text.strip())
+    has_teaser = bool(article.body_text and article.body_text.strip())
+    return not has_scraped and not has_teaser
+
+
 def _pending_articles(db: Session, limit: int | None) -> list[Article]:
     """Establishment-relevant (non-apolitical), classified, not-yet-assigned,
-    not-a-duplicate articles - oldest published first, matching Section 5's
-    queue order.
+    not-a-duplicate, not-already-diverted articles - oldest published first,
+    matching Section 5's queue order.
     """
     stmt = (
         select(Article)
@@ -83,6 +114,7 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
         .where(
             Article.assigned_admin_id.is_(None),
             Article.duplicate_of_id.is_(None),
+            Article.needs_manual_link_review.is_(False),
             SystemTag.classification != ClassificationTag.APOLITICAL,
         )
         .order_by(Article.published_at.asc())
@@ -129,25 +161,43 @@ def assign_pending_articles(db: Session, limit: int | None = None) -> Assignment
     no-op for the assignment half if there are no active admins - pending
     articles stay unassigned until one exists, they aren't dropped; the
     rescrape half still runs regardless, since it doesn't need an admin.
+
+    Each pending article is scraped (if it hasn't been already - e.g. one
+    just redistributed by reassign_admin_queue keeps its existing scrape
+    rather than wasting a second network call) before the assign-vs-divert
+    decision, not after: an article with no usable text at all never gets
+    handed to a regular admin in the first place.
     """
     result = AssignmentResult()
     depths = _active_admin_queue_depths(db)
 
     if depths:
         for article in _pending_articles(db, limit):
+            if article.scrape_attempted_at is None:
+                _scrape_and_record(article)
+
+            if _needs_manual_review(article):
+                article.needs_manual_link_review = True
+                result.diverted += 1
+                continue
+
             target_admin_id = min(depths, key=lambda admin_id: (depths[admin_id], admin_id))
             article.assigned_admin_id = target_admin_id
             article.queued_at = datetime.now(timezone.utc)
             depths[target_admin_id] += 1
             result.assigned += 1
-            _scrape_and_record(article)
         db.commit()
 
-    remaining_budget = None if limit is None else max(0, limit - result.assigned)
+    remaining_budget = None if limit is None else max(0, limit - result.assigned - result.diverted)
     if remaining_budget != 0:
         for article in _articles_needing_scrape_retry(db, remaining_budget):
             _scrape_and_record(article)
             result.rescraped += 1
+            if _needs_manual_review(article):
+                article.assigned_admin_id = None
+                article.queued_at = None
+                article.needs_manual_link_review = True
+                result.diverted += 1
         db.commit()
 
     return result
@@ -201,3 +251,37 @@ def heal_bio_scrapes(db: Session, limit: int | None = None) -> BioHealResult:
     db.commit()
 
     return result
+
+
+def divert_unreviewable_articles(db: Session) -> DivertResult:
+    """One-time cleanup, not part of the regular assign/rescrape flow:
+    assign_pending_articles() only started checking _needs_manual_review
+    *before* assigning once this feature existed - articles assigned
+    earlier (like the one that prompted this: a scrape attempt already on
+    record, rejected as an author bio, with an empty RSS teaser too - see
+    heal_bio_scrapes and app/review/scraping.py) can still be sitting,
+    unreviewed, in a regular admin's queue showing nothing at all. Finds
+    every such article and moves it to the Manual Review bucket instead:
+    un-assigns it and sets needs_manual_link_review. Pure DB reads/writes,
+    no network calls, so unlike the scrape-healing cleanups this doesn't
+    need a `limit` - call it once, it's done.
+    """
+    stmt = (
+        select(Article)
+        .where(
+            Article.assigned_admin_id.is_not(None),
+            Article.scrape_attempted_at.is_not(None),
+            Article.needs_manual_link_review.is_(False),
+            ~Article.reviews.any(),
+        )
+        .order_by(Article.id.asc())
+    )
+    candidates = [a for a in db.scalars(stmt) if _needs_manual_review(a)]
+
+    for article in candidates:
+        article.assigned_admin_id = None
+        article.queued_at = None
+        article.needs_manual_link_review = True
+    db.commit()
+
+    return DivertResult(diverted=len(candidates))

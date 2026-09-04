@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Manual Review{% endblock %}
+{% block content %}
+<h1>Manual review</h1>
+<p class="muted">
+  Articles with no usable text at all - the scrape failed (or was rejected as a
+  mis-scraped author bio) and the RSS feed had no summary either. These never
+  reach a regular admin's queue, since there'd be nothing to show them - visit
+  the source link directly to read and classify. {{ articles|length }} article(s) waiting.
+</p>
+
+{% if not articles %}
+  <div class="card">Nothing here right now.</div>
+{% else %}
+  <div class="card" style="padding:0;">
+    <table>
+      <thead>
+        <tr><th>Published</th><th>Headline</th><th>Source</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for article in articles %}
+        <tr>
+          <td class="muted">{{ article.published_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          <td>{{ article.headline }}</td>
+          <td><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.outlet.name }} &#8599;</a></td>
+          <td><a class="btn btn-primary" href="/admin/manual-review/{{ article.id }}">Classify</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

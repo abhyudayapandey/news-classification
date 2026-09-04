@@ -10,6 +10,7 @@ Usage:
     python -m app.cli compare-providers   # Phase 2: run multiple providers on the same articles, side by side
     python -m app.cli assign-queue        # Phase 3: assign classified articles to admin queues
     python -m app.cli heal-bio-scrapes    # Phase 3: one-time cleanup for wrongly-accepted author-bio scrapes
+    python -m app.cli divert-unreviewable # Phase 3: one-time cleanup, move textless articles to Manual Review
     python -m app.cli create-admin        # Phase 3: create an admin/super_admin account
 """
 
@@ -229,6 +230,18 @@ def cmd_heal_bio_scrapes(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_divert_unreviewable(_args: argparse.Namespace) -> int:
+    from app.review.assignment import divert_unreviewable_articles
+
+    db = SessionLocal()
+    try:
+        result = divert_unreviewable_articles(db)
+    finally:
+        db.close()
+    print(f"Moved {result.diverted} article(s) with no usable text to the Manual Review bucket.")
+    return 0
+
+
 def cmd_create_admin(args: argparse.Namespace) -> int:
     from app.auth.security import hash_password
     from app.models import Admin
@@ -300,6 +313,11 @@ def main() -> int:
         "--limit", type=int, default=None, help="Max articles to re-attempt (default: no limit)"
     )
 
+    subparsers.add_parser(
+        "divert-unreviewable",
+        help="One-time cleanup: move already-stuck, textless articles to the Manual Review bucket",
+    )
+
     create_admin_parser = subparsers.add_parser("create-admin", help="Create an admin/super_admin account")
     create_admin_parser.add_argument("--username", required=True)
     create_admin_parser.add_argument("--name", required=True)
@@ -325,6 +343,8 @@ def main() -> int:
         return cmd_assign_queue(args)
     if args.command == "heal-bio-scrapes":
         return cmd_heal_bio_scrapes(args)
+    if args.command == "divert-unreviewable":
+        return cmd_divert_unreviewable(args)
     if args.command == "create-admin":
         return cmd_create_admin(args)
 

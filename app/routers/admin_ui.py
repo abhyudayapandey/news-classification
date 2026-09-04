@@ -89,6 +89,21 @@ def _blind_article(article: Article) -> tuple[str, str, str]:
     return blinded_headline, blinded_body, body_source
 
 
+def _record_review(db: Session, article: Article, admin: Admin, final_tag: str) -> None:
+    """Shared by both the normal (blinded) review flow and the Manual
+    Review flow - decision/published_tag logic doesn't depend on how the
+    admin got to read the article.
+    """
+    decision = (
+        ReviewDecision.AGREED_WITH_SYSTEM
+        if final_tag == article.system_tag.classification.value
+        else ReviewDecision.OVERRODE
+    )
+    db.add(Review(article_id=article.id, admin_id=admin.id, final_tag=final_tag, decision=decision))
+    article.published_tag = final_tag
+    db.commit()
+
+
 def _queue_item(article: Article) -> dict:
     hours_elapsed = (datetime.now(timezone.utc) - article.queued_at).total_seconds() / 3600
     overdue = hours_elapsed > settings.review_sla_hours
@@ -172,15 +187,74 @@ def submit_review(
             error="Choose one of the tags.",
         )
 
-    decision = (
-        ReviewDecision.AGREED_WITH_SYSTEM
-        if final_tag == article.system_tag.classification.value
-        else ReviewDecision.OVERRODE
-    )
-    db.add(Review(article_id=article.id, admin_id=current_admin.id, final_tag=final_tag, decision=decision))
-    article.published_tag = final_tag
-    db.commit()
+    _record_review(db, article, current_admin, final_tag)
     return RedirectResponse("/admin/queue", status_code=303)
+
+
+# --- Super admin: Manual Review bucket (Article.needs_manual_link_review) ---
+#
+# Articles with no usable text at all - scrape failed/rejected AND the RSS
+# teaser is also empty (app/review/assignment.py's _needs_manual_review) -
+# never reach a regular admin's blinded queue, since there'd be nothing to
+# show them. They land here instead: super-admin only, showing the raw
+# source URL (blinding is a regular-admin protection, not applicable when
+# a human has to visit the link directly to read and classify it).
+
+
+@router.get("/manual-review", response_class=HTMLResponse)
+def manual_review_list(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    stmt = (
+        select(Article)
+        .where(Article.needs_manual_link_review.is_(True), ~Article.reviews.any())
+        .order_by(Article.published_at.asc())
+    )
+    articles = list(db.scalars(stmt))
+    return render(request, "manual_review_list.html", current_admin, articles=articles)
+
+
+@router.get("/manual-review/{article_id}", response_class=HTMLResponse)
+def manual_review_article(
+    article_id: int,
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    article = db.get(Article, article_id)
+    if article is None or not article.needs_manual_link_review or article.reviews or article.system_tag is None:
+        return RedirectResponse("/admin/manual-review", status_code=303)
+    return render(
+        request, "manual_review_detail.html", current_admin, article=article, system_tag=article.system_tag
+    )
+
+
+@router.post("/manual-review/{article_id}")
+def submit_manual_review(
+    article_id: int,
+    request: Request,
+    final_tag: str = Form(...),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    article = db.get(Article, article_id)
+    if article is None or not article.needs_manual_link_review or article.reviews or article.system_tag is None:
+        return RedirectResponse("/admin/manual-review", status_code=303)
+
+    if final_tag not in (
+        ClassificationTag.PRO_ESTABLISHMENT.value,
+        ClassificationTag.ANTI_ESTABLISHMENT.value,
+        ClassificationTag.APOLITICAL.value,
+    ):
+        return render(
+            request, "manual_review_detail.html", current_admin, status_code=400,
+            article=article, system_tag=article.system_tag, error="Choose one of the tags.",
+        )
+
+    _record_review(db, article, current_admin, final_tag)
+    return RedirectResponse("/admin/manual-review", status_code=303)
 
 
 # --- Super admin: admin account CRUD ---
