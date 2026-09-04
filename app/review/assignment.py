@@ -72,6 +72,13 @@ class DivertResult:
     diverted: int = 0  # already-assigned articles moved to the Manual Review bucket this call
 
 
+@dataclass
+class RetryFailedScrapesResult:
+    matched: int = 0  # unreviewed articles that currently have a scrape_error on record
+    rescraped: int = 0  # how many of those this call actually re-attempted (bounded by limit)
+    recovered: int = 0  # of those, how many now have usable text and left the Manual Review bucket
+
+
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
     """Active admins mapped to their current unreviewed queue size (0 for
     an active admin with nothing assigned yet).
@@ -285,3 +292,46 @@ def divert_unreviewable_articles(db: Session) -> DivertResult:
     db.commit()
 
     return DivertResult(diverted=len(candidates))
+
+
+def retry_failed_scrapes(db: Session, limit: int | None = None) -> RetryFailedScrapesResult:
+    """One-time (or occasional) cleanup, not part of the regular pipeline:
+    neither assign_pending_articles()'s retry pass nor heal_bio_scrapes()
+    touches an article that was already attempted and came back with a
+    real scrape_error - the former only looks at scrape_attempted_at IS
+    NULL (never attempted), the latter only at scraped_body_text IS NOT
+    NULL (wrongly-accepted text, not a rejected/failed one). An article
+    like #238 - already attempted, rejected, scraped_body_text NULL - is
+    never retried by anything else once app/review/scraping.py itself
+    improves (e.g. the JSON-LD articleBody path and bio-container
+    stripping added alongside this function). This is the one that gives
+    it another shot with whatever scrape_article_text() can do today.
+
+    Finds every unreviewed article with a scrape_error on record,
+    regardless of whether it's sitting in a regular admin's queue or the
+    Manual Review bucket, and re-attempts up to `limit` of them. One a
+    retry recovers usable text for an article that had been diverted to
+    Manual Review, it's cleared back out of that bucket (needs_manual_
+    link_review=False) so the normal assignment/queue flow picks it up
+    again - it does NOT immediately assign it to an admin itself, to keep
+    that decision (load balancing) in one place: call assign_pending_
+    articles() afterwards to actually queue it.
+    """
+    stmt = (
+        select(Article)
+        .where(Article.scrape_error.is_not(None), ~Article.reviews.any())
+        .order_by(Article.id.asc())
+    )
+    candidates = list(db.scalars(stmt))
+    result = RetryFailedScrapesResult(matched=len(candidates))
+
+    for article in candidates if limit is None else candidates[:limit]:
+        was_diverted = article.needs_manual_link_review
+        _scrape_and_record(article)
+        result.rescraped += 1
+        if was_diverted and not _needs_manual_review(article):
+            article.needs_manual_link_review = False
+            result.recovered += 1
+    db.commit()
+
+    return result

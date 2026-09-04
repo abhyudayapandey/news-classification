@@ -11,6 +11,7 @@ Usage:
     python -m app.cli assign-queue        # Phase 3: assign classified articles to admin queues
     python -m app.cli heal-bio-scrapes    # Phase 3: one-time cleanup for wrongly-accepted author-bio scrapes
     python -m app.cli divert-unreviewable # Phase 3: one-time cleanup, move textless articles to Manual Review
+    python -m app.cli retry-failed-scrapes # Phase 3: re-attempt scraping for articles with a scrape_error
     python -m app.cli create-admin        # Phase 3: create an admin/super_admin account
 """
 
@@ -242,6 +243,24 @@ def cmd_divert_unreviewable(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_retry_failed_scrapes(args: argparse.Namespace) -> int:
+    from app.review.assignment import retry_failed_scrapes
+
+    db = SessionLocal()
+    try:
+        result = retry_failed_scrapes(db, limit=args.limit)
+    finally:
+        db.close()
+    print(f"{result.matched} unreviewed article(s) currently have a scrape_error on record.")
+    print(f"Re-attempted {result.rescraped} of them this run.")
+    print(f"{result.recovered} recovered usable text and left the Manual Review bucket.")
+    if result.recovered:
+        print("Run `assign-queue` to actually queue the recovered ones to an admin.")
+    if result.matched > result.rescraped:
+        print("Run again to continue retrying the rest.")
+    return 0
+
+
 def cmd_create_admin(args: argparse.Namespace) -> int:
     from app.auth.security import hash_password
     from app.models import Admin
@@ -318,6 +337,14 @@ def main() -> int:
         help="One-time cleanup: move already-stuck, textless articles to the Manual Review bucket",
     )
 
+    retry_failed_parser = subparsers.add_parser(
+        "retry-failed-scrapes",
+        help="Re-attempt scraping for unreviewed articles with a scrape_error on record",
+    )
+    retry_failed_parser.add_argument(
+        "--limit", type=int, default=None, help="Max articles to re-attempt (default: no limit)"
+    )
+
     create_admin_parser = subparsers.add_parser("create-admin", help="Create an admin/super_admin account")
     create_admin_parser.add_argument("--username", required=True)
     create_admin_parser.add_argument("--name", required=True)
@@ -345,6 +372,8 @@ def main() -> int:
         return cmd_heal_bio_scrapes(args)
     if args.command == "divert-unreviewable":
         return cmd_divert_unreviewable(args)
+    if args.command == "retry-failed-scrapes":
+        return cmd_retry_failed_scrapes(args)
     if args.command == "create-admin":
         return cmd_create_admin(args)
 
