@@ -19,6 +19,12 @@ name: Scheduled ingestion pipeline
 # per article, so a slow-but-still-working call isn't wasted work even
 # if it does eventually time out - the next call (or the next 4-hour
 # cycle) just continues from wherever the DB actually is.
+#
+# Every call also goes through scripts/ci_curl_retry.sh's post_with_retry,
+# which retries specifically on 502/503/504 - the free tier sleeps after
+# ~15 minutes idle, so the app is asleep every time this 4-hour cron
+# fires, and Render's own gateway returns 502 while it wakes rather than
+# waiting for it. See that script for why retrying is safe here.
 
 on:
   schedule:
@@ -37,7 +43,8 @@ jobs:
     steps:
       - name: Ingest new articles from RSS feeds
         run: |
-          resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/ingest/run")
+          source scripts/ci_curl_retry.sh
+          resp=$(post_with_retry "$APP_URL/ingest/run" 300)
           body=$(echo "$resp" | sed '$d')
           code=$(echo "$resp" | tail -n1)
           echo "$body"
@@ -48,8 +55,9 @@ jobs:
 
       - name: Cluster + classify unprocessed articles
         run: |
+          source scripts/ci_curl_retry.sh
           for i in $(seq 1 20); do
-            resp=$(curl -sS --max-time 600 -w '\n%{http_code}' -X POST "$APP_URL/process/run?limit=20")
+            resp=$(post_with_retry "$APP_URL/process/run?limit=20" 600)
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"
@@ -66,8 +74,9 @@ jobs:
 
       - name: Assign classified articles to admin queues (and backfill scrapes)
         run: |
+          source scripts/ci_curl_retry.sh
           for i in $(seq 1 20); do
-            resp=$(curl -sS --max-time 600 -w '\n%{http_code}' -X POST "$APP_URL/queue/assign?limit=20")
+            resp=$(post_with_retry "$APP_URL/queue/assign?limit=20" 600)
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"
