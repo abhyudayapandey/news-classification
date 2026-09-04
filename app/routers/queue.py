@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.review.assignment import assign_pending_articles
+from app.review.assignment import assign_pending_articles, heal_bio_scrapes
 
 router = APIRouter(prefix="/queue", tags=["queue"])
 
@@ -32,3 +32,23 @@ def trigger_assignment(
     """
     result = assign_pending_articles(db, limit=limit)
     return {"assigned": result.assigned, "rescraped": result.rescraped}
+
+
+@router.post("/heal-bio-scrapes")
+def trigger_bio_scrape_healing(
+    limit: int = Query(
+        default=20,
+        le=50,
+        description="Max already-scraped articles to re-attempt this call, out of however many "
+        "currently look like a mis-scraped author bio - see heal_bio_scrapes() for what this does.",
+    ),
+    db: Session = Depends(get_db),
+) -> dict:
+    """One-time cleanup, not part of the regular pipeline: heals articles
+    scraped before app/review/scraping.py's author-bio detection existed
+    (or before it was fixed to catch a headline-prefixed bio). Call
+    repeatedly until `matched` is 0 - `matched` reflects how many are
+    *still* wrong as of this call, so it naturally drops as you heal them.
+    """
+    result = heal_bio_scrapes(db, limit=limit)
+    return {"matched": result.matched, "rescraped": result.rescraped}

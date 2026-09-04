@@ -28,6 +28,7 @@ not an assumption that the Phase 3 posture still applies.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
@@ -39,6 +40,44 @@ logger = logging.getLogger(__name__)
 
 USER_AGENT = "news-classification-poc/0.1 (+internal admin review tool, not for redistribution)"
 REQUEST_TIMEOUT_SECONDS = 15
+
+# Some outlets place a long "About the author" credibility block (name,
+# years of experience, beat coverage - an increasingly common SEO/E-E-A-T
+# pattern) prominently on the article page. On at least one real article,
+# trafilatura picked that block instead of the actual article body,
+# producing confident-looking but entirely wrong text - see the "why does
+# this article have information about the writer" conversation this
+# guards against. This is a best-effort heuristic, not a guarantee: it
+# will very occasionally reject a legitimate article that happens to open
+# by profiling a journalist as its subject (e.g. "X is a columnist who
+# has spent a decade covering..."). That's an acceptable trade - a false
+# positive here just means scraped_body_text stays empty and the review
+# UI falls back to the RSS teaser with an honest scrape_error, which is
+# far better than an admin confidently reviewing the wrong text.
+_BIO_OPENING_PATTERN = re.compile(
+    r"^[A-Z][a-zA-Z.'-]+(?: [A-Z][a-zA-Z.'-]+){0,3} is (?:a|an) .{0,80}"
+    r"(editor|correspondent|reporter|journalist|columnist|contributor|bureau chief)",
+    re.IGNORECASE,
+)
+_BIO_CAREER_PHRASES_PATTERN = re.compile(
+    r"(years (in|of|covering)|stationed in|has been (reporting|covering)|"
+    r"her reporting|his reporting|her coverage|his coverage)",
+    re.IGNORECASE,
+)
+
+
+def looks_like_author_bio(text: str) -> bool:
+    """Public (not just used within this module): app/review/assignment.py
+    reuses this to scan already-stored scraped_body_text for articles that
+    were wrongly accepted before this check existed, so they can be healed.
+    """
+    # Check the first couple of non-empty lines/paragraphs, not just the
+    # very start of the whole text - trafilatura often prepends the
+    # headline as its own line before the body, which would otherwise
+    # push a bio's opening sentence past a fixed-offset check.
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    opening_matches = any(_BIO_OPENING_PATTERN.match(line[:200]) for line in lines[:2])
+    return opening_matches and bool(_BIO_CAREER_PHRASES_PATTERN.search(text[:800]))
 
 # Cache of parsed robots.txt per origin for this process's lifetime - avoids
 # re-fetching robots.txt on every article from the same outlet. None means
@@ -97,4 +136,9 @@ def scrape_article_text(url: str) -> ScrapeResult:
     if not text or not text.strip():
         return ScrapeResult(text=None, error="extraction produced no text")
 
-    return ScrapeResult(text=text.strip(), error=None)
+    text = text.strip()
+    if looks_like_author_bio(text):
+        logger.info("Extraction for %s looked like an author bio, not an article - discarding", url)
+        return ScrapeResult(text=None, error="extraction likely grabbed an author bio, not the article")
+
+    return ScrapeResult(text=text, error=None)

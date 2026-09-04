@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Admin, Article, SystemTag
 from app.models.enums import ClassificationTag
-from app.review.scraping import scrape_article_text
+from app.review.scraping import looks_like_author_bio, scrape_article_text
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,12 @@ logger = logging.getLogger(__name__)
 class AssignmentResult:
     assigned: int = 0  # newly assigned to a queue this call
     rescraped: int = 0  # already-assigned articles given a first scrape attempt this call
+
+
+@dataclass
+class BioHealResult:
+    matched: int = 0  # articles whose *currently stored* scrape still looks like an author bio
+    rescraped: int = 0  # how many of those this call actually re-attempted (bounded by limit)
 
 
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
@@ -167,3 +173,31 @@ def reassign_admin_queue(db: Session, admin_id: int) -> int:
     db.commit()
 
     return assign_pending_articles(db, limit=len(orphaned)).assigned
+
+
+def heal_bio_scrapes(db: Session, limit: int | None = None) -> BioHealResult:
+    """One-time cleanup, not part of the regular assign/rescrape flow:
+    app/review/scraping.py's author-bio detection only guards *new*
+    scrapes - an article scraped before that check existed (or before it
+    was tightened) can still have a wrongly-accepted bio sitting in
+    scraped_body_text, confidently wrong rather than honestly empty. This
+    finds every article whose *currently stored* text still matches that
+    pattern, then immediately re-attempts a scrape for up to `limit` of
+    them, oldest first, regardless of review status - the new attempt
+    either recovers real article text or is honestly rejected again
+    (scrape_error explains why), either of which is strictly better than
+    what it's replacing. Not run on a schedule - call it, check
+    `matched`, and call again if it's still above 0.
+    """
+    stmt = (
+        select(Article).where(Article.scraped_body_text.is_not(None)).order_by(Article.id.asc())
+    )
+    misdetected = [a for a in db.scalars(stmt) if looks_like_author_bio(a.scraped_body_text)]
+
+    result = BioHealResult(matched=len(misdetected))
+    for article in misdetected if limit is None else misdetected[:limit]:
+        _scrape_and_record(article)
+        result.rescraped += 1
+    db.commit()
+
+    return result
