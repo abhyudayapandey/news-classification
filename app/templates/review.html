@@ -9,7 +9,13 @@
     {% if overdue %}<span class="badge badge-overdue">OVERDUE</span>{% endif %}
   </p>
   <h1>{{ blinded_headline }}</h1>
-  <div class="article-body">{{ blinded_body }}</div>
+  <div class="article-body">
+    {% if blinded_body and blinded_body.strip() %}
+      {{ blinded_body }}
+    {% else %}
+      <span class="muted"><em>No body text was provided by this outlet's feed for this article - only a headline. Classification/jurisdiction below was based on the headline alone.</em></span>
+    {% endif %}
+  </div>
 </div>
 
 <div class="card">

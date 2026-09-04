@@ -6,7 +6,13 @@
 <div class="card">
   <p class="muted">Article #{{ article.id }} - published {{ article.published_at.strftime("%Y-%m-%d %H:%M") }} - outlet: {{ article.outlet.name }}</p>
   <h1>{{ article.headline }}</h1>
-  <div class="article-body">{{ article.body_text }}</div>
+  <div class="article-body">
+    {% if article.body_text and article.body_text.strip() %}
+      {{ article.body_text }}
+    {% else %}
+      <span class="muted"><em>No body text was provided by this outlet's feed for this article - only a headline.</em></span>
+    {% endif %}
+  </div>
 </div>
 
 <div class="card">
