@@ -1,0 +1,76 @@
+name: Scheduled ingestion pipeline
+
+# Runs the three manual-trigger endpoints (ingest -> process -> queue) on a
+# schedule, since none of them run automatically on their own - see
+# README.md "8. What's deliberately not here yet" / the Render deployment
+# section. Chosen over a native Render Cron Job because Render's Cron Jobs
+# are NOT free (minimum ~$1/month per job as of writing) - this keeps the
+# $0 infrastructure constraint intact using GitHub Actions' free minutes.
+#
+# process/run and queue/assign are both capped per call (network- and
+# CPU-bound work per article on a free-tier instance), so each is looped
+# until its own response says there's nothing left to do, rather than
+# assuming one call drains the whole backlog.
+
+on:
+  schedule:
+    - cron: "0 */4 * * *" # every 4 hours, UTC
+  workflow_dispatch: {} # allows a manual "Run workflow" trigger from the Actions tab
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Set a repository variable named RENDER_APP_URL (Settings -> Secrets
+      # and variables -> Actions -> Variables) if the deployed URL ever
+      # changes - this default matches README.md section 6.2's "Status".
+      APP_URL: ${{ vars.RENDER_APP_URL || 'https://news-classification-api-qp8a.onrender.com' }}
+    steps:
+      - name: Ingest new articles from RSS feeds
+        run: |
+          resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/ingest/run")
+          body=$(echo "$resp" | sed '$d')
+          code=$(echo "$resp" | tail -n1)
+          echo "$body"
+          if [ "$code" -ge 400 ]; then
+            echo "::error::/ingest/run failed with HTTP $code"
+            exit 1
+          fi
+
+      - name: Cluster + classify unprocessed articles
+        run: |
+          for i in $(seq 1 20); do
+            resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/process/run?limit=50")
+            body=$(echo "$resp" | sed '$d')
+            code=$(echo "$resp" | tail -n1)
+            echo "$body"
+            if [ "$code" -ge 400 ]; then
+              echo "::error::/process/run failed with HTTP $code"
+              exit 1
+            fi
+            remaining=$(echo "$body" | jq -r '.remaining_unprocessed // 0')
+            if [ "$remaining" = "0" ]; then
+              echo "Processing backlog drained."
+              break
+            fi
+          done
+
+      - name: Assign classified articles to admin queues (and backfill scrapes)
+        run: |
+          for i in $(seq 1 20); do
+            resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/queue/assign?limit=30")
+            body=$(echo "$resp" | sed '$d')
+            code=$(echo "$resp" | tail -n1)
+            echo "$body"
+            if [ "$code" -ge 400 ]; then
+              echo "::error::/queue/assign failed with HTTP $code"
+              exit 1
+            fi
+            assigned=$(echo "$body" | jq -r '.assigned // 0')
+            rescraped=$(echo "$body" | jq -r '.rescraped // 0')
+            if [ "$assigned" = "0" ] && [ "$rescraped" = "0" ]; then
+              echo "Queue assignment/rescrape backlog drained."
+              break
+            fi
+          done

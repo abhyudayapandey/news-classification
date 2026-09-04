@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Reviews{% endblock %}
+{% block content %}
+<h1>All reviewed articles</h1>
+
+<form method="get" action="/admin/reviews" class="card filters">
+  <div>
+    <label for="admin_id">Admin</label>
+    <select id="admin_id" name="admin_id">
+      <option value="">All</option>
+      {% for a in all_admins %}
+        <option value="{{ a.id }}" {% if filters.admin_id == a.id %}selected{% endif %}>{{ a.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="decision">Decision</label>
+    <select id="decision" name="decision">
+      <option value="">All</option>
+      <option value="agreed_with_system" {% if filters.decision == "agreed_with_system" %}selected{% endif %}>Agreed with system</option>
+      <option value="overrode" {% if filters.decision == "overrode" %}selected{% endif %}>Overrode</option>
+    </select>
+  </div>
+  <div>
+    <label for="date_from">From</label>
+    <input type="date" id="date_from" name="date_from" value="{{ filters.date_from or '' }}">
+  </div>
+  <div>
+    <label for="date_to">To</label>
+    <input type="date" id="date_to" name="date_to" value="{{ filters.date_to or '' }}">
+  </div>
+  <div style="flex: 0;">
+    <button class="btn btn-primary" type="submit">Filter</button>
+  </div>
+</form>
+
+<p class="muted">{{ total }} review(s) match this filter.</p>
+
+<div class="card" style="padding:0;">
+  <table>
+    <thead>
+      <tr><th>When</th><th>Headline</th><th>Admin</th><th>System tag</th><th>Decision</th><th>Final tag</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in reviews %}
+      <tr>
+        <td class="muted">{{ r.timestamp.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>{{ r.article.headline }}</td>
+        <td>{{ r.admin.name }}</td>
+        <td>{{ r.article.system_tag.classification.value if r.article.system_tag else "-" }}</td>
+        <td><span class="badge badge-{{ 'agreed' if r.decision.value == 'agreed_with_system' else 'overrode' }}">{{ r.decision.value }}</span></td>
+        <td>{{ r.final_tag }}</td>
+        <td><a class="btn" href="/admin/articles/{{ r.article_id }}/compare">Compare</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="pagination">
+  {% if offset > 0 %}
+    <a class="btn" href="?{{ query_string }}&offset={{ [offset - limit, 0]|max }}">&larr; Newer</a>
+  {% endif %}
+  {% if offset + limit < total %}
+    <a class="btn" href="?{{ query_string }}&offset={{ offset + limit }}">Older &rarr;</a>
+  {% endif %}
+</div>
+{% endblock %}

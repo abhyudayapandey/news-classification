@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}News Review{% endblock %} - News Framing Platform</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    margin: 0; background: #f5f6f8; color: #1a1a1a; line-height: 1.5;
+  }
+  header {
+    background: #1f2937; color: #fff; padding: 0.75rem 1.5rem;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;
+  }
+  header a { color: #e5e7eb; text-decoration: none; margin-right: 1rem; font-size: 0.95rem; }
+  header a:hover { color: #fff; text-decoration: underline; }
+  header .brand { font-weight: 600; color: #fff; margin-right: 1.5rem; }
+  header .user-info { font-size: 0.85rem; color: #9ca3af; }
+  main { max-width: 900px; margin: 1.5rem auto; padding: 0 1rem; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.4rem; margin-top: 0; }
+  h2 { font-size: 1.1rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #eee; }
+  th { color: #555; font-weight: 600; }
+  tr:hover { background: #fafafa; }
+  .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.78rem; font-weight: 600; }
+  .badge-pro { background: #dbeafe; color: #1e40af; }
+  .badge-anti { background: #fee2e2; color: #991b1b; }
+  .badge-apolitical { background: #f3f4f6; color: #4b5563; }
+  .badge-overdue { background: #fef3c7; color: #92400e; }
+  .badge-ok { background: #d1fae5; color: #065f46; }
+  .badge-agreed { background: #d1fae5; color: #065f46; }
+  .badge-overrode { background: #ede9fe; color: #5b21b6; }
+  .btn {
+    display: inline-block; padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #d1d5db;
+    background: #fff; color: #1a1a1a; cursor: pointer; font-size: 0.9rem; text-decoration: none;
+  }
+  .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .btn-danger { background: #dc2626; color: #fff; border-color: #dc2626; }
+  .btn:hover { opacity: 0.9; }
+  label { display: block; margin: 0.6rem 0 0.25rem; font-size: 0.85rem; color: #444; font-weight: 600; }
+  input, select { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.95rem; }
+  .error { background: #fee2e2; color: #991b1b; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+  .success { background: #d1fae5; color: #065f46; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
+  .muted { color: #6b7280; font-size: 0.85rem; }
+  .article-body { white-space: pre-wrap; line-height: 1.7; }
+  .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem; }
+  .filters > div { flex: 1; min-width: 140px; }
+  form.inline { display: inline; }
+  .pagination { display: flex; gap: 0.5rem; margin-top: 1rem; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <span class="brand">News Review</span>
+    {% if current_admin %}
+      <a href="/admin/queue">My Queue</a>
+      {% if current_admin.role.value == "super_admin" %}
+        <a href="/admin/admins">Admins</a>
+        <a href="/admin/reviews">Reviews</a>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% if current_admin %}
+    <div>
+      <span class="user-info">{{ current_admin.name }} ({{ current_admin.role.value }})</span>
+      <form class="inline" method="post" action="/admin/logout" style="display:inline;">
+        <button class="btn" type="submit" style="margin-left:0.75rem;">Log out</button>
+      </form>
+    </div>
+  {% endif %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}System vs Admin Decision{% endblock %}
+{% block content %}
+<p><a href="/admin/reviews">&larr; Back to reviews</a></p>
+
+<div class="card">
+  <p class="muted">Article #{{ article.id }} - published {{ article.published_at.strftime("%Y-%m-%d %H:%M") }} - outlet: {{ article.outlet.name }}</p>
+  <h1>{{ article.headline }}</h1>
+  {% set body = article.scraped_body_text or article.body_text %}
+  <p class="muted">
+    {% if article.scraped_body_text %}Full article text (scraped from the source page).
+    {% else %}RSS summary only{% if article.scrape_error %} - full-text fetch was not available ({{ article.scrape_error }}){% endif %}.
+    {% endif %}
+  </p>
+  <div class="article-body">
+    {% if body and body.strip() %}
+      {{ body }}
+    {% else %}
+      <span class="muted"><em>No text at all was available for this article - only a headline.</em></span>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>System tag vs. admin decision</h2>
+  <table>
+    <thead><tr><th></th><th>System tag</th><th>Admin decision</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Classification</td>
+        <td><span class="badge badge-{{ 'pro' if system_tag.classification.value == 'pro-establishment' else ('anti' if system_tag.classification.value == 'anti-establishment' else 'apolitical') }}">{{ system_tag.classification.value }}</span></td>
+        <td>
+          {% if review %}
+            <span class="badge badge-{{ 'pro' if review.final_tag == 'pro-establishment' else 'anti' }}">{{ review.final_tag }}</span>
+          {% else %}
+            <span class="muted">not yet reviewed</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Jurisdiction</td>
+        <td>{{ system_tag.jurisdiction or "-" }}</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <td>Ruling party</td>
+        <td>{{ system_tag.ruling_party or "-" }}</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <td>Confidence</td>
+        <td>{{ "%.0f"|format(system_tag.confidence_score * 100) }}%</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <td>Provider</td>
+        <td>{{ system_tag.provider }}</td>
+        <td>-</td>
+      </tr>
+      {% if review %}
+      <tr>
+        <td>Decision</td>
+        <td>-</td>
+        <td><span class="badge badge-{{ 'agreed' if review.decision.value == 'agreed_with_system' else 'overrode' }}">{{ review.decision.value }}</span></td>
+      </tr>
+      <tr>
+        <td>Reviewed by</td>
+        <td>-</td>
+        <td>{{ review.admin.name }} at {{ review.timestamp.strftime("%Y-%m-%d %H:%M") }}</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
