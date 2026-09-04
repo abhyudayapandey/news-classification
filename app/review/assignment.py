@@ -77,6 +77,7 @@ class RetryFailedScrapesResult:
     matched: int = 0  # unreviewed articles that currently have a scrape_error on record
     rescraped: int = 0  # how many of those this call actually re-attempted (bounded by limit)
     recovered: int = 0  # of those, how many now have usable text and left the Manual Review bucket
+    diverted: int = 0  # of those, how many were confirmed to still need manual review and were newly diverted
 
 
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
@@ -309,13 +310,25 @@ def retry_failed_scrapes(db: Session, limit: int | None = None) -> RetryFailedSc
 
     Finds every unreviewed article with a scrape_error on record,
     regardless of whether it's sitting in a regular admin's queue or the
-    Manual Review bucket, and re-attempts up to `limit` of them. One a
+    Manual Review bucket, and re-attempts up to `limit` of them. If a
     retry recovers usable text for an article that had been diverted to
     Manual Review, it's cleared back out of that bucket (needs_manual_
     link_review=False) so the normal assignment/queue flow picks it up
     again - it does NOT immediately assign it to an admin itself, to keep
     that decision (load balancing) in one place: call assign_pending_
     articles() afterwards to actually queue it.
+
+    The reverse also happens here, not just in divert_unreviewable_
+    articles(): an article can have a scrape_error *and* sit in a regular
+    admin's queue with needs_manual_link_review still False if it was
+    assigned before that check existed (same #238-shaped gap divert_
+    unreviewable_articles() cleans up) - confirmed live (#37: a 404, no
+    RSS teaser, still sitting in a regular admin's queue with nothing to
+    review). Rather than depend on divert_unreviewable_articles() having
+    already been called, this checks _needs_manual_review() after every
+    retry regardless of the article's starting state, so a still-stuck
+    article gets diverted here too, not just a previously-diverted one
+    getting recovered.
     """
     stmt = (
         select(Article)
@@ -329,9 +342,15 @@ def retry_failed_scrapes(db: Session, limit: int | None = None) -> RetryFailedSc
         was_diverted = article.needs_manual_link_review
         _scrape_and_record(article)
         result.rescraped += 1
-        if was_diverted and not _needs_manual_review(article):
+        still_needs_manual = _needs_manual_review(article)
+        if was_diverted and not still_needs_manual:
             article.needs_manual_link_review = False
             result.recovered += 1
+        elif still_needs_manual and not was_diverted:
+            article.assigned_admin_id = None
+            article.queued_at = None
+            article.needs_manual_link_review = True
+            result.diverted += 1
     db.commit()
 
     return result
