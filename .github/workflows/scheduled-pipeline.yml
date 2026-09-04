@@ -11,6 +11,14 @@ name: Scheduled ingestion pipeline
 # CPU-bound work per article on a free-tier instance), so each is looped
 # until its own response says there's nothing left to do, rather than
 # assuming one call drains the whole backlog.
+#
+# Both are also given a generous 600s per-call timeout and a modest
+# per-call limit (20, not 50) - a batch that size can genuinely take
+# several minutes on Render's free-tier CPU running a local embedding
+# model, and process_articles()/assign_pending_articles() both commit
+# per article, so a slow-but-still-working call isn't wasted work even
+# if it does eventually time out - the next call (or the next 4-hour
+# cycle) just continues from wherever the DB actually is.
 
 on:
   schedule:
@@ -20,7 +28,7 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       # Set a repository variable named RENDER_APP_URL (Settings -> Secrets
       # and variables -> Actions -> Variables) if the deployed URL ever
@@ -41,7 +49,7 @@ jobs:
       - name: Cluster + classify unprocessed articles
         run: |
           for i in $(seq 1 20); do
-            resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/process/run?limit=50")
+            resp=$(curl -sS --max-time 600 -w '\n%{http_code}' -X POST "$APP_URL/process/run?limit=20")
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"
@@ -59,7 +67,7 @@ jobs:
       - name: Assign classified articles to admin queues (and backfill scrapes)
         run: |
           for i in $(seq 1 20); do
-            resp=$(curl -sS --max-time 300 -w '\n%{http_code}' -X POST "$APP_URL/queue/assign?limit=30")
+            resp=$(curl -sS --max-time 600 -w '\n%{http_code}' -X POST "$APP_URL/queue/assign?limit=20")
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"
