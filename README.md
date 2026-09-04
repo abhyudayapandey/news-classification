@@ -90,7 +90,7 @@ app/
                        clusters/admin-data/queue) plus admin_ui.py (the Phase 3 HTML UI)
   templates/           Jinja2 templates for the admin/super-admin UI (Phase 3)
   auth/                Phase 3: bcrypt hashing, session-based auth dependencies
-  review/              Phase 3: blinding, queue assignment, review-listing queries
+  review/              Phase 3: blinding, queue assignment, scraping, review-listing queries
   ingestion/           Phase 1: RSS fetch, dedup, ingestion pipeline
     outlets_config.py  Loads config/outlets.yaml, upserts into `outlets`
     feed_fetcher.py    Fetches + parses one RSS feed into normalized entries
@@ -723,7 +723,75 @@ The 48-hour SLA (`REVIEW_SLA_HOURS`, default 48) shows as a simple
 overdue/hours-remaining badge in the queue and on the review page — no
 auto-escalation on breach, exactly as Section 11 says to defer.
 
-### 12.4 Review decision -> Section 6's `Review` + `published_tag`
+### 12.4 Full-text scraping for admin review
+
+Raised directly during review, and worth taking as seriously as it was
+raised: RSS feeds are notifications that content exists, not a
+distribution channel — most outlets deliberately put only a headline and
+a short teaser (sometimes nothing) in the feed, precisely so you have to
+visit their site to read the rest. An admin asked to judge pro/anti
+framing off a one-line teaser can't do that job, and this was surfacing
+as articles whose review page appeared to be missing content entirely.
+
+This has no clean free-and-zero-risk answer, so rather than silently pick
+one, the tradeoffs were laid out directly: scrape (free, but most
+outlets' ToS prohibit automated scraping, and it's fragile — the answer
+we went with), pay for a licensed content API (the legitimate way to
+actually redistribute full text, real cost), or redesign the end-user
+product to never need full text at all (headline + snippet + link to the
+source, the Google News pattern — free, no legal exposure, but a real
+product-direction change deferred to whenever Phase 4 is actually
+designed).
+
+**What's built**, scoped deliberately narrow given the ToS risk:
+`app/review/scraping.py` fetches an article's own page and extracts the
+main text via [trafilatura](https://github.com/adbar/trafilatura) (a
+purpose-built content-extraction library — not a hand-rolled "grab every
+`<p>` tag" heuristic, which pulls in nav/ads/comments noise). Verified
+directly: nav links, an ad banner, and a footer/comments block were all
+correctly excluded from a realistic test page, while the actual article
+paragraphs were kept intact.
+
+- **Only for articles that will actually be reviewed.** `app/review/
+  assignment.py` triggers a scrape exactly when an article is assigned to
+  an admin's queue — never for apolitical articles, which are never
+  reviewed at all and would make this pure waste. Nothing is scraped in
+  bulk "just in case."
+- **Respects each site's robots.txt** and identifies itself honestly via
+  User-Agent — no browser-spoofing to bypass a block. A site that
+  disallows or blocks this is treated as "can't get this one," not
+  something to route around. Verified: a path disallowed via robots.txt
+  is correctly refused without even being fetched.
+- **Never republished or end-user-facing.** The result
+  (`Article.scraped_body_text`) exists only to give a human reviewer
+  enough context to make an accurate call, privately. There is no
+  end-user view in this POC yet, and this data has no path to one without
+  a deliberate future decision to build that — see the option laid out
+  above (snippet + link-out) for why "just show admins' scraped text to
+  end users too" is not the assumed default for whenever that's built.
+- **Graceful fallback, not a silent gap.** If a scrape fails (blocked,
+  timed out, extraction found nothing), `scrape_error` records why, and
+  the review/compare pages fall back to the RSS teaser with the failure
+  reason shown — verified for both "teaser exists, scrape failed" and
+  "neither exists" cases. The scraped text (when present) goes through
+  the same blinding as the RSS teaser — verified a self-reference inside
+  scraped text ("this newspaper") is correctly redacted.
+- **Bounded per call, same lesson as Phase 2's `/process/run`.** Each
+  scrape is a real network fetch (up to a 15s timeout) that now runs
+  inside `/queue/assign`, so a large batch would take a genuinely long
+  time in one HTTP call. The default batch size was lowered (10, capped
+  at 200) specifically because of this added per-article cost — call it
+  repeatedly for a large backlog rather than raising the limit.
+
+**Said plainly, once more, because it matters**: this is still not zero
+legal risk. It's judged to be a substantially smaller footprint than a
+general-purpose scraper — used only to inform a private human decision,
+never stored for or shown to the public — but if this project ever moves
+toward Phase 4's public site, "we already scrape for admin review" is not
+a green light to reuse that content for the public-facing product without
+a real, separate decision (and likely legal input) at that point.
+
+### 12.5 Review decision -> Section 6's `Review` + `published_tag`
 
 Confirming or overriding is one form: two radio options (pro/anti-
 establishment), pre-selected to the system tag. Submitting the
@@ -734,7 +802,7 @@ way for the two to disagree with each other. This creates the `Review`
 row (`admin_id`, `final_tag`, `decision`, `timestamp`) and sets
 `Article.published_tag` directly, exactly per Section 6.
 
-### 12.5 Super admin: account CRUD, deactivate-don't-delete
+### 12.6 Super admin: account CRUD, deactivate-don't-delete
 
 `Admin` gained `username`, `password_hash`, `is_active`. Deactivating
 (never hard-deleting, so `Review.admin_id` history stays intact) also
@@ -749,7 +817,7 @@ rather than glossing over: the initial guard only checked
 demoting their *role* to `admin` while leaving them active. Both paths
 are now blocked by the same check.
 
-### 12.6 Bootstrapping the first super admin
+### 12.7 Bootstrapping the first super admin
 
 Nothing can log in to create the first account, and an always-open
 "create super admin" endpoint would be a real vulnerability if left
@@ -762,7 +830,7 @@ exists) without leaving a permanent open door. Verified: works once,
 (password entered via `getpass`, never a CLI argument or shell history)
 works for the first account and every one after.
 
-### 12.7 Super admin: oversight + review-listing groundwork
+### 12.8 Super admin: oversight + review-listing groundwork
 
 - `GET /admin/articles/{id}/compare` — system tag vs. admin decision side
   by side, labeled, per Section 3.
@@ -776,7 +844,7 @@ works for the first account and every one after.
   `.decision`, and `.timestamp` are now indexed for exactly this filtering
   pattern.
 
-### 12.8 The Phase 1/2 debug endpoints are all still here
+### 12.9 The Phase 1/2 debug endpoints are all still here
 
 Per your instruction, nothing from `/health`, `/articles`,
 `/ingest/run`, `/process/run`, `/clusters`, `/clusters/stats`, or
@@ -786,7 +854,7 @@ the authenticated HTML admin UI, and for feeding the super-admin
 dashboards later. `/queue/assign` (new this phase) follows the same
 pattern.
 
-### 12.9 Verified end-to-end
+### 12.10 Verified end-to-end
 
 Full integration tests via FastAPI's `TestClient` (real HTTP requests,
 real session cookies, against actual Postgres — no mocking of the routes
@@ -802,11 +870,19 @@ rejected identically (no account-enumeration signal) → unauthenticated
 access redirected to login → self-deactivation blocked → last-super-admin
 guard verified for **both** deactivation and role-demotion, isolated from
 the self-deactivation case with a second super-admin account →
-deactivation's queue reassignment. Not yet exercised: an actual browser
-session (you logging in on Render) — the same "needs a real deploy"
-caveat as every prior phase.
+deactivation's queue reassignment. Also verified against a local mock
+article page: scraping correctly extracts real article text while
+dropping nav/ad/footer noise, respects a robots.txt disallow without
+fetching the page at all, and falls back to the RSS teaser (with the
+failure reason shown) for both "teaser exists, scrape failed" and
+"neither exists" cases - scraped text goes through the same blinding as
+the RSS teaser either way. Not yet exercised: an actual browser session
+(you logging in on Render) or scraping against the real configured
+outlets specifically - the same "needs a real deploy" caveat as every
+prior phase, and worth an early check given how outlet-specific scraping
+tends to be.
 
-### 12.10 Running it
+### 12.11 Running it
 
 ```bash
 # One-time setup

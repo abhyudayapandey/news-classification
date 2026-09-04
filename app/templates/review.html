@@ -9,13 +9,21 @@
     {% if overdue %}<span class="badge badge-overdue">OVERDUE</span>{% endif %}
   </p>
   <h1>{{ blinded_headline }}</h1>
-  <div class="article-body">
-    {% if blinded_body and blinded_body.strip() %}
-      {{ blinded_body }}
-    {% else %}
-      <span class="muted"><em>No body text was provided by this outlet's feed for this article - only a headline. Classification/jurisdiction below was based on the headline alone.</em></span>
-    {% endif %}
-  </div>
+  {% if blinded_body and blinded_body.strip() %}
+    <p class="muted">
+      {% if body_source == "scraped" %}Full article text (scraped from the source page).
+      {% else %}RSS summary only{% if article.scrape_error %} - full-text fetch was not available ({{ article.scrape_error }}){% endif %}.
+      {% endif %}
+    </p>
+    <div class="article-body">{{ blinded_body }}</div>
+  {% else %}
+    <div class="article-body">
+      <span class="muted"><em>
+        No text at all was available for this article{% if article.scrape_error %} - the RSS feed had no summary, and the full-text fetch failed ({{ article.scrape_error }}){% else %} - only a headline was provided by the feed{% endif %}.
+        Classification/jurisdiction below was based on the headline alone.
+      </em></span>
+    </div>
+  {% endif %}
 </div>
 
 <div class="card">

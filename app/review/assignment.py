@@ -8,8 +8,18 @@ articles in their queue. This self-corrects across repeated small batches
 (e.g. after /process/run?limit=20 runs several times) without needing to
 persist "whose turn is next" anywhere - recomputing load from the DB each
 call is cheap at POC scale and can't drift out of sync with reality.
+
+Also attempts a full-text scrape (app/review/scraping.py) for each newly-
+assigned article, since that's the natural point where "this article is
+about to be reviewed by a human" becomes true - apolitical articles never
+reach here, so they're never scraped. This makes assignment a network-
+bound operation now, same caveat as Phase 2's /process/run: one bad or
+slow site shouldn't be able to stall the whole batch, so each scrape is
+wrapped and a failure just leaves scraped_body_text NULL (the review UI
+falls back to the RSS teaser) rather than blocking assignment.
 """
 
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import func, select
@@ -17,6 +27,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Admin, Article, SystemTag
 from app.models.enums import ClassificationTag
+from app.review.scraping import scrape_article_text
+
+logger = logging.getLogger(__name__)
 
 
 def _active_admin_queue_depths(db: Session) -> dict[int, int]:
@@ -75,6 +88,15 @@ def assign_pending_articles(db: Session, limit: int | None = None) -> int:
         article.queued_at = datetime.now(timezone.utc)
         depths[target_admin_id] += 1
         assigned += 1
+
+        try:
+            result = scrape_article_text(article.url)
+            article.scraped_body_text = result.text
+            article.scrape_error = result.error
+        except Exception as exc:  # noqa: BLE001 - one bad site shouldn't stall the whole batch
+            logger.exception("Scraping crashed unexpectedly for article %s", article.id)
+            article.scrape_error = f"unexpected error: {exc}"[:255]
+        article.scrape_attempted_at = datetime.now(timezone.utc)
 
     db.commit()
     return assigned

@@ -72,6 +72,23 @@ def logout(request: Request):
 # --- Admin queue + review ---
 
 
+def _blind_article(article: Article) -> tuple[str, str, str]:
+    """Prefers the scraped full text (app/review/scraping.py) over the RSS
+    teaser in body_text - both go through the same redaction either way.
+    Returns (blinded_headline, blinded_body, body_source) where
+    body_source is "scraped" or "rss" so the template can label which one
+    the admin is actually looking at.
+    """
+    if article.scraped_body_text:
+        body_source = "scraped"
+        source_body = article.scraped_body_text
+    else:
+        body_source = "rss"
+        source_body = article.body_text
+    blinded_headline, blinded_body = blind_headline_and_body(article.headline, source_body, article.outlet.name)
+    return blinded_headline, blinded_body, body_source
+
+
 def _queue_item(article: Article) -> dict:
     hours_elapsed = (datetime.now(timezone.utc) - article.queued_at).total_seconds() / 3600
     overdue = hours_elapsed > settings.review_sla_hours
@@ -117,13 +134,14 @@ def review_article(
         # below, rather than a bare 404.
         return RedirectResponse("/admin/queue", status_code=303)
 
-    blinded_headline, blinded_body = blind_headline_and_body(article.headline, article.body_text, article.outlet.name)
+    blinded_headline, blinded_body, body_source = _blind_article(article)
     hours_elapsed = (datetime.now(timezone.utc) - article.queued_at).total_seconds() / 3600
     return render(
         request, "review.html", current_admin,
         article=article,
         blinded_headline=blinded_headline,
         blinded_body=blinded_body,
+        body_source=body_source,
         system_tag=article.system_tag,
         overdue=hours_elapsed > settings.review_sla_hours,
     )
@@ -142,11 +160,12 @@ def submit_review(
         return RedirectResponse("/admin/queue", status_code=303)
 
     if final_tag not in (ClassificationTag.PRO_ESTABLISHMENT.value, ClassificationTag.ANTI_ESTABLISHMENT.value):
-        blinded_headline, blinded_body = blind_headline_and_body(article.headline, article.body_text, article.outlet.name)
+        blinded_headline, blinded_body, body_source = _blind_article(article)
         return render(
             request, "review.html", current_admin, status_code=400,
             article=article, blinded_headline=blinded_headline, blinded_body=blinded_body,
-            system_tag=article.system_tag, overdue=False, error="Choose one of the two tags.",
+            body_source=body_source, system_tag=article.system_tag, overdue=False,
+            error="Choose one of the two tags.",
         )
 
     decision = (

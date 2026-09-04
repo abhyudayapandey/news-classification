@@ -92,6 +92,21 @@ class Article(Base):
     # still oldest published_at first per Section 5's literal wording.
     queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Best-effort full-text scrape of the article's own page (Section 5:
+    # admins need enough text to review accurately, which the RSS teaser in
+    # body_text often isn't). See app/review/scraping.py's module docstring
+    # for the legal/ethical posture - this is for internal admin review
+    # only, never shown to or stored for an end user, and app/review/
+    # assignment.py only attempts it for articles that actually reach an
+    # admin's queue (never for apolitical articles, which are never
+    # reviewed at all). NULL means "not attempted yet"; scrape_attempted_at
+    # non-null with scraped_body_text still NULL means "tried and failed" -
+    # see scrape_error for why. The review UI falls back to body_text (the
+    # RSS teaser) when this is unavailable.
+    scraped_body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    scrape_attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    scrape_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

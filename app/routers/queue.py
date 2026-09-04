@@ -14,8 +14,19 @@ router = APIRouter(prefix="/queue", tags=["queue"])
 
 @router.post("/assign")
 def trigger_assignment(
-    limit: int = Query(default=50, le=500, description="Max pending articles to assign in this call"),
+    limit: int = Query(
+        default=10,
+        le=200,
+        description="Max pending articles to assign (and scrape) in this call - "
+        "kept small by default since each one now costs a real network fetch",
+    ),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Default lowered from Phase 2's ingestion-style batches (which had no
+    per-item network cost) - assignment now also attempts a full-text
+    scrape per article (app/review/scraping.py), so a large batch here can
+    genuinely take a while. Call repeatedly for a big backlog, same pattern
+    as /process/run.
+    """
     assigned = assign_pending_articles(db, limit=limit)
     return {"assigned": assigned}
