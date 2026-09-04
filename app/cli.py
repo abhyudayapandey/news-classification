@@ -9,6 +9,7 @@ Usage:
     python -m app.cli verify-local-models # Phase 2: confirm the embedding model downloads/loads
     python -m app.cli compare-providers   # Phase 2: run multiple providers on the same articles, side by side
     python -m app.cli assign-queue        # Phase 3: assign classified articles to admin queues
+    python -m app.cli heal-bio-scrapes    # Phase 3: one-time cleanup for wrongly-accepted author-bio scrapes
     python -m app.cli create-admin        # Phase 3: create an admin/super_admin account
 """
 
@@ -213,6 +214,21 @@ def cmd_assign_queue(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_heal_bio_scrapes(args: argparse.Namespace) -> int:
+    from app.review.assignment import heal_bio_scrapes
+
+    db = SessionLocal()
+    try:
+        result = heal_bio_scrapes(db, limit=args.limit)
+    finally:
+        db.close()
+    print(f"{result.matched} article(s) currently have a stored scrape that looks like an author bio.")
+    print(f"Re-attempted {result.rescraped} of them this run.")
+    if result.matched > result.rescraped:
+        print("Run again to continue healing the rest.")
+    return 0
+
+
 def cmd_create_admin(args: argparse.Namespace) -> int:
     from app.auth.security import hash_password
     from app.models import Admin
@@ -276,6 +292,14 @@ def main() -> int:
     assign_parser = subparsers.add_parser("assign-queue", help="Assign classified articles to admin queues")
     assign_parser.add_argument("--limit", type=int, default=None, help="Max articles to assign (default: no limit)")
 
+    heal_bio_parser = subparsers.add_parser(
+        "heal-bio-scrapes",
+        help="One-time cleanup: re-attempt scrapes that were wrongly accepted as an author bio",
+    )
+    heal_bio_parser.add_argument(
+        "--limit", type=int, default=None, help="Max articles to re-attempt (default: no limit)"
+    )
+
     create_admin_parser = subparsers.add_parser("create-admin", help="Create an admin/super_admin account")
     create_admin_parser.add_argument("--username", required=True)
     create_admin_parser.add_argument("--name", required=True)
@@ -299,6 +323,8 @@ def main() -> int:
         return cmd_compare_providers(args)
     if args.command == "assign-queue":
         return cmd_assign_queue(args)
+    if args.command == "heal-bio-scrapes":
+        return cmd_heal_bio_scrapes(args)
     if args.command == "create-admin":
         return cmd_create_admin(args)
 

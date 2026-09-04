@@ -66,7 +66,11 @@ _BIO_CAREER_PHRASES_PATTERN = re.compile(
 )
 
 
-def _looks_like_author_bio(text: str) -> bool:
+def looks_like_author_bio(text: str) -> bool:
+    """Public (not just used within this module): app/review/assignment.py
+    reuses this to scan already-stored scraped_body_text for articles that
+    were wrongly accepted before this check existed, so they can be healed.
+    """
     # Check the first couple of non-empty lines/paragraphs, not just the
     # very start of the whole text - trafilatura often prepends the
     # headline as its own line before the body, which would otherwise
@@ -133,7 +137,7 @@ def scrape_article_text(url: str) -> ScrapeResult:
         return ScrapeResult(text=None, error="extraction produced no text")
 
     text = text.strip()
-    if _looks_like_author_bio(text):
+    if looks_like_author_bio(text):
         logger.info("Extraction for %s looked like an author bio, not an article - discarding", url)
         return ScrapeResult(text=None, error="extraction likely grabbed an author bio, not the article")
 
