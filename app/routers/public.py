@@ -10,12 +10,12 @@ see.
 """
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.public.queries import get_home_columns
+from app.public.queries import get_cluster_comparison, get_home_columns
 
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
@@ -34,3 +34,14 @@ def home(
 @router.get("/about", response_class=HTMLResponse)
 def about(request: Request):
     return templates.TemplateResponse(request, "public_about.html", {})
+
+
+@router.get("/compare/{cluster_id}")
+def compare(cluster_id: int, request: Request, db: Session = Depends(get_db)):
+    comparison = get_cluster_comparison(db, cluster_id)
+    if comparison is None:
+        # Doesn't exist, or nothing published for it yet (e.g. a stale/
+        # guessed URL) - same "just go home" behavior as the admin UI uses
+        # for a missing/inaccessible resource, rather than a bare 404.
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "public_compare.html", {"comparison": comparison})

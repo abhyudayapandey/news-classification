@@ -38,6 +38,7 @@ class ClusterCard:
     published_at: datetime
     published_at_display: str  # pre-formatted relative time - see app/public/formatting.time_ago
     outlet_breakdown_display: str | None  # e.g. "3 pro · 2 anti" - see format_outlet_breakdown
+    has_comparison: bool  # True when 2+ tags exist for this cluster - see /compare/{cluster_id}
     jurisdiction: str | None
     ruling_party: str | None
     primary_source_url: str | None
@@ -48,6 +49,26 @@ class HomeColumns:
     pro_establishment: list[ClusterCard]
     anti_establishment: list[ClusterCard]
     apolitical: list[ClusterCard]
+
+
+@dataclass
+class ComparisonArticle:
+    headline: str
+    excerpt: str
+    article_url: str
+    outlet_name: str
+    published_at_display: str
+    jurisdiction: str | None
+    ruling_party: str | None
+
+
+@dataclass
+class ClusterComparison:
+    cluster_id: int
+    primary_source_url: str | None
+    pro_establishment: list[ComparisonArticle]
+    anti_establishment: list[ComparisonArticle]
+    apolitical: list[ComparisonArticle]
 
 
 def _published_articles_for_tag(db: Session, tag: ClassificationTag) -> list[Article]:
@@ -99,28 +120,86 @@ def _cluster_cards_for_tag(
     for article in articles:
         representative_by_cluster.setdefault(article.cluster_id, article)
 
-    cards = [
-        ClusterCard(
-            cluster_id=cluster_id,
-            headline=article.headline,
-            # Section 5/scraping.py: scraped_body_text is for internal admin
-            # review only and must never reach an end user - the public
-            # excerpt can only ever be the RSS teaser (body_text), even
-            # when a fuller scrape happens to exist for this article.
-            excerpt=make_excerpt(article.body_text),
-            article_url=article.url,
-            outlet_name=article.outlet.name,
-            published_at=article.published_at,
-            published_at_display=make_time_ago(article.published_at),
-            outlet_breakdown_display=format_outlet_breakdown(breakdown_by_cluster.get(cluster_id, {})),
-            jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
-            ruling_party=article.system_tag.ruling_party if article.system_tag else None,
-            primary_source_url=article.cluster.primary_source_url if article.cluster else None,
+    cards = []
+    for cluster_id, article in representative_by_cluster.items():
+        cluster_breakdown = breakdown_by_cluster.get(cluster_id, {})
+        cards.append(
+            ClusterCard(
+                cluster_id=cluster_id,
+                headline=article.headline,
+                # Section 5/scraping.py: scraped_body_text is for internal
+                # admin review only and must never reach an end user - the
+                # public excerpt can only ever be the RSS teaser
+                # (body_text), even when a fuller scrape happens to exist
+                # for this article.
+                excerpt=make_excerpt(article.body_text),
+                article_url=article.url,
+                outlet_name=article.outlet.name,
+                published_at=article.published_at,
+                published_at_display=make_time_ago(article.published_at),
+                outlet_breakdown_display=format_outlet_breakdown(cluster_breakdown),
+                # More than one tag present for this cluster means outlets'
+                # independent, blinded reviews genuinely diverged - that's
+                # exactly the case worth a "compare the coverage" link to
+                # /compare/{cluster_id}. A single-tag cluster (everyone
+                # agreed, or only one outlet has covered it so far) has
+                # nothing to compare, so no link.
+                has_comparison=sum(1 for count in cluster_breakdown.values() if count > 0) > 1,
+                jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
+                ruling_party=article.system_tag.ruling_party if article.system_tag else None,
+                primary_source_url=article.cluster.primary_source_url if article.cluster else None,
+            )
         )
-        for cluster_id, article in representative_by_cluster.items()
-    ]
     cards.sort(key=lambda c: c.published_at, reverse=True)
     return cards[:limit]
+
+
+def get_cluster_comparison(db: Session, cluster_id: int) -> ClusterComparison | None:
+    """Every published article in one story cluster, grouped by tag - the
+    full "how did each side cover this" view a home-page card can only
+    hint at (one representative headline plus a breakdown count). Same
+    published_tag-only visibility rule as everywhere else in this module.
+    Returns None when the cluster doesn't exist or has nothing published
+    yet, so the route can redirect home instead of rendering an empty page.
+    """
+    stmt = (
+        select(Article)
+        .options(joinedload(Article.outlet), joinedload(Article.system_tag), joinedload(Article.cluster))
+        .where(
+            Article.cluster_id == cluster_id,
+            Article.published_tag.is_not(None),
+            Article.duplicate_of_id.is_(None),
+        )
+        .order_by(Article.published_at.desc())
+    )
+    articles = list(db.scalars(stmt).unique())
+    if not articles:
+        return None
+
+    by_tag: dict[str, list[ComparisonArticle]] = {tag.value: [] for tag in ClassificationTag}
+    primary_source_url = None
+    for article in articles:
+        if article.cluster and article.cluster.primary_source_url:
+            primary_source_url = article.cluster.primary_source_url
+        by_tag[article.published_tag].append(
+            ComparisonArticle(
+                headline=article.headline,
+                excerpt=make_excerpt(article.body_text),
+                article_url=article.url,
+                outlet_name=article.outlet.name,
+                published_at_display=make_time_ago(article.published_at),
+                jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
+                ruling_party=article.system_tag.ruling_party if article.system_tag else None,
+            )
+        )
+
+    return ClusterComparison(
+        cluster_id=cluster_id,
+        primary_source_url=primary_source_url,
+        pro_establishment=by_tag[ClassificationTag.PRO_ESTABLISHMENT.value],
+        anti_establishment=by_tag[ClassificationTag.ANTI_ESTABLISHMENT.value],
+        apolitical=by_tag[ClassificationTag.APOLITICAL.value],
+    )
 
 
 def get_home_columns(db: Session, limit_per_column: int = 15) -> HomeColumns:

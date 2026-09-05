@@ -11,7 +11,17 @@
   <div class="flex flex-wrap items-center gap-1.5 mb-3">
     <span class="text-[11.5px] font-medium text-ink-faint mr-0.5">{{ item.published_at_display }}</span>
     {% if item.jurisdiction %}{{ pill(item.jurisdiction ~ (" (" ~ item.ruling_party ~ ")" if item.ruling_party else "")) }}{% endif %}
-    {% if item.outlet_breakdown_display %}{{ pill(item.outlet_breakdown_display) }}{% endif %}
+    {% if item.outlet_breakdown_display %}
+      {% if item.has_comparison %}
+        <a href="/compare/{{ item.cluster_id }}"
+           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[11.5px] font-semibold hover:bg-accent hover:text-accent-ink transition-colors">
+          {{ item.outlet_breakdown_display }}
+          <svg width="8" height="8" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      {% else %}
+        {{ pill(item.outlet_breakdown_display) }}
+      {% endif %}
+    {% endif %}
   </div>
 
   <h3 class="font-display text-[17px] leading-snug font-semibold text-balance">
