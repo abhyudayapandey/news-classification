@@ -36,6 +36,36 @@ def excerpt(text: str, max_chars: int = 200) -> str:
     return truncated.rstrip(",.;:") + "…"
 
 
+_BREAKDOWN_LABELS = {
+    "pro-establishment": "pro",
+    "anti-establishment": "anti",
+    "apolitical": "apolitical",
+}
+_BREAKDOWN_ORDER = ["pro-establishment", "anti-establishment", "apolitical"]
+
+
+def format_outlet_breakdown(outlet_counts_by_tag: dict[str, int]) -> str | None:
+    """Cross-tag outlet-agreement breakdown for one story cluster, e.g.
+    "3 pro · 2 anti" - each outlet's coverage of the same story is
+    reviewed independently and blind, so a story can genuinely have some
+    outlets landing pro and others anti; this makes that split visible on
+    the card itself instead of leaving a reader to notice the same
+    headline sitting in two columns. "4 pro" (a single tag) means every
+    outlet that covered this story agreed. None when only one outlet's
+    coverage exists for this story at all - nothing to compare yet, same
+    threshold the old outlet-count pill used.
+    """
+    total = sum(outlet_counts_by_tag.values())
+    if total <= 1:
+        return None
+    parts = [
+        f"{outlet_counts_by_tag[tag]} {_BREAKDOWN_LABELS[tag]}"
+        for tag in _BREAKDOWN_ORDER
+        if outlet_counts_by_tag.get(tag, 0) > 0
+    ]
+    return " · ".join(parts)
+
+
 def time_ago(dt: datetime) -> str:
     """Compact relative time for a card's byline row ("3h ago", "2d ago") -
     falls back to an absolute date once it's far enough back that "Nd ago"
