@@ -24,6 +24,7 @@ from app.models import Article
 from app.models.enums import ClassificationTag
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
+from app.public.formatting import format_outlet_breakdown
 from app.public.formatting import time_ago as make_time_ago
 
 
@@ -36,7 +37,7 @@ class ClusterCard:
     outlet_name: str
     published_at: datetime
     published_at_display: str  # pre-formatted relative time - see app/public/formatting.time_ago
-    outlet_count: int  # outlets whose reviewed coverage agrees on this tag, within this cluster
+    outlet_breakdown_display: str | None  # e.g. "3 pro · 2 anti" - see format_outlet_breakdown
     jurisdiction: str | None
     ruling_party: str | None
     primary_source_url: str | None
@@ -67,14 +68,36 @@ def _published_articles_for_tag(db: Session, tag: ClassificationTag) -> list[Art
     return list(db.scalars(stmt).unique())
 
 
-def _cluster_cards_for_tag(db: Session, tag: ClassificationTag, limit: int) -> list[ClusterCard]:
+def _outlet_breakdown_by_cluster(db: Session) -> dict[int, dict[str, int]]:
+    """One pass across every published article (all three tags, not just
+    one) building {cluster_id: {tag: distinct_outlet_count}} - the cross-
+    tag view a single tag's query can't see on its own, since two outlets
+    covering the same story are reviewed independently and can land on
+    different tags. Feeds format_outlet_breakdown() for each card below.
+    """
+    stmt = select(Article.cluster_id, Article.published_tag, Article.outlet_id).where(
+        Article.published_tag.is_not(None),
+        Article.cluster_id.is_not(None),
+        Article.duplicate_of_id.is_(None),
+    )
+    outlets_by_cluster_and_tag: dict[int, dict[str, set[int]]] = {}
+    for cluster_id, tag, outlet_id in db.execute(stmt):
+        outlets_by_cluster_and_tag.setdefault(cluster_id, {}).setdefault(tag, set()).add(outlet_id)
+
+    return {
+        cluster_id: {tag: len(outlet_ids) for tag, outlet_ids in tags.items()}
+        for cluster_id, tags in outlets_by_cluster_and_tag.items()
+    }
+
+
+def _cluster_cards_for_tag(
+    db: Session, tag: ClassificationTag, limit: int, breakdown_by_cluster: dict[int, dict[str, int]]
+) -> list[ClusterCard]:
     articles = _published_articles_for_tag(db, tag)
 
     representative_by_cluster: dict[int, Article] = {}
-    outlets_by_cluster: dict[int, set[int]] = {}
     for article in articles:
         representative_by_cluster.setdefault(article.cluster_id, article)
-        outlets_by_cluster.setdefault(article.cluster_id, set()).add(article.outlet_id)
 
     cards = [
         ClusterCard(
@@ -89,7 +112,7 @@ def _cluster_cards_for_tag(db: Session, tag: ClassificationTag, limit: int) -> l
             outlet_name=article.outlet.name,
             published_at=article.published_at,
             published_at_display=make_time_ago(article.published_at),
-            outlet_count=len(outlets_by_cluster[cluster_id]),
+            outlet_breakdown_display=format_outlet_breakdown(breakdown_by_cluster.get(cluster_id, {})),
             jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
             ruling_party=article.system_tag.ruling_party if article.system_tag else None,
             primary_source_url=article.cluster.primary_source_url if article.cluster else None,
@@ -101,8 +124,15 @@ def _cluster_cards_for_tag(db: Session, tag: ClassificationTag, limit: int) -> l
 
 
 def get_home_columns(db: Session, limit_per_column: int = 15) -> HomeColumns:
+    breakdown_by_cluster = _outlet_breakdown_by_cluster(db)
     return HomeColumns(
-        pro_establishment=_cluster_cards_for_tag(db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column),
-        anti_establishment=_cluster_cards_for_tag(db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column),
-        apolitical=_cluster_cards_for_tag(db, ClassificationTag.APOLITICAL, limit_per_column),
+        pro_establishment=_cluster_cards_for_tag(
+            db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column, breakdown_by_cluster
+        ),
+        anti_establishment=_cluster_cards_for_tag(
+            db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column, breakdown_by_cluster
+        ),
+        apolitical=_cluster_cards_for_tag(
+            db, ClassificationTag.APOLITICAL, limit_per_column, breakdown_by_cluster
+        ),
     )
