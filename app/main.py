@@ -4,13 +4,13 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth.session import Forbidden, NotAuthenticated
 from app.config import settings
-from app.routers import admin_data, admin_ui, articles, clusters, health, ingestion, processing, queue
+from app.routers import admin_data, admin_ui, articles, clusters, health, ingestion, processing, public, queue
 
 app = FastAPI(
     title="News Framing Platform API",
     description="Phase 1: ingestion foundation. Phase 2: clustering + classification. "
-    "Phase 3: admin/super-admin review UI.",
-    version="0.3.0",
+    "Phase 3: admin/super-admin review UI. Phase 4: public site.",
+    version="0.4.0",
 )
 
 # https_only=False in development only, so local http://localhost testing
@@ -34,6 +34,7 @@ app.include_router(clusters.router)
 app.include_router(admin_data.router)
 app.include_router(queue.router)
 app.include_router(admin_ui.router)
+app.include_router(public.router)
 
 
 @app.exception_handler(NotAuthenticated)

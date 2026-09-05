@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}News Framing Platform{% endblock %}</title>
+<meta name="description" content="Indian political news, clustered by story and classified as pro-establishment, anti-establishment, or apolitical - every classification confirmed by a human reviewer before publication.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'media',
+    theme: {
+      extend: {
+        colors: {
+          paper: 'var(--paper)',
+          surface: 'var(--surface)',
+          'surface-hover': 'var(--surface-hover)',
+          ink: 'var(--ink)',
+          'ink-muted': 'var(--ink-muted)',
+          'ink-faint': 'var(--ink-faint)',
+          line: 'var(--line)',
+          accent: 'var(--accent)',
+          'accent-hover': 'var(--accent-hover)',
+          'accent-soft': 'var(--accent-soft)',
+          'accent-ink': 'var(--accent-ink)',
+        },
+        fontFamily: {
+          display: ['"Sora"', 'system-ui', 'sans-serif'],
+          sans: ['"Public Sans"', '-apple-system', 'system-ui', 'sans-serif'],
+        },
+      },
+    },
+  };
+</script>
+
+<style>
+  /* One confident accent (violet) carries every interactive/branded moment -
+     nav highlights, primary buttons, and the tag label under each of the
+     three columns. It is deliberately the SAME accent for Pro-Establishment,
+     Anti-Establishment, and Apolitical - see public_home.html's comment for
+     why the three columns still aren't color-coded against each other even
+     in this warmer, "confident app" palette. */
+  :root {
+    --paper: #F7F7FB;
+    --surface: #FFFFFF;
+    --surface-hover: #FBFAFF;
+    --ink: #17151F;
+    --ink-muted: #625F78;
+    --ink-faint: #9793AC;
+    --line: #E7E5F2;
+    --accent: #6E56CF;
+    --accent-hover: #5B45BD;
+    --accent-soft: #F1EDFC;
+    --accent-ink: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121017;
+      --surface: #1B1826;
+      --surface-hover: #221F30;
+      --ink: #F1EFFA;
+      --ink-muted: #A9A6C2;
+      --ink-faint: #726E8C;
+      --line: #2C2939;
+      --accent: #9B87F5;
+      --accent-hover: #B4A3FF;
+      --accent-soft: #241F3D;
+      --accent-ink: #17111F;
+    }
+  }
+  html { color-scheme: light dark; }
+  body { background: var(--paper); }
+  .text-balance { text-wrap: balance; }
+
+  /* Subtle animated-underline hover for nav links - the one "alive" touch
+     in the header, not a color swap alone. */
+  .nav-link { position: relative; }
+  .nav-link::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: -3px;
+    height: 2px; border-radius: 1px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 180ms ease-out;
+  }
+  .nav-link:hover::after, .nav-link[data-active="true"]::after { transform: scaleX(1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .nav-link::after { transition: none; }
+  }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body class="bg-paper text-ink font-sans antialiased min-h-screen flex flex-col">
+
+<header class="border-b border-line">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-6 flex-wrap">
+    <a href="/" class="flex items-center gap-2.5 no-underline group">
+      <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-accent text-accent-ink font-display font-bold text-sm shrink-0 transition-transform duration-200 group-hover:-rotate-6">NF</span>
+      <span class="font-display text-xl font-bold text-ink tracking-tight">News Framing Platform</span>
+    </a>
+    <nav class="flex items-center gap-7 text-[15px] font-medium">
+      <a href="/" class="nav-link text-ink hover:text-accent transition-colors" {% block nav_home_attr %}{% endblock %}>Home</a>
+      <a href="/about" class="nav-link text-ink hover:text-accent transition-colors" {% block nav_about_attr %}{% endblock %}>About</a>
+    </nav>
+  </div>
+</header>
+
+<main class="flex-1">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="border-t border-line mt-16">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <p class="text-sm leading-relaxed text-ink-faint max-w-prose">
+      Every classification shown here is confirmed or overridden by a human reviewer before publication - see
+      <a href="/about" class="nav-link font-medium text-ink-muted hover:text-accent transition-colors">About</a> for methodology.
+      We link to original reporting; we never republish it.
+    </p>
+    <p class="text-xs font-semibold uppercase tracking-[0.12em] text-ink-faint whitespace-nowrap">Proof of concept</p>
+  </div>
+</footer>
+
+</body>
+</html>

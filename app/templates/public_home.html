@@ -1,0 +1,76 @@
+{% extends "public_base.html" %}
+{% block title %}News Framing Platform{% endblock %}
+{% block nav_home_attr %}data-active="true"{% endblock %}
+
+{% macro pill(text) %}
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-hover text-ink-muted text-[11.5px] font-medium">{{ text }}</span>
+{% endmacro %}
+
+{% macro card(item) %}
+<article class="group bg-surface border border-line rounded-2xl p-5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:border-ink-faint">
+  <div class="flex flex-wrap items-center gap-1.5 mb-3">
+    <span class="text-[11.5px] font-medium text-ink-faint mr-0.5">{{ item.published_at_display }}</span>
+    {% if item.jurisdiction %}{{ pill(item.jurisdiction ~ (" (" ~ item.ruling_party ~ ")" if item.ruling_party else "")) }}{% endif %}
+    {% if item.outlet_count > 1 %}{{ pill(item.outlet_count ~ " outlets") }}{% endif %}
+  </div>
+
+  <h3 class="font-display text-[17px] leading-snug font-semibold text-balance">
+    <a href="{{ item.article_url }}" target="_blank" rel="noopener noreferrer" class="text-ink group-hover:text-accent transition-colors">{{ item.headline }}</a>
+  </h3>
+
+  <p class="mt-2 text-[13.5px] leading-relaxed text-ink-muted">{{ item.excerpt }}</p>
+
+  <div class="mt-4 flex flex-wrap items-center gap-2">
+    <a href="{{ item.article_url }}" target="_blank" rel="noopener noreferrer"
+       class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted border border-line rounded-full pl-3 pr-2.5 py-1 hover:text-ink hover:border-ink-faint transition-colors">
+      Read at {{ item.outlet_name }}
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    {% if item.primary_source_url %}
+      <a href="{{ item.primary_source_url }}" target="_blank" rel="noopener noreferrer"
+         class="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-ink bg-accent rounded-full pl-3 pr-3 py-1 hover:bg-accent-hover transition-colors">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M1.5 5.5L4 8L8.5 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Primary source
+      </a>
+    {% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{% macro column(label, items) %}
+<section>
+  <div class="flex items-center justify-between gap-3 mb-5">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true"></span>
+      <h2 class="font-display text-[13px] font-bold uppercase tracking-[0.08em] text-ink">{{ label }}</h2>
+    </div>
+    <span class="text-[11.5px] font-semibold text-ink-faint tabular-nums">{{ items|length }}</span>
+  </div>
+  {% if items %}
+    <div class="flex flex-col gap-4">
+      {% for item in items %}{{ card(item) }}{% endfor %}
+    </div>
+  {% else %}
+    <p class="py-8 text-sm text-ink-faint italic">No published stories in this category yet.</p>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+
+  <div class="mb-12 max-w-2xl">
+    <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">Latest coverage, by framing</p>
+    <h1 class="font-display text-3xl sm:text-4xl font-bold text-ink text-balance leading-tight">
+      How Indian outlets are covering today's stories
+    </h1>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-14">
+    {{ column("Pro-Establishment", columns.pro_establishment) }}
+    {{ column("Anti-Establishment", columns.anti_establishment) }}
+    {{ column("Apolitical", columns.apolitical) }}
+  </div>
+
+</div>
+{% endblock %}
