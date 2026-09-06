@@ -15,7 +15,9 @@ reviewed classifications, never the raw system tag.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date as date_cls
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -26,6 +28,24 @@ from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
 from app.public.formatting import format_outlet_breakdown
 from app.public.formatting import time_ago as make_time_ago
+
+# The platform's outlets and readership are India-focused, so "today"
+# means the Indian calendar day, not the UTC one this data is stored in -
+# using UTC day boundaries would clip or duplicate the last/first ~5.5
+# hours of every IST day. Article.published_at is UTC-aware; this is the
+# one place that gets converted to IST, purely for day-bucketing.
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def today_ist() -> date_cls:
+    return datetime.now(IST).date()
+
+
+def _day_bounds_utc(day: date_cls) -> tuple[datetime, datetime]:
+    """[start, end) in UTC for one IST calendar day."""
+    start_ist = datetime.combine(day, time.min, tzinfo=IST)
+    end_ist = start_ist + timedelta(days=1)
+    return start_ist.astimezone(timezone.utc), end_ist.astimezone(timezone.utc)
 
 
 @dataclass
@@ -71,36 +91,55 @@ class ClusterComparison:
     apolitical: list[ComparisonArticle]
 
 
-def _published_articles_for_tag(db: Session, tag: ClassificationTag) -> list[Article]:
+def _published_articles_for_tag(
+    db: Session, tag: ClassificationTag, day_bounds: tuple[datetime, datetime] | None
+) -> list[Article]:
     """Newest-published first, so the first article seen per cluster while
     grouping below is always that cluster's most recent one for this tag -
-    avoids a second sort pass after grouping.
+    avoids a second sort pass after grouping. day_bounds (from
+    _day_bounds_utc), when given, restricts to articles whose own
+    published_at (the outlet's original publish time, not our review
+    time) falls in that IST calendar day.
     """
+    conditions = [
+        Article.published_tag == tag.value,
+        Article.cluster_id.is_not(None),
+        Article.duplicate_of_id.is_(None),
+    ]
+    if day_bounds is not None:
+        start, end = day_bounds
+        conditions += [Article.published_at >= start, Article.published_at < end]
+
     stmt = (
         select(Article)
         .options(joinedload(Article.outlet), joinedload(Article.system_tag))
-        .where(
-            Article.published_tag == tag.value,
-            Article.cluster_id.is_not(None),
-            Article.duplicate_of_id.is_(None),
-        )
+        .where(*conditions)
         .order_by(Article.published_at.desc())
     )
     return list(db.scalars(stmt).unique())
 
 
-def _outlet_breakdown_by_cluster(db: Session) -> dict[int, dict[str, int]]:
+def _outlet_breakdown_by_cluster(
+    db: Session, day_bounds: tuple[datetime, datetime] | None
+) -> dict[int, dict[str, int]]:
     """One pass across every published article (all three tags, not just
     one) building {cluster_id: {tag: distinct_outlet_count}} - the cross-
     tag view a single tag's query can't see on its own, since two outlets
     covering the same story are reviewed independently and can land on
     different tags. Feeds format_outlet_breakdown() for each card below.
+    Scoped to the same day_bounds as the cards it's computed for, so a
+    date-filtered view's breakdown reflects that day's coverage only.
     """
-    stmt = select(Article.cluster_id, Article.published_tag, Article.outlet_id).where(
+    conditions = [
         Article.published_tag.is_not(None),
         Article.cluster_id.is_not(None),
         Article.duplicate_of_id.is_(None),
-    )
+    ]
+    if day_bounds is not None:
+        start, end = day_bounds
+        conditions += [Article.published_at >= start, Article.published_at < end]
+
+    stmt = select(Article.cluster_id, Article.published_tag, Article.outlet_id).where(*conditions)
     outlets_by_cluster_and_tag: dict[int, dict[str, set[int]]] = {}
     for cluster_id, tag, outlet_id in db.execute(stmt):
         outlets_by_cluster_and_tag.setdefault(cluster_id, {}).setdefault(tag, set()).add(outlet_id)
@@ -112,9 +151,13 @@ def _outlet_breakdown_by_cluster(db: Session) -> dict[int, dict[str, int]]:
 
 
 def _cluster_cards_for_tag(
-    db: Session, tag: ClassificationTag, limit: int, breakdown_by_cluster: dict[int, dict[str, int]]
+    db: Session,
+    tag: ClassificationTag,
+    limit: int,
+    breakdown_by_cluster: dict[int, dict[str, int]],
+    day_bounds: tuple[datetime, datetime] | None,
 ) -> list[ClusterCard]:
-    articles = _published_articles_for_tag(db, tag)
+    articles = _published_articles_for_tag(db, tag, day_bounds)
 
     representative_by_cluster: dict[int, Article] = {}
     for article in articles:
@@ -202,16 +245,21 @@ def get_cluster_comparison(db: Session, cluster_id: int) -> ClusterComparison | 
     )
 
 
-def get_home_columns(db: Session, limit_per_column: int = 15) -> HomeColumns:
-    breakdown_by_cluster = _outlet_breakdown_by_cluster(db)
+def get_home_columns(db: Session, limit_per_column: int = 15, day: date_cls | None = None) -> HomeColumns:
+    """day (an IST calendar date), when given, restricts every column to
+    articles originally published that day - see _day_bounds_utc. None
+    (the default) is unfiltered, latest-first regardless of date.
+    """
+    day_bounds = _day_bounds_utc(day) if day is not None else None
+    breakdown_by_cluster = _outlet_breakdown_by_cluster(db, day_bounds)
     return HomeColumns(
         pro_establishment=_cluster_cards_for_tag(
-            db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column, breakdown_by_cluster
+            db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column, breakdown_by_cluster, day_bounds
         ),
         anti_establishment=_cluster_cards_for_tag(
-            db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column, breakdown_by_cluster
+            db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column, breakdown_by_cluster, day_bounds
         ),
         apolitical=_cluster_cards_for_tag(
-            db, ClassificationTag.APOLITICAL, limit_per_column, breakdown_by_cluster
+            db, ClassificationTag.APOLITICAL, limit_per_column, breakdown_by_cluster, day_bounds
         ),
     )

@@ -4,7 +4,14 @@ kept separate from app/public/queries.py so the query layer stays about
 data access and this stays about presentation.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+
+
+def format_date_long(day: date) -> str:
+    """"4 September 2026" - for the date-picker's headline context on the
+    public homepage (app/routers/public.py's day param).
+    """
+    return day.strftime("%-d %B %Y")
 
 
 def format_jurisdiction(raw: str | None) -> str | None:
