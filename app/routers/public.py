@@ -9,13 +9,16 @@ No auth here at all: everything this router shows is, by construction
 see.
 """
 
+from datetime import date as date_cls
+
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.public.queries import get_cluster_comparison, get_home_columns
+from app.public.formatting import format_date_long
+from app.public.queries import get_cluster_comparison, get_home_columns, today_ist
 
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
@@ -24,11 +27,41 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
+    date: str | None = Query(
+        default=None,
+        description="YYYY-MM-DD, IST calendar day - defaults to today. A future date redirects to today.",
+    ),
     limit: int = Query(default=15, le=50, description="Max story clusters shown per column"),
     db: Session = Depends(get_db),
 ):
-    columns = get_home_columns(db, limit_per_column=limit)
-    return templates.TemplateResponse(request, "public_home.html", {"columns": columns})
+    today = today_ist()
+
+    selected_date = today
+    if date is not None:
+        try:
+            selected_date = date_cls.fromisoformat(date)
+        except ValueError:
+            # Malformed input (hand-edited URL, bad bookmark) - fall back
+            # to today rather than a 400 over what's purely a cosmetic
+            # query param.
+            selected_date = today
+        if selected_date > today:
+            # Never show (or let the date picker imply) a future date -
+            # nothing published there could ever be legitimate.
+            return RedirectResponse(f"/?date={today.isoformat()}", status_code=303)
+
+    columns = get_home_columns(db, limit_per_column=limit, day=selected_date)
+    return templates.TemplateResponse(
+        request,
+        "public_home.html",
+        {
+            "columns": columns,
+            "selected_date": selected_date,
+            "selected_date_display": format_date_long(selected_date),
+            "today_iso": today.isoformat(),
+            "is_today": selected_date == today,
+        },
+    )
 
 
 @router.get("/about", response_class=HTMLResponse)

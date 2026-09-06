@@ -60,19 +60,53 @@
     <div class="flex flex-col gap-4">
       {% for item in items %}{{ card(item) }}{% endfor %}
     </div>
+  {% elif is_today %}
+    <p class="py-8 text-sm text-ink-faint italic">Nothing published in this category yet today - a review can take up to 48 hours after an article first appears, so today's picture often fills in later in the day.</p>
   {% else %}
-    <p class="py-8 text-sm text-ink-faint italic">No published stories in this category yet.</p>
+    <p class="py-8 text-sm text-ink-faint italic">No published stories in this category on {{ selected_date_display }}.</p>
   {% endif %}
 </section>
 {% endmacro %}
+
+{% block head %}
+<style>
+  /* Native date input: keep the browser's own calendar UI (no JS picker
+     library) but tint the icon to match the accent instead of the
+     browser-default black/grey, and make it visibly a violet-tinted
+     control rather than looking unstyled next to everything else. */
+  input[type="date"].date-input::-webkit-calendar-picker-indicator {
+    filter: invert(38%) sepia(54%) saturate(1929%) hue-rotate(226deg) brightness(93%) contrast(93%);
+    cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) {
+    input[type="date"].date-input::-webkit-calendar-picker-indicator {
+      filter: invert(76%) sepia(31%) saturate(1878%) hue-rotate(206deg) brightness(101%) contrast(101%);
+    }
+  }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
 
   <div class="mb-12 max-w-2xl">
-    <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">Latest coverage, by framing</p>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 mb-3">
+      <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent">
+        {% if is_today %}Today's coverage, by framing{% else %}Coverage from {{ selected_date_display }}{% endif %}
+      </p>
+      <form method="get" action="/" class="flex items-center gap-3">
+        <label for="date-picker" class="sr-only">Choose a date</label>
+        <input type="date" id="date-picker" name="date" value="{{ selected_date.isoformat() }}" max="{{ today_iso }}"
+               onchange="this.form.submit()"
+               class="date-input bg-surface border border-line rounded-full px-3 py-1.5 text-[13px] font-medium text-ink focus:outline-none focus:border-accent transition-colors">
+        <noscript><button type="submit" class="text-[13px] font-semibold text-accent">Go</button></noscript>
+        {% if not is_today %}
+          <a href="/" class="text-[13px] font-semibold text-accent hover:text-accent-hover transition-colors whitespace-nowrap">Jump to today</a>
+        {% endif %}
+      </form>
+    </div>
     <h1 class="font-display text-3xl sm:text-4xl font-bold text-ink text-balance leading-tight">
-      How Indian outlets are covering today's stories
+      {% if is_today %}How Indian outlets are covering today's stories{% else %}How Indian outlets covered stories on {{ selected_date_display }}{% endif %}
     </h1>
   </div>
 
