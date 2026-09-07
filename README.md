@@ -744,6 +744,21 @@ shorter, categorized ones, even though the total review burden is the
 same either way. Order within each section is still oldest `published_at`
 first, per Section 5.
 
+Each row also shows the same blinded excerpt (`app/public/formatting.
+excerpt`, on the blinded body - see §12.3's blinding rules) an admin
+would otherwise only see after opening the full review page, plus a
+checkbox and a per-section "Publish selected" button
+(`POST /queue/bulk-confirm`, in `app/routers/admin_ui.py`). Requested
+directly: many articles are obvious from the headline and excerpt alone
+(a cricket score, a weather report), and clicking into each one just to
+confirm what's already correct added friction without adding a review.
+Bulk-publish can only *agree* with the system tag already shown for that
+row - there's no per-article tag picker in the bulk form - so an actual
+override still goes through the single-article review page, same as
+before. Silently skips any id that isn't this admin's to review (wrong
+owner, already reviewed, a stale page after a double-submit) instead of
+failing the whole batch.
+
 Two new `Article` fields support this: `assigned_admin_id` and
 `queued_at`. `queued_at` — not `published_at` — is what the 48-hour SLA
 (§12.3) is measured against: an article can sit unclassified for a while

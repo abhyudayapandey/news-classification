@@ -6,29 +6,45 @@
 {% if not items %}
   <div class="card">Nothing here right now.</div>
 {% else %}
-  <div class="card" style="padding:0; margin-bottom:1.5rem;">
-    <table>
-      <thead>
-        <tr><th>Published</th><th>Headline</th><th>SLA</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for item in items %}
-        <tr>
-          <td class="muted">{{ item.article.published_at.strftime("%Y-%m-%d %H:%M") }}</td>
-          <td>{{ item.article.headline }}</td>
-          <td>
-            {% if item.overdue %}
-              <span class="badge badge-overdue">OVERDUE</span>
-            {% else %}
-              <span class="badge badge-ok">{{ item.hours_remaining }}h left</span>
-            {% endif %}
-          </td>
-          <td><a class="btn btn-primary" href="/admin/review/{{ item.article.id }}">Review</a></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  <form method="post" action="/admin/queue/bulk-confirm" class="queue-section">
+    <div class="card" style="padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:2rem;"><input type="checkbox" class="select-all" style="width:auto;"></th>
+            <th>Published</th>
+            <th>Headline &amp; excerpt</th>
+            <th>SLA</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td><input type="checkbox" name="article_ids" value="{{ item.article.id }}" class="row-check" style="width:auto;"></td>
+            <td class="muted">{{ item.article.published_at.strftime("%Y-%m-%d %H:%M") }}</td>
+            <td>
+              <div>{{ item.headline }}</div>
+              {% if item.excerpt %}<div class="muted" style="margin-top:0.2rem;">{{ item.excerpt }}</div>{% endif %}
+            </td>
+            <td>
+              {% if item.overdue %}
+                <span class="badge badge-overdue">OVERDUE</span>
+              {% else %}
+                <span class="badge badge-ok">{{ item.hours_remaining }}h left</span>
+              {% endif %}
+            </td>
+            <td><a class="btn btn-primary" href="/admin/review/{{ item.article.id }}">Review</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p style="margin:0.75rem 0 1.5rem;">
+      <button type="submit" class="btn btn-primary bulk-publish-btn" disabled>Publish selected</button>
+      <span class="muted">Publishes each selected article under the system tag already shown above - use this only when the headline and excerpt alone are enough to agree with it. To override a tag instead, open it with Review.</span>
+    </p>
+  </form>
 {% endif %}
 {% endmacro %}
 
@@ -39,4 +55,31 @@
 {{ section("Pro-Establishment", pro_items) }}
 {{ section("Anti-Establishment", anti_items) }}
 {{ section("Apolitical", apolitical_items) }}
+
+<script>
+document.querySelectorAll("form.queue-section").forEach(function (form) {
+  var selectAll = form.querySelector(".select-all");
+  var rowChecks = Array.prototype.slice.call(form.querySelectorAll(".row-check"));
+  var publishBtn = form.querySelector(".bulk-publish-btn");
+
+  function updateButton() {
+    var checkedCount = rowChecks.filter(function (c) { return c.checked; }).length;
+    publishBtn.disabled = checkedCount === 0;
+    publishBtn.textContent = checkedCount ? "Publish selected (" + checkedCount + ")" : "Publish selected";
+    selectAll.checked = checkedCount > 0 && checkedCount === rowChecks.length;
+  }
+
+  rowChecks.forEach(function (c) { c.addEventListener("change", updateButton); });
+  selectAll.addEventListener("change", function () {
+    rowChecks.forEach(function (c) { c.checked = selectAll.checked; });
+    updateButton();
+  });
+  form.addEventListener("submit", function (e) {
+    var checkedCount = rowChecks.filter(function (c) { return c.checked; }).length;
+    if (!checkedCount || !confirm("Publish " + checkedCount + " article(s) under their system-suggested tag?")) {
+      e.preventDefault();
+    }
+  });
+});
+</script>
 {% endblock %}
