@@ -21,6 +21,7 @@ from app.db import get_db
 from app.models import Admin, Article, Review
 from app.models.enums import AdminRole, ClassificationTag, ReviewDecision
 from app.public.formatting import excerpt as make_excerpt
+from app.public.formatting import format_jurisdiction
 from app.review.assignment import reassign_admin_queue
 from app.review.blinding import blind_headline_and_body
 from app.review.queries import ReviewFilters, query_reviews
@@ -113,6 +114,13 @@ def _queue_item(article: Article) -> dict:
     The excerpt is the same length/truncation as the public site's card
     teaser (app/public/formatting.excerpt) since it's meant to give the
     admin the same "headline + hero text" a reader would eventually see.
+
+    Also carries jurisdiction/ruling_party, formatted the same way review.html
+    already shows them - requested directly: the same headline can be pro for
+    one party/jurisdiction and anti for another, so an admin judging an
+    "obvious" case straight from the queue list (the whole point of the
+    excerpt above) needs that context in the table itself, not just after
+    opening the full review page.
     """
     hours_elapsed = (datetime.now(timezone.utc) - article.queued_at).total_seconds() / 3600
     overdue = hours_elapsed > settings.review_sla_hours
@@ -121,6 +129,8 @@ def _queue_item(article: Article) -> dict:
         "article": article,
         "headline": blinded_headline,
         "excerpt": make_excerpt(blinded_body) if blinded_body.strip() else None,
+        "jurisdiction": format_jurisdiction(article.system_tag.jurisdiction) or "-",
+        "ruling_party": article.system_tag.ruling_party or "unresolved",
         "overdue": overdue,
         "hours_remaining": max(0, round(settings.review_sla_hours - hours_elapsed)),
     }
