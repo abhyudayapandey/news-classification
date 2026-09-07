@@ -736,13 +736,27 @@ re-evaluation (§9.2, §9.5) are unchanged - they're now a pre-filter that
 reduces how often a real political article reaches the queue mislabeled,
 rather than the last line of defense before publish.
 
-An admin's own queue (`/admin/queue`) is grouped into three sections -
+An admin's own queue (`/admin/queue`) is grouped into three categories -
 Pro-Establishment, Anti-Establishment, Apolitical, by the article's
-system tag - rather than one flat oldest-first list. Requested directly:
-a single long list of everything read as more daunting than three
-shorter, categorized ones, even though the total review burden is the
-same either way. Order within each section is still oldest `published_at`
-first, per Section 5.
+system tag - rendered as tabs rather than one flat oldest-first list.
+Requested directly: a single long list of everything read as more
+daunting than three shorter, categorized ones. The first version of this
+stacked all three lists on the page instead, one below the other -
+that still left an admin scrolling through everything, just split across
+three lists instead of one, missing the actual point of categorizing
+them. Tabs show one category at a time (defaulting to the first
+non-empty one, so an admin never lands on a tab with nothing to review);
+all three are still rendered server-side and just hidden/shown client-
+side, so switching tabs is instant with no extra request. Order within
+each tab is now newest `published_at`
+first - a further departure from Section 5's original oldest-first
+wording, requested directly: publishing the most recent articles first
+keeps their context current and matches what an end user sees first on
+the public site (also newest-first). This is purely display/review
+order, not assignment order - `app/review/assignment.py`'s
+`_pending_articles()` still assigns oldest-pending-first, so a backlog of
+older unclassified articles isn't starved by a steady stream of newer
+ones arriving first in line for an admin.
 
 Each row also shows the same blinded excerpt (`app/public/formatting.
 excerpt`, on the blinded body - see §12.3's blinding rules) an admin
@@ -763,8 +777,10 @@ Two new `Article` fields support this: `assigned_admin_id` and
 `queued_at`. `queued_at` — not `published_at` — is what the 48-hour SLA
 (§12.3) is measured against: an article can sit unclassified for a while
 after publication (ingestion/processing lag), and the SLA is about review
-turnaround, not the news' own age. Queue *order* is still oldest
-`published_at` first, per Section 5's literal wording.
+turnaround, not the news' own age. Queue *display* order is newest
+`published_at` first (see above) — a Phase 4 departure from Section 5's
+original oldest-first wording — but that's independent of the SLA clock,
+which is unaffected by this change either way.
 
 ### 12.3 Blinding (Section 5)
 

@@ -48,6 +48,13 @@
   .success { background: #d1fae5; color: #065f46; padding: 0.6rem 1rem; border-radius: 6px; margin-bottom: 1rem; }
   .muted { color: #6b7280; font-size: 0.85rem; }
   .article-body { white-space: pre-wrap; line-height: 1.7; }
+  .tabs { display: flex; gap: 0.25rem; border-bottom: 2px solid #e5e7eb; margin-bottom: 1.25rem; }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px;
+    padding: 0.6rem 1rem; font-size: 0.9rem; font-weight: 600; color: #6b7280; cursor: pointer;
+  }
+  .tab-btn:hover { color: #1a1a1a; }
+  .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
   .filters { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: end; margin-bottom: 1rem; }
   .filters > div { flex: 1; min-width: 140px; }
   form.inline { display: inline; }

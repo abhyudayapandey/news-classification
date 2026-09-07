@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block title %}My Queue{% endblock %}
 
-{% macro section(label, items) %}
-<h2>{{ label }} <span class="muted">({{ items|length }})</span></h2>
+{% macro section(key, label, items, active_tab) %}
+<div class="tab-panel" data-tab-panel="{{ key }}" {% if key != active_tab %}hidden{% endif %}>
 {% if not items %}
   <div class="card">Nothing here right now.</div>
 {% else %}
@@ -46,17 +46,43 @@
     </p>
   </form>
 {% endif %}
+</div>
 {% endmacro %}
 
 {% block content %}
 <h1>My review queue</h1>
-<p class="muted">Oldest first within each category (Section 5). {{ total }} article(s) awaiting your review.</p>
+<p class="muted">Newest first within each category. {{ total }} article(s) awaiting your review.</p>
 
-{{ section("Pro-Establishment", pro_items) }}
-{{ section("Anti-Establishment", anti_items) }}
-{{ section("Apolitical", apolitical_items) }}
+<div class="tabs" role="tablist">
+  <button type="button" class="tab-btn{% if active_tab == 'pro' %} active{% endif %}" data-tab="pro" role="tab" aria-selected="{{ 'true' if active_tab == 'pro' else 'false' }}">
+    Pro-Establishment <span class="muted">({{ pro_items|length }})</span>
+  </button>
+  <button type="button" class="tab-btn{% if active_tab == 'anti' %} active{% endif %}" data-tab="anti" role="tab" aria-selected="{{ 'true' if active_tab == 'anti' else 'false' }}">
+    Anti-Establishment <span class="muted">({{ anti_items|length }})</span>
+  </button>
+  <button type="button" class="tab-btn{% if active_tab == 'apolitical' %} active{% endif %}" data-tab="apolitical" role="tab" aria-selected="{{ 'true' if active_tab == 'apolitical' else 'false' }}">
+    Apolitical <span class="muted">({{ apolitical_items|length }})</span>
+  </button>
+</div>
+
+{{ section("pro", "Pro-Establishment", pro_items, active_tab) }}
+{{ section("anti", "Anti-Establishment", anti_items, active_tab) }}
+{{ section("apolitical", "Apolitical", apolitical_items, active_tab) }}
 
 <script>
+document.querySelectorAll(".tab-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".tab-btn").forEach(function (b) {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
+    document.querySelectorAll(".tab-panel").forEach(function (p) { p.hidden = true; });
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+    document.querySelector('.tab-panel[data-tab-panel="' + btn.dataset.tab + '"]').hidden = false;
+  });
+});
+
 document.querySelectorAll("form.queue-section").forEach(function (form) {
   var selectAll = form.querySelector(".select-all");
   var rowChecks = Array.prototype.slice.call(form.querySelectorAll(".row-check"));
