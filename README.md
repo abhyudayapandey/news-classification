@@ -1076,7 +1076,25 @@ page the diverging case uses, which renders correctly either way (one
 populated section for agreement, two or more for divergence; its heading
 text adjusts - "reached the same verdict" vs. "framed this story"
 differently - based on how many tag sections actually have anything in
-them).
+them). A diverging card's own breakdown pill (the compare-link one) got
+the same hover treatment, showing what the *other* tag(s) said, each
+headline labeled with its tag ("Anti-Establishment: ...") since those
+headlines don't all share the card's own tag the way the agreement case's
+do.
+
+**A real bug caught right after shipping the above, worth recording
+plainly rather than glossing over**: a cluster's *sort position* in its
+column used to be its own representative article's `published_at`. Once
+the representative became the earliest article, that meant a story's
+position was set by when it was *first* reported, not by how recently it
+was actually covered - a story first reported long ago that just got a
+brand-new follow-up from another outlet would sort as if it were stale,
+and could be pushed out of `limit_per_column` entirely despite being
+genuinely live, ongoing coverage. `ClusterCard.published_at` (the sort
+key) is now the cluster+tag's *most recent* article's timestamp,
+independent of `published_at_display` (the earliest article's own
+timestamp, honestly describing the headline actually shown) - the two are
+allowed to differ, deliberately.
 
 **Date browsing**: `GET /?date=YYYY-MM-DD`, IST calendar-day boundaries
 (the outlets and readership are India-focused; UTC boundaries would clip

@@ -14,9 +14,19 @@
     {% if item.outlet_breakdown_display %}
       {% if item.has_comparison %}
         <a href="/compare/{{ item.cluster_id }}"
-           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[11.5px] font-semibold hover:bg-accent hover:text-accent-ink transition-colors">
+           class="group/breakdown relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[11.5px] font-semibold hover:bg-accent hover:text-accent-ink transition-colors">
           {{ item.outlet_breakdown_display }}
           <svg width="8" height="8" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          {% if item.other_tag_headlines %}
+          <div class="pointer-events-none absolute left-0 top-full mt-2 z-10 hidden group-hover/breakdown:block w-72 bg-ink text-paper text-[12px] leading-snug rounded-xl p-3 shadow-xl text-left normal-case font-normal">
+            <p class="font-semibold text-paper opacity-60 uppercase tracking-wide text-[10px] mb-1.5">Other coverage</p>
+            <ul class="space-y-1.5">
+              {% for other in item.other_tag_headlines %}
+                <li class="line-clamp-2"><span class="font-semibold">{{ other.tag_label }}:</span> {{ other.headline }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
         </a>
       {% elif item.other_headlines %}
         <a href="/compare/{{ item.cluster_id }}"
@@ -25,7 +35,7 @@
           <div class="pointer-events-none absolute left-0 top-full mt-2 z-10 hidden group-hover/breakdown:block w-64 bg-ink text-paper text-[12px] leading-snug rounded-xl p-3 shadow-xl">
             <p class="font-semibold text-paper opacity-60 uppercase tracking-wide text-[10px] mb-1.5">Also reported by</p>
             <ul class="space-y-1.5">
-              {% for headline in item.other_headlines %}<li class="line-clamp-2">{{ headline }}</li>{% endfor %}
+              {% for other in item.other_headlines %}<li class="line-clamp-2">{{ other.headline }}</li>{% endfor %}
             </ul>
           </div>
         </a>
