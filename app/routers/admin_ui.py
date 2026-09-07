@@ -136,14 +136,20 @@ def my_queue(
     list - requested directly (Phase 4): a single long undifferentiated
     list read as more daunting to an admin than three shorter, categorized
     ones, even though the total review volume is identical either way.
-    Order within each category is still oldest published_at first
-    (Section 5). Apolitical articles reach here too now - see
-    app/review/assignment.py's module docstring for why.
+    Order within each category is newest published_at first - a Phase 4
+    departure from Section 5's original oldest-first wording, requested
+    directly: publishing the most recent articles first keeps their
+    context current and matches what an end user sees first on the public
+    site (also newest-first), whereas the review/publish order was never
+    itself the thing Section 5's SLA cares about (that's queued_at, not
+    published_at - see Article.queued_at's field comment). Apolitical
+    articles reach here too now - see app/review/assignment.py's module
+    docstring for why.
     """
     stmt = (
         select(Article)
         .where(Article.assigned_admin_id == current_admin.id, ~Article.reviews.any())
-        .order_by(Article.published_at.asc())
+        .order_by(Article.published_at.desc())
     )
     articles = list(db.scalars(stmt))
     items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
