@@ -4,7 +4,7 @@ kept separate from app/public/queries.py so the query layer stays about
 data access and this stays about presentation.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 
 def format_date_long(day: date) -> str:
@@ -12,6 +12,29 @@ def format_date_long(day: date) -> str:
     public homepage (app/routers/public.py's day param).
     """
     return day.strftime("%-d %B %Y")
+
+
+def recent_date_options(today: date, days: int = 14) -> list[tuple[str, str]]:
+    """(iso_value, label) pairs, today first, for the home page's date
+    <select> - a bounded list rather than an open-ended native date-input
+    calendar. Two reasons: a native <input type="date">'s calendar UI
+    renders as a full-screen sheet on iOS Safari (reported as "really
+    bad, so big"), where a <select> is a compact native wheel picker on
+    every platform; and a future date is structurally never one of these
+    options at all, rather than merely discouraged by a `max` attribute
+    that iOS wasn't fully enforcing anyway.
+    """
+    options = []
+    for offset in range(days):
+        day = today - timedelta(days=offset)
+        if offset == 0:
+            label = "Today"
+        elif offset == 1:
+            label = "Yesterday"
+        else:
+            label = day.strftime("%a, %-d %b")
+        options.append((day.isoformat(), label))
+    return options
 
 
 def format_jurisdiction(raw: str | None) -> str | None:

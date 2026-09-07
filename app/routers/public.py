@@ -17,7 +17,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.public.formatting import format_date_long
+from app.public.formatting import format_date_long, recent_date_options
 from app.public.queries import get_cluster_comparison, get_home_columns, today_ist
 
 router = APIRouter(tags=["public"])
@@ -50,6 +50,15 @@ def home(
             # nothing published there could ever be legitimate.
             return RedirectResponse(f"/?date={today.isoformat()}", status_code=303)
 
+    date_options = recent_date_options(today)
+    if selected_date.isoformat() not in {iso for iso, _ in date_options}:
+        # A direct/shared link older than the dropdown's own lookback
+        # window - still a perfectly valid view (get_home_columns below
+        # doesn't care), so represent it honestly in the <select> instead
+        # of letting the browser silently fall back to showing "Today" as
+        # selected while the page itself is showing an older date.
+        date_options = [(selected_date.isoformat(), format_date_long(selected_date)), *date_options]
+
     columns = get_home_columns(db, limit_per_column=limit, day=selected_date)
     return templates.TemplateResponse(
         request,
@@ -58,7 +67,7 @@ def home(
             "columns": columns,
             "selected_date": selected_date,
             "selected_date_display": format_date_long(selected_date),
-            "today_iso": today.isoformat(),
+            "date_options": date_options,
             "is_today": selected_date == today,
         },
     )
