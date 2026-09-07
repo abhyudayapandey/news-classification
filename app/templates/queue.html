@@ -14,6 +14,8 @@
             <th style="width:2rem;"><input type="checkbox" class="select-all" style="width:auto;"></th>
             <th>Published</th>
             <th>Headline &amp; excerpt</th>
+            <th>Jurisdiction</th>
+            <th>Ruling party</th>
             <th>SLA</th>
             <th></th>
           </tr>
@@ -27,6 +29,8 @@
               <div>{{ item.headline }}</div>
               {% if item.excerpt %}<div class="muted" style="margin-top:0.2rem;">{{ item.excerpt }}</div>{% endif %}
             </td>
+            <td class="muted">{{ item.jurisdiction }}</td>
+            <td class="muted">{{ item.ruling_party }}</td>
             <td>
               {% if item.overdue %}
                 <span class="badge badge-overdue">OVERDUE</span>

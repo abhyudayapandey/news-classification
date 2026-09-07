@@ -773,6 +773,16 @@ before. Silently skips any id that isn't this admin's to review (wrong
 owner, already reviewed, a stale page after a double-submit) instead of
 failing the whole batch.
 
+The table also has **Jurisdiction** and **Ruling party** columns (formatted
+the same way `review.html` already shows them - `format_jurisdiction`, and
+`ruling_party or "unresolved"`). Requested directly: the same headline can
+be pro-establishment for one party/jurisdiction and anti-establishment for
+another, so an admin judging an "obvious" case straight from the queue
+list - the entire point of the excerpt above - needs that context in the
+table itself, not just after opening the full review page. Apolitical rows
+show "-"/"unresolved" here too, same as their review page always has,
+since jurisdiction/ruling_party genuinely don't apply to them (§4.2).
+
 Two new `Article` fields support this: `assigned_admin_id` and
 `queued_at`. `queued_at` — not `published_at` — is what the 48-hour SLA
 (§12.3) is measured against: an article can sit unclassified for a while
