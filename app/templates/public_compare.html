@@ -45,9 +45,10 @@
     All stories
   </a>
 
+  {% set section_count = (comparison.pro_establishment|length > 0)|int + (comparison.anti_establishment|length > 0)|int + (comparison.apolitical|length > 0)|int %}
   <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">Comparing coverage</p>
   <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink text-balance leading-tight mb-8">
-    How different outlets framed this story
+    {% if section_count > 1 %}How different outlets framed this story{% else %}Every outlet covering this story reached the same verdict{% endif %}
   </h1>
 
   {% if comparison.primary_source_url %}
@@ -63,7 +64,6 @@
     </div>
   {% endif %}
 
-  {% set section_count = (comparison.pro_establishment|length > 0)|int + (comparison.anti_establishment|length > 0)|int + (comparison.apolitical|length > 0)|int %}
   <div class="grid grid-cols-1 {% if section_count == 2 %}md:grid-cols-2{% elif section_count == 3 %}md:grid-cols-3{% endif %} gap-x-8 gap-y-14">
     {% if comparison.pro_establishment %}{{ side("Pro-Establishment", comparison.pro_establishment) }}{% endif %}
     {% if comparison.anti_establishment %}{{ side("Anti-Establishment", comparison.anti_establishment) }}{% endif %}

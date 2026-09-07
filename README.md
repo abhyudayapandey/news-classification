@@ -6,13 +6,14 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**Phases 1-3 are built**: project scaffolding and the full database schema
+**Phases 1-4 are built**: project scaffolding and the full database schema
 plus RSS ingestion with wire-copy dedup (Phase 1); embedding-based topic
 clustering and pro/anti/apolitical classification with jurisdiction/ruling-
-party resolution (Phase 2 — see §9); and the login-gated admin/super-admin
+party resolution (Phase 2 — see §9); the login-gated admin/super-admin
 review UI - queueing, blinding, confirm/override, account management, and
-oversight views (Phase 3 — see §12). No public end-user website yet —
-that's Phase 4.
+oversight views (Phase 3 — see §12); and the public end-user site - three
+framing columns, cross-outlet agreement/divergence, and date browsing
+(Phase 4 — see §13).
 
 ---
 
@@ -1026,7 +1027,75 @@ queue, and — as super admin — visit `/admin/admins` to create accounts for
 the other 1-2 people, and `/admin/reviews` to see everything reviewed so
 far.
 
-## 13. Known gaps carried over from the planning doc
+## 13. Phase 4: Public site
+
+Builds Sections 8-9: the end-user-facing website. Server-rendered Jinja2 in
+this same FastAPI app, same architecture as Phase 3's admin UI - no
+separate frontend build - styled with Tailwind loaded via its CDN script
+rather than a local build pipeline.
+
+`app/public/queries.py` is a read model kept deliberately separate from
+Phase 3's admin queries (`app/review/queries.py`), because the two have a
+fundamentally different visibility rule. The one rule this module enforces:
+**nothing is visible until `Article.published_tag` is set** - already the
+codebase's own definition of "safe to show" (set directly for apolitical
+articles, set by admin review for pro/anti). `SystemTag`, the raw
+unreviewed model output, is never read here. Cards use `body_text` (the
+RSS teaser) only - `scraped_body_text` is admin-review-only per
+`app/review/scraping.py`'s own docstring, enforced here in the query layer
+rather than left to convention.
+
+**Layout**: three columns - Pro-Establishment, Anti-Establishment,
+Apolitical - each a list of story clusters, newest first. Column identity
+is typographic, not color-coded: no red/green, no saffron/green/blue - the
+same reasoning Section 4.4 applies to calling a primary source "fact"
+applies to how a tag is *presented*, not just what it's called. A cluster
+with a `primary_source_url` shows a distinct badge; a cluster with none
+shows an explicit "no primary source available" state on its `/compare`
+page (Section 4.4).
+
+**One cluster can have several published articles under the same tag**
+(multiple outlets covering the same story and agreeing), and grouping is
+by *(cluster, published_tag)*, not cluster alone - two outlets reviewing
+the same story independently and blind can land on genuinely different
+verdicts, and that's shown, not collapsed: a diverging story appears under
+both Pro-Establishment and Anti-Establishment at once, each with a cross-
+tag breakdown pill (`format_outlet_breakdown`, e.g. "3 pro · 2 anti").
+Clicking a diverging card's pill goes to `/compare/{cluster_id}`, showing
+every published article in the story grouped by tag side by side.
+
+**Which article represents a cluster+tag on the home page, when more than
+one outlet agrees**: the *earliest*-published one, not the most recent -
+requested directly, since picking whichever article a query happened to
+return first read as arbitrary to a reader with no way to know why that
+outlet's headline was the one shown. The other agreeing outlets' headlines
+aren't dropped: the same-sentiment card's breakdown pill (e.g. "3 pro") is
+hoverable - a small popover lists the other outlets' headlines under
+"Also reported by" - and clicking it goes to the same `/compare/{cluster_id}`
+page the diverging case uses, which renders correctly either way (one
+populated section for agreement, two or more for divergence; its heading
+text adjusts - "reached the same verdict" vs. "framed this story"
+differently - based on how many tag sections actually have anything in
+them).
+
+**Date browsing**: `GET /?date=YYYY-MM-DD`, IST calendar-day boundaries
+(the outlets and readership are India-focused; UTC boundaries would clip
+or duplicate the last/first ~5.5 hours of every real IST day). Filters on
+the article's own original `published_at`, not when review completed - a
+deliberate tradeoff, since the 48-hour review SLA means "Today" can look
+sparse for part of the day, accepted because it matches what a reader
+actually means by "today's news." Rendered as a bounded 14-day `<select>`
+(`app/public/formatting.recent_date_options`), not a native calendar
+input - the latter rendered as a full-screen sheet on iOS Safari and let a
+future date remain clickable in the picker UI even though the server
+already rejected it; a `<select>` fixes both, since a future date is now
+structurally never one of the options at all.
+
+`/about` (`public_about.html`) ships as a scaffold only - nav and layout
+done, one clearly marked placeholder left for methodology copy still to
+be written directly, not drafted here.
+
+## 14. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology

@@ -59,6 +59,7 @@ class ClusterCard:
     published_at_display: str  # pre-formatted relative time - see app/public/formatting.time_ago
     outlet_breakdown_display: str | None  # e.g. "3 pro · 2 anti" - see format_outlet_breakdown
     has_comparison: bool  # True when 2+ tags exist for this cluster - see /compare/{cluster_id}
+    other_headlines: list[str]  # other outlets' headlines under this same tag - see _cluster_cards_for_tag
     jurisdiction: str | None
     ruling_party: str | None
     primary_source_url: str | None
@@ -94,12 +95,11 @@ class ClusterComparison:
 def _published_articles_for_tag(
     db: Session, tag: ClassificationTag, day_bounds: tuple[datetime, datetime] | None
 ) -> list[Article]:
-    """Newest-published first, so the first article seen per cluster while
-    grouping below is always that cluster's most recent one for this tag -
-    avoids a second sort pass after grouping. day_bounds (from
-    _day_bounds_utc), when given, restricts to articles whose own
-    published_at (the outlet's original publish time, not our review
-    time) falls in that IST calendar day.
+    """day_bounds (from _day_bounds_utc), when given, restricts to articles
+    whose own published_at (the outlet's original publish time, not our
+    review time) falls in that IST calendar day. Order doesn't matter here -
+    _cluster_cards_for_tag below picks the representative explicitly by
+    published_at rather than relying on query order.
     """
     conditions = [
         Article.published_tag == tag.value,
@@ -114,7 +114,6 @@ def _published_articles_for_tag(
         select(Article)
         .options(joinedload(Article.outlet), joinedload(Article.system_tag))
         .where(*conditions)
-        .order_by(Article.published_at.desc())
     )
     return list(db.scalars(stmt).unique())
 
@@ -159,12 +158,21 @@ def _cluster_cards_for_tag(
 ) -> list[ClusterCard]:
     articles = _published_articles_for_tag(db, tag, day_bounds)
 
-    representative_by_cluster: dict[int, Article] = {}
+    articles_by_cluster: dict[int, list[Article]] = {}
     for article in articles:
-        representative_by_cluster.setdefault(article.cluster_id, article)
+        articles_by_cluster.setdefault(article.cluster_id, []).append(article)
 
     cards = []
-    for cluster_id, article in representative_by_cluster.items():
+    for cluster_id, cluster_articles in articles_by_cluster.items():
+        # Earliest-published article for this cluster+tag is shown as the
+        # representative - requested directly: picking whichever article
+        # the query happened to return first (previously the most-recently
+        # published one) read as arbitrary to a reader with no way to know
+        # why that particular outlet's headline was the one shown. The
+        # first report of the story is a meaningful, deterministic choice
+        # instead.
+        article = min(cluster_articles, key=lambda a: a.published_at)
+        other_headlines = [a.headline for a in cluster_articles if a.id != article.id]
         cluster_breakdown = breakdown_by_cluster.get(cluster_id, {})
         cards.append(
             ClusterCard(
@@ -188,6 +196,7 @@ def _cluster_cards_for_tag(
                 # agreed, or only one outlet has covered it so far) has
                 # nothing to compare, so no link.
                 has_comparison=sum(1 for count in cluster_breakdown.values() if count > 0) > 1,
+                other_headlines=other_headlines,
                 jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
                 ruling_party=article.system_tag.ruling_party if article.system_tag else None,
                 primary_source_url=article.cluster.primary_source_url if article.cluster else None,
