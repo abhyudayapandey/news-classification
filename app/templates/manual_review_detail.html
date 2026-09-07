@@ -21,7 +21,7 @@
   <h2>System-generated tag</h2>
   <p>
     Classification:
-    <span class="badge badge-{{ 'pro' if system_tag.classification.value == 'pro-establishment' else 'anti' }}">
+    <span class="badge badge-{{ 'pro' if system_tag.classification.value == 'pro-establishment' else ('anti' if system_tag.classification.value == 'anti-establishment' else 'apolitical') }}">
       {{ system_tag.classification.value }}
     </span>
   </p>
@@ -49,7 +49,8 @@
       Anti-establishment
     </label>
     <label>
-      <input type="radio" name="final_tag" value="apolitical" style="width:auto; display:inline;">
+      <input type="radio" name="final_tag" value="apolitical"
+        {% if system_tag.classification.value == "apolitical" %}checked{% endif %} style="width:auto; display:inline;">
       Apolitical
     </label>
     <p class="muted">Leaving the pre-selected option and submitting confirms the system tag; picking a different one overrides it.</p>

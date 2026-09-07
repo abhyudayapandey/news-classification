@@ -20,6 +20,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import Admin, Article, Review
 from app.models.enums import AdminRole, ClassificationTag, ReviewDecision
+from app.public.formatting import excerpt as make_excerpt
 from app.review.assignment import reassign_admin_queue
 from app.review.blinding import blind_headline_and_body
 from app.review.queries import ReviewFilters, query_reviews
@@ -105,10 +106,21 @@ def _record_review(db: Session, article: Article, admin: Admin, final_tag: str) 
 
 
 def _queue_item(article: Article) -> dict:
+    """Includes the same blinded headline/excerpt an admin would see on the
+    full review page - requested directly so an admin can tell at a glance,
+    right from the queue list, whether an article is an obvious case (agree
+    with the system tag, select it, bulk-publish) without opening each one.
+    The excerpt is the same length/truncation as the public site's card
+    teaser (app/public/formatting.excerpt) since it's meant to give the
+    admin the same "headline + hero text" a reader would eventually see.
+    """
     hours_elapsed = (datetime.now(timezone.utc) - article.queued_at).total_seconds() / 3600
     overdue = hours_elapsed > settings.review_sla_hours
+    blinded_headline, blinded_body, _ = _blind_article(article)
     return {
         "article": article,
+        "headline": blinded_headline,
+        "excerpt": make_excerpt(blinded_body) if blinded_body.strip() else None,
         "overdue": overdue,
         "hours_remaining": max(0, round(settings.review_sla_hours - hours_elapsed)),
     }
@@ -120,14 +132,30 @@ def my_queue(
     current_admin: Admin = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    """Grouped into the three system-tag categories rather than one flat
+    list - requested directly (Phase 4): a single long undifferentiated
+    list read as more daunting to an admin than three shorter, categorized
+    ones, even though the total review volume is identical either way.
+    Order within each category is still oldest published_at first
+    (Section 5). Apolitical articles reach here too now - see
+    app/review/assignment.py's module docstring for why.
+    """
     stmt = (
         select(Article)
         .where(Article.assigned_admin_id == current_admin.id, ~Article.reviews.any())
         .order_by(Article.published_at.asc())
     )
     articles = list(db.scalars(stmt))
-    items = [_queue_item(a) for a in articles]
-    return render(request, "queue.html", current_admin, items=items)
+    items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
+    for article in articles:
+        items_by_tag[article.system_tag.classification].append(_queue_item(article))
+    return render(
+        request, "queue.html", current_admin,
+        pro_items=items_by_tag[ClassificationTag.PRO_ESTABLISHMENT],
+        anti_items=items_by_tag[ClassificationTag.ANTI_ESTABLISHMENT],
+        apolitical_items=items_by_tag[ClassificationTag.APOLITICAL],
+        total=len(articles),
+    )
 
 
 @router.get("/review/{article_id}", response_class=HTMLResponse)
@@ -188,6 +216,33 @@ def submit_review(
         )
 
     _record_review(db, article, current_admin, final_tag)
+    return RedirectResponse("/admin/queue", status_code=303)
+
+
+@router.post("/queue/bulk-confirm")
+def bulk_confirm(
+    article_ids: list[int] = Form(default=[]),
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """The checkbox+"Publish selected" flow on /admin/queue: for obvious
+    cases an admin can already judge from the queue list's headline+excerpt
+    alone, this skips opening each article individually. Always agrees with
+    the system tag already shown for that row - there's no per-article tag
+    picker here, so this can only confirm, never override (an override
+    still goes through the full single-article review page). Silently
+    ignores any id that isn't actually this admin's to review (wrong owner,
+    already reviewed, stale page) rather than erroring the whole batch.
+    """
+    if article_ids:
+        stmt = select(Article).where(
+            Article.id.in_(article_ids),
+            Article.assigned_admin_id == current_admin.id,
+            ~Article.reviews.any(),
+        )
+        for article in db.scalars(stmt):
+            if article.system_tag is not None:
+                _record_review(db, article, current_admin, article.system_tag.classification.value)
     return RedirectResponse("/admin/queue", status_code=303)
 
 
