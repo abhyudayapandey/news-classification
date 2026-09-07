@@ -736,12 +736,19 @@ re-evaluation (§9.2, §9.5) are unchanged - they're now a pre-filter that
 reduces how often a real political article reaches the queue mislabeled,
 rather than the last line of defense before publish.
 
-An admin's own queue (`/admin/queue`) is grouped into three sections -
+An admin's own queue (`/admin/queue`) is grouped into three categories -
 Pro-Establishment, Anti-Establishment, Apolitical, by the article's
-system tag - rather than one flat oldest-first list. Requested directly:
-a single long list of everything read as more daunting than three
-shorter, categorized ones, even though the total review burden is the
-same either way. Order within each section is now newest `published_at`
+system tag - rendered as tabs rather than one flat oldest-first list.
+Requested directly: a single long list of everything read as more
+daunting than three shorter, categorized ones. The first version of this
+stacked all three lists on the page instead, one below the other -
+that still left an admin scrolling through everything, just split across
+three lists instead of one, missing the actual point of categorizing
+them. Tabs show one category at a time (defaulting to the first
+non-empty one, so an admin never lands on a tab with nothing to review);
+all three are still rendered server-side and just hidden/shown client-
+side, so switching tabs is instant with no extra request. Order within
+each tab is now newest `published_at`
 first - a further departure from Section 5's original oldest-first
 wording, requested directly: publishing the most recent articles first
 keeps their context current and matches what an end user sees first on

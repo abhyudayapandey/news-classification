@@ -145,6 +145,13 @@ def my_queue(
     published_at - see Article.queued_at's field comment). Apolitical
     articles reach here too now - see app/review/assignment.py's module
     docstring for why.
+
+    The three categories render as tabs, not three stacked full-length
+    lists - stacking them still forced exactly the scrolling-through-a-
+    long-list problem the categorization itself was meant to solve, just
+    spread across three lists instead of one. Only one tab's articles are
+    in the DOM as visible at a time; the other two are still rendered
+    (so switching tabs is instant, no extra request) but hidden.
     """
     stmt = (
         select(Article)
@@ -155,11 +162,26 @@ def my_queue(
     items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
     for article in articles:
         items_by_tag[article.system_tag.classification].append(_queue_item(article))
+
+    pro_items = items_by_tag[ClassificationTag.PRO_ESTABLISHMENT]
+    anti_items = items_by_tag[ClassificationTag.ANTI_ESTABLISHMENT]
+    apolitical_items = items_by_tag[ClassificationTag.APOLITICAL]
+    # Default to the first category that actually has something to review,
+    # so an admin with (say) only apolitical articles pending doesn't land
+    # on an empty Pro-Establishment tab.
+    if pro_items:
+        active_tab = "pro"
+    elif anti_items:
+        active_tab = "anti"
+    else:
+        active_tab = "apolitical"
+
     return render(
         request, "queue.html", current_admin,
-        pro_items=items_by_tag[ClassificationTag.PRO_ESTABLISHMENT],
-        anti_items=items_by_tag[ClassificationTag.ANTI_ESTABLISHMENT],
-        apolitical_items=items_by_tag[ClassificationTag.APOLITICAL],
+        pro_items=pro_items,
+        anti_items=anti_items,
+        apolitical_items=apolitical_items,
+        active_tab=active_tab,
         total=len(articles),
     )
 
