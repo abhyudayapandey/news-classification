@@ -120,14 +120,30 @@ def my_queue(
     current_admin: Admin = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
+    """Grouped into the three system-tag categories rather than one flat
+    list - requested directly (Phase 4): a single long undifferentiated
+    list read as more daunting to an admin than three shorter, categorized
+    ones, even though the total review volume is identical either way.
+    Order within each category is still oldest published_at first
+    (Section 5). Apolitical articles reach here too now - see
+    app/review/assignment.py's module docstring for why.
+    """
     stmt = (
         select(Article)
         .where(Article.assigned_admin_id == current_admin.id, ~Article.reviews.any())
         .order_by(Article.published_at.asc())
     )
     articles = list(db.scalars(stmt))
-    items = [_queue_item(a) for a in articles]
-    return render(request, "queue.html", current_admin, items=items)
+    items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
+    for article in articles:
+        items_by_tag[article.system_tag.classification].append(_queue_item(article))
+    return render(
+        request, "queue.html", current_admin,
+        pro_items=items_by_tag[ClassificationTag.PRO_ESTABLISHMENT],
+        anti_items=items_by_tag[ClassificationTag.ANTI_ESTABLISHMENT],
+        apolitical_items=items_by_tag[ClassificationTag.APOLITICAL],
+        total=len(articles),
+    )
 
 
 @router.get("/review/{article_id}", response_class=HTMLResponse)

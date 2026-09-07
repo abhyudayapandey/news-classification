@@ -2,10 +2,14 @@
 classify) plus the two Section 4.3 safety nets (entity-trigger override,
 cluster re-evaluation) for one article at a time.
 
-Does not touch review/publish beyond what Section 4.3 explicitly assigns to
-this stage: apolitical articles get published_tag set directly here ("skips
-straight to publish"); everything else is left with published_tag=NULL,
-awaiting the Phase 3 admin review queue.
+Does not touch review/publish at all: every classified article - apolitical
+included - is left with published_tag=NULL here, awaiting the Phase 3 admin
+review queue. This is a deliberate departure from Section 4.3's original
+"apolitical skips straight to publish": live use surfaced apolitical
+mis-classifications (a genuinely pro/anti article the classifier missed)
+sitting unreviewed and already public, since nothing ever looked at them
+again once auto-published. See app/review/assignment.py's module docstring
+for the queueing side of this change.
 """
 
 import logging
@@ -137,7 +141,9 @@ def _process_one(
 
     if classification.classification == ClassificationTag.APOLITICAL:
         result.apolitical += 1
-        article.published_tag = ClassificationTag.APOLITICAL.value  # Section 4.3: skip straight to publish
+        # published_tag stays NULL - Phase 4 update: apolitical no longer
+        # skips straight to publish, it queues for admin review like
+        # pro/anti (app/review/assignment.py). See this module's docstring.
     else:
         if classification.classification == ClassificationTag.PRO_ESTABLISHMENT:
             result.pro_establishment += 1

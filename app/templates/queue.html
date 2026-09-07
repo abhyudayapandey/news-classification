@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% block title %}My Queue{% endblock %}
-{% block content %}
-<h1>My review queue</h1>
-<p class="muted">Oldest first (Section 5). {{ items|length }} article(s) awaiting your review.</p>
 
+{% macro section(label, items) %}
+<h2>{{ label }} <span class="muted">({{ items|length }})</span></h2>
 {% if not items %}
-  <div class="card">Nothing in your queue right now.</div>
+  <div class="card">Nothing here right now.</div>
 {% else %}
-  <div class="card" style="padding:0;">
+  <div class="card" style="padding:0; margin-bottom:1.5rem;">
     <table>
       <thead>
         <tr><th>Published</th><th>Headline</th><th>SLA</th><th></th></tr>
@@ -31,4 +30,13 @@
     </table>
   </div>
 {% endif %}
+{% endmacro %}
+
+{% block content %}
+<h1>My review queue</h1>
+<p class="muted">Oldest first within each category (Section 5). {{ total }} article(s) awaiting your review.</p>
+
+{{ section("Pro-Establishment", pro_items) }}
+{{ section("Anti-Establishment", anti_items) }}
+{{ section("Apolitical", apolitical_items) }}
 {% endblock %}

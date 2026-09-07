@@ -43,9 +43,11 @@ class Article(Base):
 
     # Copy of the winning review's final_tag once published (Section 6:
     # "POC = copy of the single review; future = e.g. majority vote of
-    # reviews[]"). Null until an admin has reviewed the article - EXCEPT for
-    # apolitical articles, which the pipeline sets directly (Section 4.3:
-    # apolitical skips straight to publish, no review needed).
+    # reviews[]"). Null until an admin has reviewed the article - all three
+    # tags, apolitical included, since Phase 4 (app/review/assignment.py's
+    # module docstring: Section 4.3's original "apolitical skips straight
+    # to publish" let real mis-classifications sit unreviewed and already
+    # public, so the pipeline no longer sets this directly for anything).
     published_tag: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # --- Phase 2 additions (not in the original Section 6 spec) ---
@@ -80,9 +82,10 @@ class Article(Base):
     # --- Phase 3 additions: Section 7 stage 6 (queue) ---
 
     # Section 5: "Each admin has their own queue (no overlap)". Set by
-    # app/review/assignment.py once an article is establishment-relevant
-    # and classified; NULL means "not yet queued" (still apolitical,
-    # unclassified, or a duplicate that never enters review at all).
+    # app/review/assignment.py once an article is classified (any of the
+    # three tags - see that module's docstring for the Phase 4 apolitical
+    # change); NULL means "not yet queued" (unclassified, a duplicate that
+    # never enters review, or diverted to needs_manual_link_review below).
     assigned_admin_id: Mapped[int | None] = mapped_column(ForeignKey("admins.id"), nullable=True, index=True)
     # When this article entered its assigned admin's queue - the clock the
     # 48-hour SLA (Section 5) is measured against. Deliberately not
@@ -98,8 +101,8 @@ class Article(Base):
     # for the legal/ethical posture - this is for internal admin review
     # only, never shown to or stored for an end user, and app/review/
     # assignment.py only attempts it for articles that actually reach an
-    # admin's queue (never for apolitical articles, which are never
-    # reviewed at all). NULL means "not attempted yet"; scrape_attempted_at
+    # admin's queue (apolitical included, since Phase 4). NULL means "not
+    # attempted yet"; scrape_attempted_at
     # non-null with scraped_body_text still NULL means "tried and failed" -
     # see scrape_error for why. The review UI falls back to body_text (the
     # RSS teaser) when this is unavailable.

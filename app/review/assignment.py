@@ -1,6 +1,15 @@
 """Section 7 stage 6 (queue) + Section 5's "each admin has their own
-queue, no overlap": assigns establishment-relevant, classified articles to
-an active admin.
+queue, no overlap": assigns classified articles to an active admin.
+
+Phase 4 update: apolitical articles are assigned here too, same as pro/
+anti - app/processing/pipeline.py no longer auto-publishes them (Section
+4.3's original "skip straight to publish" let real mis-classifications
+sit unreviewed and already public with nothing ever looking again). An
+admin's own queue view (app/routers/admin_ui.py's my_queue) groups its
+three tags into separate sections rather than one flat list - requested
+directly, since one long undifferentiated list read as more daunting
+than three shorter, categorized ones even though the review volume is
+identical either way.
 
 Load-balanced rather than a stateless round-robin counter: each article is
 assigned to whichever active admin currently has the fewest unreviewed
@@ -11,10 +20,10 @@ call is cheap at POC scale and can't drift out of sync with reality.
 
 Also attempts a full-text scrape (app/review/scraping.py) for each newly-
 assigned article, since that's the natural point where "this article is
-about to be reviewed by a human" becomes true - apolitical articles never
-reach here, so they're never scraped. This makes assignment a network-
-bound operation now, same caveat as Phase 2's /process/run: one bad or
-slow site shouldn't be able to stall the whole batch, so each scrape is
+about to be reviewed by a human" becomes true - apolitical articles get
+this too now, same as pro/anti. This makes assignment a network-bound
+operation now, same caveat as Phase 2's /process/run: one bad or slow
+site shouldn't be able to stall the whole batch, so each scrape is
 wrapped and a failure just leaves scraped_body_text NULL (the review UI
 falls back to the RSS teaser) rather than blocking assignment.
 
@@ -48,7 +57,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Admin, Article, SystemTag
-from app.models.enums import ClassificationTag
 from app.review.scraping import looks_like_author_bio, scrape_article_text
 
 logger = logging.getLogger(__name__)
@@ -112,9 +120,10 @@ def _needs_manual_review(article: Article) -> bool:
 
 
 def _pending_articles(db: Session, limit: int | None) -> list[Article]:
-    """Establishment-relevant (non-apolitical), classified, not-yet-assigned,
-    not-a-duplicate, not-already-diverted articles - oldest published first,
-    matching Section 5's queue order.
+    """Classified, not-yet-assigned, not-a-duplicate, not-already-diverted
+    articles - all three tags, apolitical included (Phase 4 update - see
+    this module's docstring) - oldest published first, matching Section
+    5's queue order.
     """
     stmt = (
         select(Article)
@@ -123,7 +132,6 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
             Article.assigned_admin_id.is_(None),
             Article.duplicate_of_id.is_(None),
             Article.needs_manual_link_review.is_(False),
-            SystemTag.classification != ClassificationTag.APOLITICAL,
         )
         .order_by(Article.published_at.asc())
     )

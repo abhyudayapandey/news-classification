@@ -127,7 +127,7 @@ Phase 3, all seven are populated:
 | Table | Populated as of | Notes |
 |---|---|---|
 | `outlets` | Phase 1 | Synced from `config/outlets.yaml` on every ingestion run |
-| `articles` | Phase 1 (+ Phase 2/3 fields) | `published_tag` set directly for apolitical (Phase 2) or from a `Review` (Phase 3); `assigned_admin_id`/`queued_at` added in Phase 3 |
+| `articles` | Phase 1 (+ Phase 2/3 fields) | `published_tag` set from a `Review`, for all three tags including apolitical (Phase 4 update — see §12.2); `assigned_admin_id`/`queued_at` added in Phase 3 |
 | `story_clusters` | Phase 2 | Populated by `app/processing/clustering.py` |
 | `system_tags` | Phase 2 | 1:1 with `articles`; written by `app/processing/pipeline.py` |
 | `jurisdiction_ruling_parties` | Phase 2 (seeded) | Manually maintained lookup table — see §9.4 for what's seeded and what needs verification |
@@ -716,13 +716,33 @@ processing each got their own trigger:
 python -m app.cli assign-queue      # or POST /queue/assign
 ```
 
-`app/review/assignment.py` assigns each pending (classified,
-non-apolitical, not-yet-assigned) article to whichever **active** admin
-currently has the fewest unreviewed articles — load-balanced by
-recomputing queue depth from the DB each call, rather than a stateless
-round-robin counter that could drift out of sync across repeated small
-batches. Apolitical articles never enter this queue at all — Section 4.3
-already published them directly in Phase 2.
+`app/review/assignment.py` assigns each pending (classified, not-yet-
+assigned) article to whichever **active** admin currently has the fewest
+unreviewed articles — load-balanced by recomputing queue depth from the
+DB each call, rather than a stateless round-robin counter that could
+drift out of sync across repeated small batches.
+
+**Phase 4 update, departing from Section 4.3's original "apolitical skips
+straight to publish":** live use surfaced apolitical mis-classifications
+(a genuinely pro/anti article the classifier missed) sitting unreviewed
+and already public, since nothing ever looked at them again once
+auto-published. `app/processing/pipeline.py` no longer sets
+`published_tag` for apolitical articles at all - they now enter the same
+queue/assignment/review flow as pro/anti (`app/review/assignment.py`'s
+`_pending_articles()` no longer excludes them), and `published_tag` for
+*every* tag, apolitical included, is set only once an admin's `Review`
+confirms or overrides it. The entity-trigger net and cluster
+re-evaluation (§9.2, §9.5) are unchanged - they're now a pre-filter that
+reduces how often a real political article reaches the queue mislabeled,
+rather than the last line of defense before publish.
+
+An admin's own queue (`/admin/queue`) is grouped into three sections -
+Pro-Establishment, Anti-Establishment, Apolitical, by the article's
+system tag - rather than one flat oldest-first list. Requested directly:
+a single long list of everything read as more daunting than three
+shorter, categorized ones, even though the total review burden is the
+same either way. Order within each section is still oldest `published_at`
+first, per Section 5.
 
 Two new `Article` fields support this: `assigned_admin_id` and
 `queued_at`. `queued_at` — not `published_at` — is what the 48-hour SLA
@@ -793,9 +813,11 @@ paragraphs were kept intact.
 
 - **Only for articles that will actually be reviewed.** `app/review/
   assignment.py` triggers a scrape exactly when an article is assigned to
-  an admin's queue — never for apolitical articles, which are never
-  reviewed at all and would make this pure waste. Nothing is scraped in
-  bulk "just in case."
+  an admin's queue - since §12.2's Phase 4 update, that now includes
+  apolitical articles too (they're reviewed the same as pro/anti), so
+  this is really "never for a duplicate or an apolitical article that's
+  already been reassigned to a still-pending state," not an apolitical-
+  specific exemption anymore. Nothing is scraped in bulk "just in case."
 - **Respects each site's robots.txt** and identifies itself honestly via
   User-Agent — no browser-spoofing to bypass a block. A site that
   disallows or blocks this is treated as "can't get this one," not

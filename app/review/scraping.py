@@ -1,8 +1,9 @@
 """Best-effort full-article-text scraping for internal admin review only
 (Section 5) - not for any end-user-facing view, and not run for every
 ingested article. app/review/assignment.py calls this only for articles
-that actually reach an admin's queue, since apolitical articles are never
-reviewed at all and scraping them would be pure waste.
+that actually reach an admin's queue - which, since Phase 4, includes
+apolitical articles too (they're reviewed the same as pro/anti now), so
+this is scoped by "will a human actually look at this," not by tag.
 
 Why this exists: RSS feeds are designed as notifications that content
 exists, not a distribution channel - most outlets deliberately put only a
