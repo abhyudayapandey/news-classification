@@ -29,6 +29,12 @@ from app.public.formatting import format_jurisdiction
 from app.public.formatting import format_outlet_breakdown
 from app.public.formatting import time_ago as make_time_ago
 
+_TAG_LABELS = {
+    ClassificationTag.PRO_ESTABLISHMENT.value: "Pro-Establishment",
+    ClassificationTag.ANTI_ESTABLISHMENT.value: "Anti-Establishment",
+    ClassificationTag.APOLITICAL.value: "Apolitical",
+}
+
 # The platform's outlets and readership are India-focused, so "today"
 # means the Indian calendar day, not the UTC one this data is stored in -
 # using UTC day boundaries would clip or duplicate the last/first ~5.5
@@ -49,17 +55,24 @@ def _day_bounds_utc(day: date_cls) -> tuple[datetime, datetime]:
 
 
 @dataclass
+class OtherHeadline:
+    tag_label: str | None  # None for the same-tag agreement hover, where every item shares this card's own tag
+    headline: str
+
+
+@dataclass
 class ClusterCard:
     cluster_id: int
     headline: str
     excerpt: str
     article_url: str
     outlet_name: str
-    published_at: datetime
-    published_at_display: str  # pre-formatted relative time - see app/public/formatting.time_ago
+    published_at: datetime  # most recent activity in this cluster+tag - see _cluster_cards_for_tag. Sort key only, never the displayed article's own time.
+    published_at_display: str  # pre-formatted relative time of the article actually shown above - see app/public/formatting.time_ago
     outlet_breakdown_display: str | None  # e.g. "3 pro · 2 anti" - see format_outlet_breakdown
     has_comparison: bool  # True when 2+ tags exist for this cluster - see /compare/{cluster_id}
-    other_headlines: list[str]  # other outlets' headlines under this same tag - see _cluster_cards_for_tag
+    other_headlines: list[OtherHeadline]  # same-tag agreement hover content (has_comparison=False) - see _cluster_cards_for_tag
+    other_tag_headlines: list[OtherHeadline]  # cross-tag divergence hover content (has_comparison=True)
     jurisdiction: str | None
     ruling_party: str | None
     primary_source_url: str | None
@@ -149,11 +162,37 @@ def _outlet_breakdown_by_cluster(
     }
 
 
+def _other_tag_headlines_by_cluster(
+    db: Session, day_bounds: tuple[datetime, datetime] | None
+) -> dict[int, dict[str, list[str]]]:
+    """One pass across every published article (all three tags), building
+    {cluster_id: {tag: [headline, ...]}} - lets a diverging card's hover
+    show what the *other* tag(s) said about the same story, labeled, without
+    a second per-card query. Same "one pass across all tags" shape as
+    _outlet_breakdown_by_cluster, just headlines instead of outlet counts.
+    """
+    conditions = [
+        Article.published_tag.is_not(None),
+        Article.cluster_id.is_not(None),
+        Article.duplicate_of_id.is_(None),
+    ]
+    if day_bounds is not None:
+        start, end = day_bounds
+        conditions += [Article.published_at >= start, Article.published_at < end]
+
+    stmt = select(Article.cluster_id, Article.published_tag, Article.headline).where(*conditions)
+    headlines_by_cluster_and_tag: dict[int, dict[str, list[str]]] = {}
+    for cluster_id, tag, headline in db.execute(stmt):
+        headlines_by_cluster_and_tag.setdefault(cluster_id, {}).setdefault(tag, []).append(headline)
+    return headlines_by_cluster_and_tag
+
+
 def _cluster_cards_for_tag(
     db: Session,
     tag: ClassificationTag,
     limit: int,
     breakdown_by_cluster: dict[int, dict[str, int]],
+    other_tag_headlines_by_cluster: dict[int, dict[str, list[str]]],
     day_bounds: tuple[datetime, datetime] | None,
 ) -> list[ClusterCard]:
     articles = _published_articles_for_tag(db, tag, day_bounds)
@@ -172,8 +211,25 @@ def _cluster_cards_for_tag(
         # first report of the story is a meaningful, deterministic choice
         # instead.
         article = min(cluster_articles, key=lambda a: a.published_at)
-        other_headlines = [a.headline for a in cluster_articles if a.id != article.id]
+        # Sort/freshness order is deliberately NOT the same article's own
+        # timestamp: a story with an old first report but a brand new
+        # follow-up from another outlet is still live, ongoing coverage and
+        # belongs near the top of the column - using the earliest article's
+        # own (old) timestamp here previously pushed exactly these stories
+        # out of the limit_per_column cutoff, a real bug caught after ship.
+        most_recent_activity_at = max(a.published_at for a in cluster_articles)
+        other_headlines = [
+            OtherHeadline(tag_label=None, headline=a.headline)
+            for a in cluster_articles
+            if a.id != article.id
+        ]
         cluster_breakdown = breakdown_by_cluster.get(cluster_id, {})
+        other_tag_headlines = [
+            OtherHeadline(tag_label=_TAG_LABELS[other_tag], headline=headline)
+            for other_tag, headlines in other_tag_headlines_by_cluster.get(cluster_id, {}).items()
+            if other_tag != tag.value
+            for headline in headlines
+        ]
         cards.append(
             ClusterCard(
                 cluster_id=cluster_id,
@@ -186,7 +242,7 @@ def _cluster_cards_for_tag(
                 excerpt=make_excerpt(article.body_text),
                 article_url=article.url,
                 outlet_name=article.outlet.name,
-                published_at=article.published_at,
+                published_at=most_recent_activity_at,
                 published_at_display=make_time_ago(article.published_at),
                 outlet_breakdown_display=format_outlet_breakdown(cluster_breakdown),
                 # More than one tag present for this cluster means outlets'
@@ -197,6 +253,7 @@ def _cluster_cards_for_tag(
                 # nothing to compare, so no link.
                 has_comparison=sum(1 for count in cluster_breakdown.values() if count > 0) > 1,
                 other_headlines=other_headlines,
+                other_tag_headlines=other_tag_headlines,
                 jurisdiction=format_jurisdiction(article.system_tag.jurisdiction) if article.system_tag else None,
                 ruling_party=article.system_tag.ruling_party if article.system_tag else None,
                 primary_source_url=article.cluster.primary_source_url if article.cluster else None,
@@ -261,14 +318,18 @@ def get_home_columns(db: Session, limit_per_column: int = 15, day: date_cls | No
     """
     day_bounds = _day_bounds_utc(day) if day is not None else None
     breakdown_by_cluster = _outlet_breakdown_by_cluster(db, day_bounds)
+    other_tag_headlines_by_cluster = _other_tag_headlines_by_cluster(db, day_bounds)
     return HomeColumns(
         pro_establishment=_cluster_cards_for_tag(
-            db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column, breakdown_by_cluster, day_bounds
+            db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column,
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
         ),
         anti_establishment=_cluster_cards_for_tag(
-            db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column, breakdown_by_cluster, day_bounds
+            db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column,
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
         ),
         apolitical=_cluster_cards_for_tag(
-            db, ClassificationTag.APOLITICAL, limit_per_column, breakdown_by_cluster, day_bounds
+            db, ClassificationTag.APOLITICAL, limit_per_column,
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
         ),
     )
