@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}New Client{% endblock %}
+{% block content %}
+<p><a href="/admin/clients">&larr; Back to clients</a></p>
+<div class="card" style="max-width: 420px;">
+  <h1>New client</h1>
+  <form method="post" action="/admin/clients/new">
+    <label for="name">Client name</label>
+    <input type="text" id="name" name="name" required autofocus>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">Create client</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

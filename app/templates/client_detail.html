@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name }}{% endblock %}
+{% block content %}
+<p><a href="/admin/clients">&larr; Back to clients</a></p>
+<h1>
+  {{ client.name }}
+  {% if client.active %}<span class="badge badge-ok">active</span>
+  {% else %}<span class="badge badge-overdue">inactive</span>{% endif %}
+</h1>
+
+{% if message %}<div class="success">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+<div class="card">
+  <h2>Tracked entities</h2>
+  <p class="muted">
+    YouTube is fetched for every tracked entity regardless of X access (free tier, no gating).
+    X is fetched for an entity only while at least one active client has X access granted for it.
+  </p>
+  {% if not subject_rows %}
+    <p class="muted">Not tracking any entities yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Entity</th><th>X access</th><th>Ceiling / spend</th><th>Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in subject_rows %}
+      <tr>
+        <td>{{ r.entity.name }}</td>
+        <td>{{ "Yes" if r.x_access else "No" }}</td>
+        <td>
+          {% if r.x_access %}
+            ${{ "%.4f"|format(r.current_spend_usd) }} / ${{ "%.4f"|format(r.x_spend_ceiling_usd) if r.x_spend_ceiling_usd is not none else "?" }}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.status.value == "hit" %}<span class="badge badge-anti">HIT</span>
+          {% elif r.status.value == "approaching" %}<span class="badge badge-overdue">APPROACHING</span>
+          {% elif r.status.value == "ok" %}<span class="badge badge-ok">OK</span>
+          {% elif r.status.value == "no_ceiling" %}<span class="badge badge-overdue">NO CEILING</span>
+          {% else %}<span class="badge badge-apolitical">NO X ACCESS</span>{% endif %}
+        </td>
+        <td>
+          {% if r.x_access %}
+          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/revoke">
+            <button class="btn" type="submit" onclick="return confirm('Revoke X access to {{ r.entity.name }} for {{ client.name }}?');">Revoke X access</button>
+          </form>
+          {% endif %}
+          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/remove">
+            <button class="btn btn-danger" type="submit" onclick="return confirm('Stop tracking {{ r.entity.name }} entirely for {{ client.name }}?');">Stop tracking</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h3 style="margin-top:1.5rem;">Add tracked entity</h3>
+  <form method="post" action="/admin/clients/{{ client.id }}/subjects/new">
+    <label for="entity_id">Entity</label>
+    <select id="entity_id" name="entity_id" required>
+      {% for e in available_entities %}
+      <option value="{{ e.id }}">{{ e.name }} ({{ e.type.value }})</option>
+      {% endfor %}
+    </select>
+
+    <label><input type="checkbox" name="grant_x" value="1" style="width:auto; display:inline;"> Grant X access</label>
+
+    <label for="x_ceiling">Monthly X ceiling (USD, only used if X access is checked)</label>
+    <input type="text" id="x_ceiling" name="x_ceiling" placeholder="e.g. 25.00">
+
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit" {% if not available_entities %}disabled{% endif %}>Add</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Client logins</h2>
+  <p class="muted">Accounts this client can use to log into their own dashboard at /client/login.</p>
+  {% if not client_users %}
+    <p class="muted">No logins created yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Username</th><th>Name</th><th>Status</th><th>Created</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for u in client_users %}
+      <tr>
+        <td>{{ u.username }}</td>
+        <td>{{ u.name }}</td>
+        <td>
+          {% if u.is_active %}<span class="badge badge-ok">active</span>
+          {% else %}<span class="badge badge-overdue">inactive</span>{% endif %}
+        </td>
+        <td class="muted">{{ u.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          {% if u.is_active %}
+          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/users/{{ u.id }}/deactivate">
+            <button class="btn btn-danger" type="submit">Deactivate</button>
+          </form>
+          {% else %}
+          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/users/{{ u.id }}/reactivate">
+            <button class="btn" type="submit">Reactivate</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h3 style="margin-top:1.5rem;">Add login</h3>
+  <form method="post" action="/admin/clients/{{ client.id }}/users/new">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required>
+    <label for="cu_name">Contact name</label>
+    <input type="text" id="cu_name" name="name" required>
+    <label for="cu_password">Password</label>
+    <input type="password" id="cu_password" name="password" required>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">Create login</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

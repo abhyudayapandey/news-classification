@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ entity.name }}{% endblock %}
+{% block header %}
+<header>
+  <div><span class="brand">News Framing Platform &middot; Client Portal</span></div>
+  <div>
+    <span class="user-info">{{ current_client_user.name }} ({{ current_client_user.client.name }})</span>
+    <form class="inline" method="post" action="/client/logout" style="display:inline;">
+      <button class="btn" type="submit" style="margin-left:0.75rem;">Log out</button>
+    </form>
+  </div>
+</header>
+{% endblock %}
+{% block content %}
+<p><a href="/client/dashboard">&larr; Back to your subjects</a></p>
+<h1>{{ entity.name }}</h1>
+
+{% if subject.x_access %}
+<div class="card">
+  <h2>Your X usage this month</h2>
+  <p>
+    ${{ "%.4f"|format(current_spend_usd) }}
+    {% if subject.x_spend_ceiling_usd is not none %} of ${{ "%.4f"|format(subject.x_spend_ceiling_usd) }} contracted{% endif %}
+  </p>
+</div>
+{% else %}
+<div class="card">
+  <p class="muted">X coverage isn't included in your plan for this subject - showing YouTube coverage only.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>YouTube coverage</h2>
+  {% if not youtube_mentions %}
+    <p class="muted">No YouTube mentions fetched yet.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Title</th><th>Channel</th><th>Posted</th><th></th></tr></thead>
+    <tbody>
+      {% for m in youtube_mentions %}
+      <tr>
+        <td>{{ m.content_text }}</td>
+        <td>{{ m.author or "-" }}</td>
+        <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
+        <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+{% if subject.x_access %}
+<div class="card">
+  <h2>X coverage</h2>
+  {% if not x_mentions %}
+    <p class="muted">No X mentions fetched yet.</p>
+  {% else %}
+  <table>
+    <thead><tr><th>Post</th><th>Author</th><th>Posted</th><th></th></tr></thead>
+    <tbody>
+      {% for m in x_mentions %}
+      <tr>
+        <td>{{ m.content_text }}</td>
+        <td>{{ m.author or "-" }}</td>
+        <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
+        <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

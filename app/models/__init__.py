@@ -3,6 +3,7 @@ from app.models.article import Article
 from app.models.article_entity import ArticleEntity
 from app.models.client import Client
 from app.models.client_subject import ClientSubject
+from app.models.client_user import ClientUser
 from app.models.entity import Entity
 from app.models.entity_social_config import EntitySocialConfig
 from app.models.enums import (
@@ -29,6 +30,7 @@ __all__ = [
     "ClassificationTag",
     "Client",
     "ClientSubject",
+    "ClientUser",
     "Entity",
     "EntitySocialConfig",
     "EntityProminence",

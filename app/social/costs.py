@@ -69,7 +69,13 @@ def revoke_x_access(db: Session, client_id: int, entity_id: int) -> ClientSubjec
     return subject
 
 
-def _status_for(ceiling: Decimal | None, current_spend: Decimal, x_access: bool) -> CeilingStatus:
+def status_for(ceiling: Decimal | None, current_spend: Decimal, x_access: bool) -> CeilingStatus:
+    """Shared by list_client_cost_statuses below and the admin client-
+    detail page (app/routers/admin_ui.py) - both need the same OK/
+    APPROACHING/HIT/NO_ACCESS/NO_CEILING classification for a given
+    (ceiling, spend, access) triple, so it's a public function rather than
+    two copies of the same comparison logic.
+    """
     if not x_access:
         return CeilingStatus.NO_ACCESS
     if ceiling is None:
@@ -111,7 +117,7 @@ def list_client_cost_statuses(db: Session) -> list[ClientCostStatus]:
                 x_access=subject.x_access,
                 x_spend_ceiling_usd=subject.x_spend_ceiling_usd,
                 entity_current_spend_usd=current_spend,
-                status=_status_for(subject.x_spend_ceiling_usd, current_spend, subject.x_access),
+                status=status_for(subject.x_spend_ceiling_usd, current_spend, subject.x_access),
             )
         )
     return statuses

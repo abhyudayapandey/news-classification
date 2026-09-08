@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Client Portal Log In{% endblock %}
+{% block header %}
+<header>
+  <div><span class="brand">News Framing Platform &middot; Client Portal</span></div>
+</header>
+{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 360px; margin: 3rem auto;">
+  <h1>Client log in</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="/client/login">
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username" required autofocus>
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" required>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">Log in</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

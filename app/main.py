@@ -2,9 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth.client_session import ClientNotAuthenticated
 from app.auth.session import Forbidden, NotAuthenticated
 from app.config import settings
-from app.routers import admin_data, admin_ui, articles, clusters, entities, health, ingestion, processing, public, queue, social
+from app.routers import admin_data, admin_ui, articles, client_ui, clusters, entities, health, ingestion, processing, public, queue, social
 
 app = FastAPI(
     title="News Framing Platform API",
@@ -36,6 +37,7 @@ app.include_router(entities.router)
 app.include_router(social.router)
 app.include_router(queue.router)
 app.include_router(admin_ui.router)
+app.include_router(client_ui.router)
 app.include_router(public.router)
 
 
@@ -47,3 +49,8 @@ async def not_authenticated_handler(request: Request, exc: NotAuthenticated) -> 
 @app.exception_handler(Forbidden)
 async def forbidden_handler(request: Request, exc: Forbidden) -> HTMLResponse:
     return HTMLResponse("<h1>403 Forbidden</h1><p>Super admin access required.</p>", status_code=403)
+
+
+@app.exception_handler(ClientNotAuthenticated)
+async def client_not_authenticated_handler(request: Request, exc: ClientNotAuthenticated) -> RedirectResponse:
+    return RedirectResponse("/client/login", status_code=303)

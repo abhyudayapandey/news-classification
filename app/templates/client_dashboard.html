@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Client Dashboard{% endblock %}
+{% block header %}
+<header>
+  <div><span class="brand">News Framing Platform &middot; Client Portal</span></div>
+  <div>
+    <span class="user-info">{{ current_client_user.name }} ({{ current_client_user.client.name }})</span>
+    <form class="inline" method="post" action="/client/logout" style="display:inline;">
+      <button class="btn" type="submit" style="margin-left:0.75rem;">Log out</button>
+    </form>
+  </div>
+</header>
+{% endblock %}
+{% block content %}
+<h1>Your tracked subjects</h1>
+<p class="muted">
+  YouTube coverage is included for every subject below. X coverage and spend are shown only where
+  your plan includes X access for that subject.
+</p>
+
+{% if not subjects %}
+  <p class="muted">No subjects are being tracked for your account yet - contact your account manager.</p>
+{% else %}
+<div class="card" style="padding:0;">
+  <table>
+    <thead>
+      <tr><th>Subject</th><th>X access</th><th>Your X usage this month</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in subjects %}
+      <tr>
+        <td>{{ s.entity.name }}</td>
+        <td>{{ "Included" if s.x_access else "Not included" }}</td>
+        <td>
+          {% if s.x_access %}
+            ${{ "%.4f"|format(s.current_spend_usd) }}
+            {% if s.x_spend_ceiling_usd is not none %} / ${{ "%.4f"|format(s.x_spend_ceiling_usd) }} contracted{% endif %}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td><a class="btn" href="/client/entities/{{ s.entity.id }}">View mentions</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
