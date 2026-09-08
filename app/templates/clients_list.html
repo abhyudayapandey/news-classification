@@ -13,7 +13,7 @@
 <div class="card" style="padding:0; overflow-x:auto;">
   <table>
     <thead>
-      <tr><th>Client</th><th>Subject</th><th>News</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th></tr>
+      <tr><th>Client</th><th>Subject</th><th>News</th><th>YouTube</th><th>X</th><th>X spend / ceiling</th><th>Status</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
@@ -40,42 +40,40 @@
             {% endif %}
             <td>{{ s.entity.name }}</td>
             <td>
-              {% if s.news_access %}
-                <span class="badge badge-ok">ON</span>
-                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/news/disable">
-                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
-                </form>
-              {% else %}
-                <span class="badge badge-apolitical">OFF</span>
-                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/news/enable">
-                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
-                </form>
-              {% endif %}
+              <form method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/news/{{ 'disable' if s.news_access else 'enable' }}" class="switch-row">
+                <input type="hidden" name="next" value="/admin/clients">
+                <label class="switch">
+                  <input type="checkbox" {% if s.news_access %}checked{% endif %} onchange="this.form.submit()">
+                  <span class="slider"></span>
+                </label>
+                <span class="switch-label">{{ "On" if s.news_access else "Off" }}</span>
+              </form>
             </td>
             <td>
-              {% if s.youtube_access %}
-                <span class="badge badge-ok">ON</span>
-                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/youtube/disable">
-                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
-                </form>
-              {% else %}
-                <span class="badge badge-apolitical">OFF</span>
-                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/youtube/enable">
-                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
-                </form>
-              {% endif %}
+              <form method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/youtube/{{ 'disable' if s.youtube_access else 'enable' }}" class="switch-row">
+                <input type="hidden" name="next" value="/admin/clients">
+                <label class="switch">
+                  <input type="checkbox" {% if s.youtube_access %}checked{% endif %} onchange="this.form.submit()">
+                  <span class="slider"></span>
+                </label>
+                <span class="switch-label">{{ "On" if s.youtube_access else "Off" }}</span>
+              </form>
             </td>
             <td>
               {% if s.x_access %}
-                <span class="badge badge-ok">ON</span>
-                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/revoke">
-                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
+                <form method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/revoke" class="switch-row">
+                  <input type="hidden" name="next" value="/admin/clients">
+                  <label class="switch">
+                    <input type="checkbox" checked onchange="if(confirm('Revoke X access to {{ s.entity.name }} for {{ r.client.name }}?')){this.form.submit();}else{this.checked=true;}">
+                    <span class="slider"></span>
+                  </label>
+                  <span class="switch-label">On</span>
                 </form>
               {% else %}
-                <span class="badge badge-apolitical">OFF</span>
                 <details class="inline" style="display:inline-block;">
-                  <summary class="btn" style="display:inline-block; cursor:pointer; padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</summary>
+                  <summary class="switch-label" style="cursor:pointer; text-decoration:underline;">Off &middot; grant access</summary>
                   <form method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/grant-x" style="margin-top:0.4rem; min-width:160px;">
+                    <input type="hidden" name="next" value="/admin/clients">
                     <input type="text" name="x_ceiling" placeholder="Monthly ceiling $">
                     <button class="btn btn-primary" type="submit" style="margin-top:0.4rem;">Grant</button>
                   </form>
@@ -84,8 +82,8 @@
             </td>
             <td>
               {% if s.x_access %}
-                ${{ "%.4f"|format(s.current_spend_usd) }}
-                {% if s.x_spend_ceiling_usd is not none %} / ${{ "%.4f"|format(s.x_spend_ceiling_usd) }}{% endif %}
+                Spend ${{ "%.4f"|format(s.current_spend_usd) }}
+                {% if s.x_spend_ceiling_usd is not none %}<br>Ceiling ${{ "%.4f"|format(s.x_spend_ceiling_usd) }}{% endif %}
               {% else %}
                 <span class="muted">-</span>
               {% endif %}

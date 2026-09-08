@@ -20,6 +20,7 @@ Usage:
     python -m app.cli show-clients        # Phase 6: list clients
     python -m app.cli add-client-subject  # Phase 6: have a client track an entity, optionally with X access
     python -m app.cli fetch-social        # Phase 6: fetch YouTube/X mentions for tracked entities
+    python -m app.cli backfill-social-mentions # Phase 6: re-score sentiment/geography + real YouTube view counts for pre-existing rows
     python -m app.cli social-cost-report  # Phase 6: super-admin cost view
 """
 
@@ -397,6 +398,26 @@ def cmd_fetch_social(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backfill_social_mentions(args: argparse.Namespace) -> int:
+    from app.social.backfill import backfill_social_mentions
+
+    db = SessionLocal()
+    try:
+        result = backfill_social_mentions(db, limit=args.limit)
+    finally:
+        db.close()
+    print(f"Scanned:                   {result.scanned}")
+    print(f"Sentiment (re-)scored:     {result.sentiment_scored}")
+    print(f"Geography tagged:          {result.geography_tagged}")
+    print(f"YouTube engagement filled: {result.youtube_engagement_updated}")
+    print("(X engagement is not backfilled here - it would mean a fresh, separately-billed X API read.)")
+    if result.errors:
+        print(f"{len(result.errors)} error(s):")
+        for e in result.errors[:10]:
+            print(f"  - {e}")
+    return 0
+
+
 def cmd_social_cost_report(_args: argparse.Namespace) -> int:
     from app.social.costs import list_client_cost_statuses, list_entity_spend_summaries
 
@@ -549,6 +570,12 @@ def main() -> int:
     )
     fetch_social_parser.add_argument("--limit", type=int, default=None, help="Max entities to scan this run")
 
+    backfill_social_parser = subparsers.add_parser(
+        "backfill-social-mentions",
+        help="Re-score sentiment/geography and re-fetch real YouTube view counts for SocialMention rows stored before those existed",
+    )
+    backfill_social_parser.add_argument("--limit", type=int, default=None, help="Max rows to process this run")
+
     subparsers.add_parser(
         "social-cost-report", help="Super-admin cost view: entity spend + per-client ceiling status"
     )
@@ -593,6 +620,8 @@ def main() -> int:
         return cmd_add_client_subject(args)
     if args.command == "fetch-social":
         return cmd_fetch_social(args)
+    if args.command == "backfill-social-mentions":
+        return cmd_backfill_social_mentions(args)
     if args.command == "social-cost-report":
         return cmd_social_cost_report(args)
 

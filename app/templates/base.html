@@ -59,6 +59,26 @@
   .filters > div { flex: 1; min-width: 140px; }
   form.inline { display: inline; }
   .pagination { display: flex; gap: 0.5rem; margin-top: 1rem; }
+
+  /* A single flip switch replacing the old badge+button pair for a
+     binary on/off setting - one glance shows the state, one click
+     changes it, no separate enable/disable button restating the
+     opposite of what's already shown. */
+  .switch-row { display: flex; align-items: center; gap: 0.5rem; }
+  .switch { position: relative; display: inline-block; width: 34px; height: 20px; flex-shrink: 0; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider {
+    position: absolute; cursor: pointer; inset: 0; background: #d1d5db;
+    border-radius: 999px; transition: background-color 120ms ease-out;
+  }
+  .switch .slider::before {
+    content: ""; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px;
+    background: #fff; border-radius: 50%; transition: transform 120ms ease-out;
+  }
+  .switch input:checked + .slider { background: #059669; }
+  .switch input:checked + .slider::before { transform: translateX(14px); }
+  .switch input:focus-visible + .slider { outline: 2px solid #2563eb; outline-offset: 2px; }
+  .switch-label { font-size: 0.82rem; color: #4b5563; }
 </style>
 </head>
 <body>
