@@ -20,17 +20,42 @@ Seeded with national figures and state chief ministers, following the
 same jurisdiction_seed.py precedent of a `confidence` note per entry and
 explicit honesty about my training cutoff (January 2026) versus this
 being built in September 2026 - eight months where real personnel changes
-could have happened that I have no way to know about. Three states'
-sitting chief ministers are **deliberately not seeded as named
-individuals** for exactly this reason: West Bengal, Tamil Nadu, and
-Kerala all changed ruling parties in the May 2026 elections (see
-app/data/jurisdiction_seed.py), which postdates my training data - I know
-which *party* now governs each (seeded), but not with confidence which
-specific person that party installed as chief minister, and guessing
-would be exactly the kind of fabrication this platform's own design
-principles (Section 2) warn against. The former chief ministers
-(Banerjee, Stalin, Vijayan) are still seeded, as real, current, relevant
-political figures - just not asserted to hold that specific office today.
+could have happened that I have no way to know about. West Bengal, Tamil
+Nadu, and Kerala all changed ruling parties in the May 2026 elections (see
+app/data/jurisdiction_seed.py); their new chief ministers were initially
+**deliberately not seeded as named individuals**, since guessing a
+specific person would have been exactly the kind of fabrication this
+platform's own design principles (Section 2) warn against. **Update,
+user-confirmed**: all three are now known and seeded below - Suvendu
+Adhikari (BJP, West Bengal, sworn in 9 May 2026), Vijay (TVK, Tamil Nadu,
+sworn in 10 May 2026 - the entity already existed as TVK's founder,
+updated in place rather than duplicated), and V. D. Satheesan
+(Congress-led UDF, Kerala, sworn in 18 May 2026). The former chief
+ministers (Banerjee, Stalin, Vijayan) stay seeded too, as real, current,
+relevant political figures now correctly noted as predecessors rather
+than "successor unknown".
+
+**Kerala's ~2-week gap, flagged explicitly per direct instruction**: the
+election result (and so `jurisdiction_seed.py`'s `effective_from` for
+Congress-led UDF) landed May 4, 2026, but Satheesan's swearing-in - and
+so his actual start as an identifiable named entity - didn't happen until
+May 18, a Congress internal leadership dispute delaying the announcement.
+**Audited for downstream impact**: nothing in this codebase infers a
+person's start date from `JurisdictionRulingParty.effective_from` -
+`resolve_ruling_party()` (app/processing/jurisdiction.py) resolves the
+ruling *party* only and never touches `Entity`/`ArticleEntity` at all, and
+entity text-matching (app/processing/entities.py) has no date dimension
+whatsoever - it just looks for literal name occurrences, so it can't
+mismatch an article to the wrong person based on when they took office.
+The real, structural gap this surfaces: `Entity` has no date-ranged
+validity the way `JurisdictionRulingParty` does, so `entity_metadata`'s
+"role" is always a single current snapshot, not historically accurate for
+older mentions ("the Kerala CM" in an article from May 10 correctly meant
+Vijayan, in caretaker capacity, not Satheesan - nothing here would get
+that wrong today, but nothing would get it right from stored data alone
+either, if that distinction is ever needed). Not fixed here - it's a
+schema extension (effective_from/to on Entity or a new mapping table) with
+no concrete need yet, not something to speculatively build.
 
 **A deliberate precision/recall tradeoff, flagged rather than silently
 accepted**: a few aliases below are genuinely ambiguous in isolation
@@ -114,10 +139,12 @@ ENTITY_SEED: list[tuple[str, EntityType, list[str], dict]] = [
     # --- Persons: major figures no longer (or never confirmed) in the
     # specific office their party now holds, post-cutoff - kept as real,
     # currently relevant figures without asserting a current title.
-    ("Mamata Banerjee", EntityType.PERSON, [], {"party": "Trinamool Congress", "role": "party leader, former West Bengal CM", "confidence": "high", "note": "TMC lost the May 2026 WB election to BJP - new CM not seeded, see module docstring"}),
-    ("M.K. Stalin", EntityType.PERSON, ["Stalin"], {"party": "Dravida Munnetra Kazhagam", "role": "party leader, former Tamil Nadu CM", "confidence": "high", "note": "DMK lost the May 2026 TN election to TVK - new CM not seeded, see module docstring", "alias_caution": "'Stalin' alone is ambiguous with the historical Soviet figure - included anyway since Indian political news context makes the intended referent clear, but flagged"}),
-    ("Pinarayi Vijayan", EntityType.PERSON, [], {"party": "Communist Party of India (Marxist)", "role": "party leader, former Kerala CM", "confidence": "high", "note": "LDF lost the May 2026 Kerala election to Congress-led UDF - new CM not seeded, see module docstring"}),
-    ("Vijay", EntityType.PERSON, ["Thalapathy Vijay", "C. Joseph Vijay"], {"party": "Tamilaga Vettri Kazhagam", "role": "party founder", "confidence": "medium", "note": "TVK's founder/leader - NOT asserted to hold a specific government post, since that's beyond my confident pre-cutoff knowledge"}),
+    ("Mamata Banerjee", EntityType.PERSON, [], {"party": "Trinamool Congress", "role": "party leader, former West Bengal CM", "confidence": "high", "note": "TMC lost the May 2026 WB election to BJP - succeeded by Suvendu Adhikari, sworn in 9 May 2026"}),
+    ("M.K. Stalin", EntityType.PERSON, ["Stalin"], {"party": "Dravida Munnetra Kazhagam", "role": "party leader, former Tamil Nadu CM", "confidence": "high", "note": "DMK lost the May 2026 TN election to TVK - succeeded by Vijay, sworn in 10 May 2026", "alias_caution": "'Stalin' alone is ambiguous with the historical Soviet figure - included anyway since Indian political news context makes the intended referent clear, but flagged"}),
+    ("Pinarayi Vijayan", EntityType.PERSON, [], {"party": "Communist Party of India (Marxist)", "role": "party leader, former Kerala CM", "confidence": "high", "note": "LDF lost the May 2026 Kerala election to Congress-led UDF - succeeded by V. D. Satheesan, sworn in 18 May 2026 (a ~2-week gap after the May 4 result, per a Congress leadership dispute; Vijayan is understood to have continued in a caretaker capacity in the interim, per standard convention - that specific detail is not independently confirmed)"}),
+    ("Vijay", EntityType.PERSON, ["Thalapathy Vijay", "C. Joseph Vijay"], {"party": "Tamilaga Vettri Kazhagam", "role": "Chief Minister, Tamil Nadu", "confidence": "high", "note": "user-confirmed: sworn in 10 May 2026 - previously seeded only as TVK's founder, since which government post (if any) he'd take was beyond confident pre-cutoff knowledge at the time"}),
+    ("Suvendu Adhikari", EntityType.PERSON, [], {"party": "Bharatiya Janata Party", "role": "Chief Minister, West Bengal", "confidence": "high", "note": "user-confirmed: sworn in 9 May 2026, succeeding Mamata Banerjee/TMC"}),
+    ("V. D. Satheesan", EntityType.PERSON, ["Satheesan"], {"party": "Indian National Congress", "role": "Chief Minister, Kerala (Congress-led UDF coalition)", "confidence": "high", "note": "user-confirmed: sworn in 18 May 2026, succeeding Pinarayi Vijayan/LDF - see module docstring for the ~2-week post-election gap and why it doesn't affect any current downstream logic"}),
     ("Naveen Patnaik", EntityType.PERSON, [], {"party": "Biju Janata Dal", "role": "party leader, former Odisha CM", "confidence": "high", "note": "BJD lost the June 2024 Odisha election to BJP"}),
 ]
 
