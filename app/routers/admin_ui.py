@@ -653,16 +653,28 @@ def list_clients(
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
 ):
+    """Nested per-subject view (each client's tracked entities as their own
+    rows, YouTube/X toggles included right here) rather than one aggregate-
+    count row per client - built once per-subject toggles existed, so a
+    super admin can see and change access without a click-through to each
+    client's own detail page for the common case.
+    """
     clients = db.query(Client).order_by(Client.created_at.asc()).all()
-    rows = [
-        {
-            "client": c,
-            "subject_count": len(c.subjects),
-            "x_grant_count": sum(1 for s in c.subjects if s.x_access),
-            "user_count": len(c.users),
-        }
-        for c in clients
-    ]
+    rows = []
+    for c in clients:
+        subject_rows = []
+        for s in sorted(c.subjects, key=lambda s: s.entity.name):
+            config = db.get(EntitySocialConfig, s.entity_id)
+            current_spend = config.x_spend_usd if config is not None else Decimal("0")
+            subject_rows.append({
+                "entity": s.entity,
+                "x_access": s.x_access,
+                "youtube_access": s.youtube_access,
+                "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
+                "current_spend_usd": current_spend,
+                "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
+            })
+        rows.append({"client": c, "subject_rows": subject_rows, "user_count": len(c.users)})
     return render(request, "clients_list.html", current_admin, rows=rows, message=message, error=error)
 
 
@@ -727,6 +739,7 @@ def client_detail(
         subject_rows.append({
             "entity": s.entity,
             "x_access": s.x_access,
+            "youtube_access": s.youtube_access,
             "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
             "current_spend_usd": current_spend,
             "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
@@ -752,6 +765,7 @@ def add_client_subject(
     entity_id: int = Form(...),
     grant_x: str | None = Form(default=None),
     x_ceiling: str = Form(default=""),
+    grant_youtube: str | None = Form(default="1"),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -769,16 +783,53 @@ def add_client_subject(
                 f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
                 status_code=303,
             )
-        grant_x_access(db, client_id, entity_id, ceiling)
+        subject = grant_x_access(db, client_id, entity_id, ceiling)
     else:
         # Track without X access - same as the CLI's add-client-subject
         # with no --x-ceiling: a real ClientSubject row exists (so the
-        # entity shows up on the client's dashboard, YouTube included),
-        # just with x_access left at its default False.
-        if db.get(ClientSubject, (client_id, entity_id)) is None:
-            db.add(ClientSubject(client_id=client_id, entity_id=entity_id))
+        # entity shows up on the client's dashboard), just with x_access
+        # left at its default False.
+        subject = db.get(ClientSubject, (client_id, entity_id))
+        if subject is None:
+            subject = ClientSubject(client_id=client_id, entity_id=entity_id)
+            db.add(subject)
             db.commit()
+
+    # youtube_access defaults to True on the column itself (visibility was
+    # implicit/unconditional before this toggle existed), so only act when
+    # the admin explicitly unchecked it at creation time.
+    if grant_youtube != "1" and subject.youtube_access:
+        subject.youtube_access = False
+        db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Tracking updated.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/grant-x")
+def grant_client_subject_x_access(
+    client_id: int,
+    entity_id: int,
+    x_ceiling: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Turning X on for an already-tracked subject - distinct from
+    add_client_subject above (which only runs once, when the subject is
+    first tracked). A toggle needs to work in both directions at any
+    time, and turning X on always needs a ceiling (grant_x_access itself
+    enforces that), so this is a real form submit, not a bare on/off
+    flip.
+    """
+    try:
+        ceiling = Decimal(x_ceiling) if x_ceiling.strip() else None
+    except InvalidOperation:
+        ceiling = None
+    if ceiling is None or ceiling <= 0:
+        return RedirectResponse(
+            f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
+            status_code=303,
+        )
+    grant_x_access(db, client_id, entity_id, ceiling)
+    return RedirectResponse(f"/admin/clients/{client_id}?message=X access granted.", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/revoke")
@@ -787,6 +838,32 @@ def revoke_client_subject(
 ):
     revoke_x_access(db, client_id, entity_id)
     return RedirectResponse(f"/admin/clients/{client_id}?message=X access revoked.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/youtube/enable")
+def enable_client_subject_youtube(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.youtube_access = True
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility enabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/youtube/disable")
+def disable_client_subject_youtube(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    """Visibility-only, unlike X's revoke: YouTube keeps fetching for this
+    entity regardless (free, shared, unconditional per Section 13) - this
+    only stops it from rendering on this one client's dashboard.
+    """
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.youtube_access = False
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility disabled.", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/remove")

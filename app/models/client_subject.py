@@ -52,5 +52,15 @@ class ClientSubject(Base):
     # backfilled value to satisfy a NOT NULL.
     x_spend_ceiling_usd: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
 
+    # Visibility-only, unlike x_access: YouTube is free/unconditional per
+    # Section 13's own design (fetched for every tracked entity regardless
+    # of any client's settings - see EntitySocialConfig's docstring), so
+    # this never gates fetching, only whether THIS client's dashboard
+    # renders YouTube mentions for this subject. Defaults to True so every
+    # existing row keeps the visibility it implicitly always had before
+    # this column existed - a client wasn't "missing" YouTube access
+    # before, there was simply no way to turn it off.
+    youtube_access: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+
     client: Mapped["Client"] = relationship(back_populates="subjects")
     entity: Mapped["Entity"] = relationship(back_populates="client_subjects")

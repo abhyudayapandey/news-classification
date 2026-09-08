@@ -15,61 +15,126 @@
 <p><a href="/client/dashboard">&larr; Back to your subjects</a></p>
 <h1>{{ entity.name }}</h1>
 
-{% if subject.x_access %}
-<div class="card">
-  <h2>Your X usage this month</h2>
-  <p>
-    ${{ "%.4f"|format(current_spend_usd) }}
-    {% if subject.x_spend_ceiling_usd is not none %} of ${{ "%.4f"|format(subject.x_spend_ceiling_usd) }} contracted{% endif %}
-  </p>
-</div>
-{% else %}
-<div class="card">
-  <p class="muted">X coverage isn't included in your plan for this subject - showing YouTube coverage only.</p>
-</div>
-{% endif %}
-
-<div class="card">
-  <h2>YouTube coverage</h2>
-  {% if not youtube_mentions %}
-    <p class="muted">No YouTube mentions fetched yet.</p>
-  {% else %}
-  <table>
-    <thead><tr><th>Title</th><th>Channel</th><th>Posted</th><th></th></tr></thead>
-    <tbody>
-      {% for m in youtube_mentions %}
-      <tr>
-        <td>{{ m.content_text }}</td>
-        <td>{{ m.author or "-" }}</td>
-        <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
-        <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="tabs" role="tablist">
+  <button type="button" class="tab-btn active" data-tab="articles" role="tab" aria-selected="true">
+    News articles <span class="muted">({{ news_articles|length }})</span>
+  </button>
+  {% if subject.youtube_access %}
+  <button type="button" class="tab-btn" data-tab="youtube" role="tab" aria-selected="false">
+    YouTube <span class="muted">({{ youtube_mentions|length }})</span>
+  </button>
+  {% endif %}
+  {% if subject.x_access %}
+  <button type="button" class="tab-btn" data-tab="x" role="tab" aria-selected="false">
+    X <span class="muted">({{ x_mentions|length }})</span>
+  </button>
   {% endif %}
 </div>
 
-{% if subject.x_access %}
-<div class="card">
-  <h2>X coverage</h2>
-  {% if not x_mentions %}
-    <p class="muted">No X mentions fetched yet.</p>
-  {% else %}
-  <table>
-    <thead><tr><th>Post</th><th>Author</th><th>Posted</th><th></th></tr></thead>
-    <tbody>
-      {% for m in x_mentions %}
-      <tr>
-        <td>{{ m.content_text }}</td>
-        <td>{{ m.author or "-" }}</td>
-        <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
-        <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+<div class="tab-panel" data-tab-panel="articles">
+  <div class="card">
+    {% if not news_articles %}
+      <p class="muted">No published articles mention {{ entity.name }} yet.</p>
+    {% else %}
+    <table>
+      <thead><tr><th>Headline</th><th>Tag</th><th>Jurisdiction</th><th>Outlet</th><th>Published</th></tr></thead>
+      <tbody>
+        {% for a in news_articles %}
+        <tr>
+          <td>
+            <a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.headline }}</a>
+            {% if a.excerpt %}<div class="muted">{{ a.excerpt }}</div>{% endif %}
+          </td>
+          <td>
+            {% if a.published_tag == "pro-establishment" %}<span class="badge badge-pro">Pro-establishment</span>
+            {% elif a.published_tag == "anti-establishment" %}<span class="badge badge-anti">Anti-establishment</span>
+            {% else %}<span class="badge badge-apolitical">Apolitical</span>{% endif %}
+          </td>
+          <td class="muted">{{ a.jurisdiction or "-" }}{% if a.ruling_party %} ({{ a.ruling_party }}){% endif %}</td>
+          <td class="muted">{{ a.outlet_name }}</td>
+          <td class="muted">{{ a.published_at.strftime("%Y-%m-%d") }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+{% if subject.youtube_access %}
+<div class="tab-panel" data-tab-panel="youtube" hidden>
+  <div class="card">
+    {% if not youtube_mentions %}
+      <p class="muted">No YouTube mentions fetched yet.</p>
+    {% else %}
+    <table>
+      <thead><tr><th>Title</th><th>Channel</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
+      <tbody>
+        {% for m in youtube_mentions %}
+        <tr>
+          <td>{{ m.content_text }}</td>
+          <td>{{ m.author or "-" }}</td>
+          <td>
+            {% if m.sentiment is none %}<span class="muted">-</span>
+            {% elif m.sentiment.value == "favorable" %}<span class="badge badge-pro">Favorable</span>
+            {% elif m.sentiment.value == "unfavorable" %}<span class="badge badge-anti">Unfavorable</span>
+            {% else %}<span class="badge badge-apolitical">Neutral</span>{% endif %}
+          </td>
+          <td class="muted">{{ "%.0f%%"|format(m.sentiment_confidence * 100) if m.sentiment_confidence is not none else "-" }}</td>
+          <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
+          <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
 </div>
 {% endif %}
+
+{% if subject.x_access %}
+<div class="tab-panel" data-tab-panel="x" hidden>
+  <div class="card">
+    {% if not x_mentions %}
+      <p class="muted">No X mentions fetched yet.</p>
+    {% else %}
+    <table>
+      <thead><tr><th>Post</th><th>Author</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
+      <tbody>
+        {% for m in x_mentions %}
+        <tr>
+          <td>{{ m.content_text }}</td>
+          <td>{{ m.author or "-" }}</td>
+          <td>
+            {% if m.sentiment is none %}<span class="muted">-</span>
+            {% elif m.sentiment.value == "favorable" %}<span class="badge badge-pro">Favorable</span>
+            {% elif m.sentiment.value == "unfavorable" %}<span class="badge badge-anti">Unfavorable</span>
+            {% else %}<span class="badge badge-apolitical">Neutral</span>{% endif %}
+          </td>
+          <td class="muted">{{ "%.0f%%"|format(m.sentiment_confidence * 100) if m.sentiment_confidence is not none else "-" }}</td>
+          <td class="muted">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</td>
+          <td><a href="{{ m.url }}" target="_blank" rel="noopener">View</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<script>
+document.querySelectorAll(".tab-btn").forEach(function (btn) {
+  btn.addEventListener("click", function () {
+    document.querySelectorAll(".tab-btn").forEach(function (b) {
+      b.classList.remove("active");
+      b.setAttribute("aria-selected", "false");
+    });
+    document.querySelectorAll(".tab-panel").forEach(function (p) { p.hidden = true; });
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+    document.querySelector('.tab-panel[data-tab-panel="' + btn.dataset.tab + '"]').hidden = false;
+  });
+});
+</script>
 {% endblock %}
