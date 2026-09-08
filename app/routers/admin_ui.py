@@ -25,6 +25,7 @@ from app.public.formatting import format_jurisdiction
 from app.review.assignment import reassign_admin_queue
 from app.review.blinding import blind_headline_and_body
 from app.review.queries import ReviewFilters, query_reviews
+from app.social.costs import list_client_cost_statuses, list_entity_spend_summaries
 
 router = APIRouter(prefix="/admin", tags=["admin-ui"])
 templates = Jinja2Templates(directory="app/templates")
@@ -592,4 +593,27 @@ def list_reviews(
         reviews=reviews, total=total, all_admins=all_admins,
         filters={"admin_id": admin_id, "decision": decision, "date_from": date_from, "date_to": date_to},
         limit=limit, offset=offset, query_string="&".join(query_parts),
+    )
+
+
+@router.get("/social-costs", response_class=HTMLResponse)
+def social_costs(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Section 13's cost visibility, deliberately gated behind
+    require_super_admin rather than living as an open debug endpoint like
+    /entities or /articles - this is business-confidential spend/contract
+    data, "a screen that could never be the one shared on a client call"
+    per direct instruction. Shows both halves of the shared-fetch/per-
+    client-access split: real spend per entity (app/models/
+    entity_social_config.py), and each client's own ceiling status against
+    that same shared number (app/models/client_subject.py) - informational
+    only, nothing here throttles anything.
+    """
+    return render(
+        request, "social_costs.html", current_admin,
+        entity_summaries=list_entity_spend_summaries(db),
+        client_statuses=list_client_cost_statuses(db),
     )

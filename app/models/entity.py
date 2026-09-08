@@ -54,3 +54,10 @@ class Entity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     mentions: Mapped[list["ArticleEntity"]] = relationship(back_populates="entity", cascade="all, delete-orphan")
+    # Section 13 social listening additions - see the respective models'
+    # docstrings for the shared-vs-per-client design these two split apart.
+    social_config: Mapped["EntitySocialConfig | None"] = relationship(
+        back_populates="entity", uselist=False, cascade="all, delete-orphan"
+    )
+    social_mentions: Mapped[list["SocialMention"]] = relationship(back_populates="entity", cascade="all, delete-orphan")
+    client_subjects: Mapped[list["ClientSubject"]] = relationship(back_populates="entity", cascade="all, delete-orphan")

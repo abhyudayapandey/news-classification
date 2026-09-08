@@ -16,6 +16,11 @@ Usage:
     python -m app.cli seed-entities       # Phase 5: upsert app/data/entity_seed.py
     python -m app.cli backfill-entities   # Phase 5: (re-)run entity extraction against already-ingested articles
     python -m app.cli show-entities       # Phase 5: list seeded entities
+    python -m app.cli create-client       # Phase 6: create a B2B client record
+    python -m app.cli show-clients        # Phase 6: list clients
+    python -m app.cli add-client-subject  # Phase 6: have a client track an entity, optionally with X access
+    python -m app.cli fetch-social        # Phase 6: fetch YouTube/X mentions for tracked entities
+    python -m app.cli social-cost-report  # Phase 6: super-admin cost view
 """
 
 import argparse
@@ -313,6 +318,112 @@ def cmd_show_entities(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_create_client(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from app.models import Client
+
+    db = SessionLocal()
+    try:
+        client = Client(name=args.name, contract_start=date.today())
+        db.add(client)
+        db.commit()
+        print(f"Created client #{client.id}: {client.name}")
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_show_clients(_args: argparse.Namespace) -> int:
+    from app.models import Client
+
+    db = SessionLocal()
+    try:
+        clients = db.query(Client).order_by(Client.id).all()
+        if not clients:
+            print("No clients yet. Run `python -m app.cli create-client --name ...` first.")
+            return 0
+        for c in clients:
+            status = "active" if c.active else "INACTIVE"
+            x_subjects = [s for s in c.subjects if s.x_access]
+            print(f"#{c.id:<4d} [{status:8s}] {c.name} - tracking {len(c.subjects)} entit(y/ies), {len(x_subjects)} with X access")
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_add_client_subject(args: argparse.Namespace) -> int:
+    from decimal import Decimal
+
+    from app.models import ClientSubject
+    from app.social.costs import grant_x_access
+
+    db = SessionLocal()
+    try:
+        if args.x_ceiling is not None:
+            subject = grant_x_access(db, args.client_id, args.entity_id, Decimal(str(args.x_ceiling)))
+            print(f"Granted X access: client #{args.client_id} -> entity #{args.entity_id}, ceiling ${subject.x_spend_ceiling_usd}/month")
+        else:
+            subject = db.get(ClientSubject, (args.client_id, args.entity_id))
+            if subject is None:
+                subject = ClientSubject(client_id=args.client_id, entity_id=args.entity_id)
+                db.add(subject)
+                db.commit()
+            print(f"Client #{args.client_id} now tracking entity #{args.entity_id} (no X access - pass --x-ceiling to grant it)")
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        db.close()
+    return 0
+
+
+def cmd_fetch_social(args: argparse.Namespace) -> int:
+    from app.social.pipeline import fetch_social_mentions
+
+    db = SessionLocal()
+    try:
+        result = fetch_social_mentions(db, limit=args.limit)
+    finally:
+        db.close()
+    print(f"Entities scanned:        {result.entities_scanned}")
+    print(f"YouTube posts read:      {result.youtube_posts_read}")
+    print(f"X posts read:            {result.x_posts_read} ({result.x_entities_fetched} entit(y/ies) fetched, {result.x_entities_skipped} skipped - no active client access or no API key)")
+    print(f"X cost incurred (call):  ${result.x_cost_incurred_usd}")
+    if result.errors:
+        print(f"{len(result.errors)} error(s):")
+        for e in result.errors[:10]:
+            print(f"  - {e}")
+    return 0
+
+
+def cmd_social_cost_report(_args: argparse.Namespace) -> int:
+    from app.social.costs import list_client_cost_statuses, list_entity_spend_summaries
+
+    db = SessionLocal()
+    try:
+        print("=== Entity spend (shared, current period) ===")
+        summaries = list_entity_spend_summaries(db)
+        if not summaries:
+            print("No X spend recorded yet.")
+        for s in summaries:
+            active = "active" if s.x_active else "inactive"
+            print(f"  {s.entity_name}: ${s.x_spend_usd} this period [{active}], tracked by {s.tracked_by_client_count} client(s) with X access")
+
+        print()
+        print("=== Per-client ceiling status ===")
+        statuses = list_client_cost_statuses(db)
+        if not statuses:
+            print("No client X-access grants yet.")
+        for status in statuses:
+            flag = {"ok": "  ", "approaching": "! ", "hit": "!!", "no_access": "  ", "no_ceiling": "? "}[status.status.value]
+            ceiling_str = f"${status.x_spend_ceiling_usd}" if status.x_spend_ceiling_usd is not None else "none set"
+            print(f"  {flag} {status.client_name} / {status.entity_name}: ${status.entity_current_spend_usd} of {ceiling_str} - {status.status.value.upper()}")
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_create_admin(args: argparse.Namespace) -> int:
     from app.auth.security import hash_password
     from app.models import Admin
@@ -418,6 +529,30 @@ def main() -> int:
     show_entities_parser = subparsers.add_parser("show-entities", help="List seeded entities and their mention counts")
     show_entities_parser.add_argument("--limit", type=int, default=100)
 
+    create_client_parser = subparsers.add_parser("create-client", help="Create a B2B client record (Section 13.6 groundwork)")
+    create_client_parser.add_argument("--name", required=True)
+
+    subparsers.add_parser("show-clients", help="List clients and how many entities/X grants each has")
+
+    add_subject_parser = subparsers.add_parser(
+        "add-client-subject", help="Have a client track an entity, optionally granting X access with a ceiling"
+    )
+    add_subject_parser.add_argument("--client-id", type=int, required=True)
+    add_subject_parser.add_argument("--entity-id", type=int, required=True)
+    add_subject_parser.add_argument(
+        "--x-ceiling", type=float, default=None,
+        help="Monthly USD ceiling - passing this grants x_access=true; omit to track without X access",
+    )
+
+    fetch_social_parser = subparsers.add_parser(
+        "fetch-social", help="Fetch YouTube (always) + X (gated per-entity on active client access) for tracked entities"
+    )
+    fetch_social_parser.add_argument("--limit", type=int, default=None, help="Max entities to scan this run")
+
+    subparsers.add_parser(
+        "social-cost-report", help="Super-admin cost view: entity spend + per-client ceiling status"
+    )
+
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -450,6 +585,16 @@ def main() -> int:
         return cmd_backfill_entities(args)
     if args.command == "show-entities":
         return cmd_show_entities(args)
+    if args.command == "create-client":
+        return cmd_create_client(args)
+    if args.command == "show-clients":
+        return cmd_show_clients(args)
+    if args.command == "add-client-subject":
+        return cmd_add_client_subject(args)
+    if args.command == "fetch-social":
+        return cmd_fetch_social(args)
+    if args.command == "social-cost-report":
+        return cmd_social_cost_report(args)
 
     parser.print_help()
     return 1

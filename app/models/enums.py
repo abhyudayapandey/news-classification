@@ -41,6 +41,17 @@ class EntityProminence(str, enum.Enum):
     MENTIONED = "mentioned"
 
 
+class SocialSource(str, enum.Enum):
+    """Section 13's social listening capability - the two sources this
+    platform fetches from, with deliberately different cost postures (see
+    app/social/base.py): YouTube is free-tier and always fetched once an
+    entity is tracked; X is metered per-post-read and gated per-entity on
+    live ClientSubject.x_access (app/social/pipeline.py)."""
+
+    X = "x"
+    YOUTUBE = "youtube"
+
+
 class SubjectSentiment(str, enum.Enum):
     """Section 13.2's subject-specific sentiment axis - deliberately named
     favorable/unfavorable/neutral rather than reusing pro/anti-establishment

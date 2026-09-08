@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Social Costs{% endblock %}
+{% block content %}
+<h1>Social listening costs</h1>
+<p class="muted">
+  Super-admin only. Informational - nothing here throttles a client's contracted access automatically;
+  an approaching or hit ceiling is for you to act on (renegotiate, eat the overage, or contact the client).
+</p>
+
+<div class="card">
+  <h2>Entity spend (shared, current period)</h2>
+  <p class="muted">
+    One fetch serves every client tracking that entity - this is the real, shared X cost, not divided per client.
+  </p>
+  {% if not entity_summaries %}
+    <p class="muted">No X spend recorded yet.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>Entity</th><th>X status</th><th>Spend this period</th><th>Tracked by (X access)</th><th>Last X fetch</th></tr>
+      </thead>
+      <tbody>
+        {% for s in entity_summaries %}
+        <tr>
+          <td>{{ s.entity_name }}</td>
+          <td><span class="badge {{ 'badge-ok' if s.x_active else 'badge-apolitical' }}">{{ 'active' if s.x_active else 'inactive' }}</span></td>
+          <td>${{ "%.4f"|format(s.x_spend_usd) }}</td>
+          <td>{{ s.tracked_by_client_count }} client(s)</td>
+          <td class="muted">{{ s.x_last_fetched_at.strftime("%Y-%m-%d %H:%M") if s.x_last_fetched_at else "never" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Per-client ceiling status</h2>
+  <p class="muted">
+    Each client's own contracted monthly ceiling, compared against their tracked entity's shared spend above.
+  </p>
+  {% if not client_statuses %}
+    <p class="muted">No client has been granted X access yet.</p>
+  {% else %}
+    <table>
+      <thead>
+        <tr><th>Client</th><th>Entity</th><th>Spend / ceiling</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for c in client_statuses %}
+        <tr>
+          <td>{{ c.client_name }}</td>
+          <td>{{ c.entity_name }}</td>
+          <td>
+            ${{ "%.4f"|format(c.entity_current_spend_usd) }}
+            {% if c.x_spend_ceiling_usd is not none %} / ${{ "%.4f"|format(c.x_spend_ceiling_usd) }}{% else %} / <em>no ceiling set</em>{% endif %}
+          </td>
+          <td>
+            {% if c.status.value == "hit" %}
+              <span class="badge badge-anti">HIT</span>
+            {% elif c.status.value == "approaching" %}
+              <span class="badge badge-overdue">APPROACHING</span>
+            {% elif c.status.value == "ok" %}
+              <span class="badge badge-ok">OK</span>
+            {% elif c.status.value == "no_ceiling" %}
+              <span class="badge badge-overdue">NO CEILING SET</span>
+            {% else %}
+              <span class="badge badge-apolitical">NO ACCESS</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}
