@@ -15,22 +15,41 @@
 <p><a href="/client/dashboard">&larr; Back to your subjects</a></p>
 <h1>{{ entity.name }}</h1>
 
+{% set has_news = subject.news_access %}
+{% set has_social = subject.youtube_access or subject.x_access %}
+{% if not has_news and not has_social %}
+<div class="card"><p class="muted">Nothing is enabled for this subject on your plan yet - contact your account manager.</p></div>
+{% else %}
 <div class="tabs" role="tablist">
+  {% if has_news %}
   <button type="button" class="tab-btn active" data-tab="articles" role="tab" aria-selected="true">
     News articles <span class="muted">({{ news_articles|length }})</span>
   </button>
+  {% endif %}
   {% if subject.youtube_access %}
-  <button type="button" class="tab-btn" data-tab="youtube" role="tab" aria-selected="false">
+  <button type="button" class="tab-btn{% if not has_news %} active{% endif %}" data-tab="youtube" role="tab" aria-selected="{{ 'false' if has_news else 'true' }}">
     YouTube <span class="muted">({{ youtube_mentions|length }})</span>
   </button>
   {% endif %}
   {% if subject.x_access %}
-  <button type="button" class="tab-btn" data-tab="x" role="tab" aria-selected="false">
+  <button type="button" class="tab-btn{% if not has_news and not subject.youtube_access %} active{% endif %}" data-tab="x" role="tab" aria-selected="{{ 'true' if not has_news and not subject.youtube_access else 'false' }}">
     X <span class="muted">({{ x_mentions|length }})</span>
   </button>
   {% endif %}
 </div>
 
+{% if has_social %}
+<p class="muted" style="margin:0.5rem 0 1rem;">
+  Showing
+  <a href="?range=today"{% if social_range == "today" %} style="font-weight:600;"{% endif %}>Today</a> &middot;
+  <a href="?range=yesterday"{% if social_range == "yesterday" %} style="font-weight:600;"{% endif %}>Yesterday</a> &middot;
+  <a href="?range=3d"{% if social_range == "3d" %} style="font-weight:600;"{% endif %}>Last 3 days</a> &middot;
+  <a href="?range=7d"{% if social_range == "7d" %} style="font-weight:600;"{% endif %}>Last 7 days</a>
+  , most-engaged first.
+</p>
+{% endif %}
+
+{% if has_news %}
 <div class="tab-panel" data-tab-panel="articles">
   <div class="card">
     {% if not news_articles %}
@@ -60,20 +79,22 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
 
 {% if subject.youtube_access %}
-<div class="tab-panel" data-tab-panel="youtube" hidden>
+<div class="tab-panel" data-tab-panel="youtube" {% if has_news %}hidden{% endif %}>
   <div class="card">
     {% if not youtube_mentions %}
-      <p class="muted">No YouTube mentions fetched yet.</p>
+      <p class="muted">No YouTube mentions in this window.</p>
     {% else %}
     <table>
-      <thead><tr><th>Title</th><th>Channel</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
+      <thead><tr><th>Title</th><th>Channel</th><th>Views</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
       <tbody>
         {% for m in youtube_mentions %}
         <tr>
           <td>{{ m.content_text }}</td>
           <td>{{ m.author or "-" }}</td>
+          <td class="muted">{{ "{:,}".format(m.engagement_count) }}</td>
           <td>
             {% if m.sentiment is none %}<span class="muted">-</span>
             {% elif m.sentiment.value == "favorable" %}<span class="badge badge-pro">Favorable</span>
@@ -93,18 +114,19 @@
 {% endif %}
 
 {% if subject.x_access %}
-<div class="tab-panel" data-tab-panel="x" hidden>
+<div class="tab-panel" data-tab-panel="x" {% if has_news or subject.youtube_access %}hidden{% endif %}>
   <div class="card">
     {% if not x_mentions %}
-      <p class="muted">No X mentions fetched yet.</p>
+      <p class="muted">No X mentions in this window.</p>
     {% else %}
     <table>
-      <thead><tr><th>Post</th><th>Author</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
+      <thead><tr><th>Post</th><th>Author</th><th>Engagement</th><th>Sentiment</th><th>Confidence</th><th>Posted</th><th></th></tr></thead>
       <tbody>
         {% for m in x_mentions %}
         <tr>
           <td>{{ m.content_text }}</td>
           <td>{{ m.author or "-" }}</td>
+          <td class="muted">{{ "{:,}".format(m.engagement_count) }}</td>
           <td>
             {% if m.sentiment is none %}<span class="muted">-</span>
             {% elif m.sentiment.value == "favorable" %}<span class="badge badge-pro">Favorable</span>
@@ -121,6 +143,7 @@
     {% endif %}
   </div>
 </div>
+{% endif %}
 {% endif %}
 
 <script>

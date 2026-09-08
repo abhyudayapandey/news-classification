@@ -737,6 +737,7 @@ def list_clients(
                 "entity": s.entity,
                 "x_access": s.x_access,
                 "youtube_access": s.youtube_access,
+                "news_access": s.news_access,
                 "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
                 "current_spend_usd": current_spend,
                 "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
@@ -746,18 +747,64 @@ def list_clients(
 
 
 @router.get("/clients/new", response_class=HTMLResponse)
-def new_client_form(request: Request, current_admin: Admin = Depends(require_super_admin)):
-    return render(request, "client_form.html", current_admin)
+def new_client_form(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    error: str | None = Query(default=None),
+):
+    entities = db.query(Entity).order_by(Entity.name.asc()).all()
+    return render(request, "client_form.html", current_admin, entities=entities, error=error)
 
 
 @router.post("/clients/new")
 def create_client(
     name: str = Form(...),
+    username: str = Form(default=""),
+    contact_name: str = Form(default=""),
+    password: str = Form(default=""),
+    entity_id: str = Form(default=""),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
+    """Consolidated form, per direct instruction: the common case (a new
+    client with its first login and first tracked subject) used to take
+    three separate submissions across two pages - this does all three in
+    one, while /admin/clients/{id}'s own incremental "add login"/"add
+    tracked entity" forms stay in place for adding more later. Login and
+    subject are both genuinely optional here (blank username = no login
+    created yet, blank entity = no subject tracked yet) since a client can
+    legitimately be created before either is known.
+    """
+    username = username.strip()
+    contact_name = contact_name.strip()
+
+    if username and (not contact_name or not password):
+        return RedirectResponse(
+            "/admin/clients/new?error=A login needs both a contact name and a password.", status_code=303
+        )
+    if username and db.query(ClientUser).filter(ClientUser.username == username).one_or_none() is not None:
+        return RedirectResponse("/admin/clients/new?error=Username already taken.", status_code=303)
+    if username:
+        try:
+            password_hash = hash_password(password)
+        except ValueError as exc:
+            return RedirectResponse(f"/admin/clients/new?error={exc}", status_code=303)
+
     client = Client(name=name, contract_start=date.today())
     db.add(client)
+    db.flush()
+
+    if username:
+        db.add(ClientUser(client_id=client.id, username=username, name=contact_name, password_hash=password_hash))
+
+    # Toggles all default False on the column itself - deliberately not
+    # set here, so a subject added at creation time starts exactly as
+    # invisible as one added later via /subjects/new, per the same
+    # "nothing visible until payment" instruction that set those defaults.
+    if entity_id.strip():
+        db.add(ClientSubject(client_id=client.id, entity_id=int(entity_id)))
+
     db.commit()
     return RedirectResponse(f"/admin/clients/{client.id}?message=Created {name}.", status_code=303)
 
@@ -807,9 +854,12 @@ def client_detail(
             "entity": s.entity,
             "x_access": s.x_access,
             "youtube_access": s.youtube_access,
+            "news_access": s.news_access,
             "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
             "current_spend_usd": current_spend,
             "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
+            "social_fetch_max_results": config.social_fetch_max_results if config is not None else None,
+            "social_fetch_lookback_days": config.social_fetch_lookback_days if config is not None else None,
         })
 
     tracked_entity_ids = {s.entity_id for s in client.subjects}
@@ -832,7 +882,8 @@ def add_client_subject(
     entity_id: int = Form(...),
     grant_x: str | None = Form(default=None),
     x_ceiling: str = Form(default=""),
-    grant_youtube: str | None = Form(default="1"),
+    grant_youtube: str | None = Form(default=None),
+    grant_news: str | None = Form(default=None),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -862,11 +913,16 @@ def add_client_subject(
             db.add(subject)
             db.commit()
 
-    # youtube_access defaults to True on the column itself (visibility was
-    # implicit/unconditional before this toggle existed), so only act when
-    # the admin explicitly unchecked it at creation time.
-    if grant_youtube != "1" and subject.youtube_access:
-        subject.youtube_access = False
+    # All three visibility toggles default to False on the column itself
+    # (per direct instruction: nothing is visible on a client's dashboard
+    # until a super admin turns it on, once payment is actually received) -
+    # so these only need to act when the admin explicitly CHECKED the box
+    # at creation time, the opposite of this form's old youtube-only logic.
+    if grant_youtube == "1" and not subject.youtube_access:
+        subject.youtube_access = True
+        db.commit()
+    if grant_news == "1" and not subject.news_access:
+        subject.news_access = True
         db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Tracking updated.", status_code=303)
 
@@ -931,6 +987,67 @@ def disable_client_subject_youtube(
         subject.youtube_access = False
         db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility disabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/news/enable")
+def enable_client_subject_news(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.news_access = True
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility enabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/news/disable")
+def disable_client_subject_news(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    """Same visibility-only shape as YouTube's disable - the articles
+    themselves stay published on the B2C site regardless, this only stops
+    them rendering on this one client's dashboard.
+    """
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.news_access = False
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility disabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/entities/{entity_id}/social-fetch-config")
+def update_entity_social_fetch_config(
+    client_id: int,
+    entity_id: int,
+    max_results: str = Form(default=""),
+    lookback_days: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Entity-level, not client-level - see EntitySocialConfig's docstring
+    for why "how much to fetch" has to be one shared number regardless of
+    how many clients track the same entity. Reached from a client's own
+    detail page (the natural place a super admin is already looking at
+    this entity), but changing it here affects every client tracking it.
+    Blank input resets to "use the global default" (settings.
+    social_fetch_max_results_per_entity / no lookback bound), not zero.
+    """
+    config = db.get(EntitySocialConfig, entity_id)
+    if config is None:
+        config = EntitySocialConfig(entity_id=entity_id)
+        db.add(config)
+
+    def _parse_positive_int(raw: str) -> int | None:
+        try:
+            value = int(raw.strip())
+        except ValueError:
+            return None
+        return value if value > 0 else None
+
+    config.social_fetch_max_results = _parse_positive_int(max_results)
+    config.social_fetch_lookback_days = _parse_positive_int(lookback_days)
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Fetch settings updated.", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/remove")

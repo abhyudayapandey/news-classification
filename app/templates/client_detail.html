@@ -23,12 +23,25 @@
   {% else %}
   <table>
     <thead>
-      <tr><th>Entity</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th><th></th></tr>
+      <tr><th>Entity</th><th>News</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th><th>Fetch settings</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in subject_rows %}
       <tr>
         <td>{{ r.entity.name }}</td>
+        <td>
+          {% if r.news_access %}
+            <span class="badge badge-ok">ON</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/news/disable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
+            </form>
+          {% else %}
+            <span class="badge badge-apolitical">OFF</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/news/enable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
+            </form>
+          {% endif %}
+        </td>
         <td>
           {% if r.youtube_access %}
             <span class="badge badge-ok">ON</span>
@@ -74,6 +87,21 @@
           {% else %}<span class="badge badge-apolitical">-</span>{% endif %}
         </td>
         <td>
+          <details class="inline" style="display:inline-block;">
+            <summary class="btn" style="display:inline-block; cursor:pointer; padding:0.15rem 0.5rem; font-size:0.78rem;">
+              {% if r.social_fetch_max_results or r.social_fetch_lookback_days %}Custom{% else %}Default{% endif %}
+            </summary>
+            <form method="post" action="/admin/clients/{{ client.id }}/entities/{{ r.entity.id }}/social-fetch-config" style="margin-top:0.4rem; min-width:200px;">
+              <label style="font-size:0.78rem;">Max results per fetch</label>
+              <input type="text" name="max_results" value="{{ r.social_fetch_max_results or '' }}" placeholder="e.g. 10 (default)">
+              <label style="font-size:0.78rem;">Lookback window (days)</label>
+              <input type="text" name="lookback_days" value="{{ r.social_fetch_lookback_days or '' }}" placeholder="e.g. 7 (API default)">
+              <p class="muted" style="font-size:0.75rem;">Shared across every client tracking this entity. Blank = platform default.</p>
+              <button class="btn btn-primary" type="submit" style="margin-top:0.4rem;">Save</button>
+            </form>
+          </details>
+        </td>
+        <td>
           <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/remove">
             <button class="btn btn-danger" type="submit" onclick="return confirm('Stop tracking {{ r.entity.name }} entirely for {{ client.name }}?');">Stop tracking</button>
           </form>
@@ -93,8 +121,10 @@
       {% endfor %}
     </select>
 
-    <label><input type="checkbox" name="grant_youtube" value="1" checked style="width:auto; display:inline;"> Show YouTube on their dashboard</label>
+    <label><input type="checkbox" name="grant_news" value="1" style="width:auto; display:inline;"> Show news articles on their dashboard</label>
+    <label><input type="checkbox" name="grant_youtube" value="1" style="width:auto; display:inline;"> Show YouTube on their dashboard</label>
     <label><input type="checkbox" name="grant_x" value="1" style="width:auto; display:inline;"> Grant X access</label>
+    <p class="muted" style="font-size:0.8rem;">All three start off by default - turn them on once payment is received.</p>
 
     <label for="x_ceiling">Monthly X ceiling (USD, only used if X access is checked)</label>
     <input type="text" id="x_ceiling" name="x_ceiling" placeholder="e.g. 25.00">

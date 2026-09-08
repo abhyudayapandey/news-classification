@@ -13,7 +13,7 @@
 <div class="card" style="padding:0; overflow-x:auto;">
   <table>
     <thead>
-      <tr><th>Client</th><th>Subject</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th></tr>
+      <tr><th>Client</th><th>Subject</th><th>News</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th></tr>
     </thead>
     <tbody>
       {% for r in rows %}
@@ -25,7 +25,7 @@
             {% else %}<span class="badge badge-overdue">inactive</span>{% endif %}
             <div class="muted">{{ r.user_count }} login(s)</div>
           </td>
-          <td colspan="5" class="muted">No subjects tracked yet - <a href="/admin/clients/{{ r.client.id }}">manage</a></td>
+          <td colspan="6" class="muted">No subjects tracked yet - <a href="/admin/clients/{{ r.client.id }}">manage</a></td>
         </tr>
         {% else %}
           {% for s in r.subject_rows %}
@@ -39,6 +39,19 @@
             </td>
             {% endif %}
             <td>{{ s.entity.name }}</td>
+            <td>
+              {% if s.news_access %}
+                <span class="badge badge-ok">ON</span>
+                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/news/disable">
+                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
+                </form>
+              {% else %}
+                <span class="badge badge-apolitical">OFF</span>
+                <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/subjects/{{ s.entity.id }}/news/enable">
+                  <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
+                </form>
+              {% endif %}
+            </td>
             <td>
               {% if s.youtube_access %}
                 <span class="badge badge-ok">ON</span>

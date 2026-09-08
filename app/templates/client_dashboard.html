@@ -14,7 +14,7 @@
 {% block content %}
 <h1>Your tracked subjects</h1>
 <p class="muted">
-  YouTube and X coverage are shown per subject only where your plan includes them.
+  News, YouTube, and X coverage are each shown per subject only where your plan includes them.
 </p>
 
 {% if not subjects %}
@@ -23,15 +23,16 @@
 <div class="card" style="padding:0;">
   <table>
     <thead>
-      <tr><th>Subject</th><th>YouTube</th><th>X</th><th></th></tr>
+      <tr><th>Subject</th><th>News</th><th>YouTube</th><th>X</th><th></th></tr>
     </thead>
     <tbody>
       {% for s in subjects %}
       <tr>
         <td>{{ s.entity.name }}</td>
+        <td>{{ "Included" if s.news_access else "Not included" }}</td>
         <td>{{ "Included" if s.youtube_access else "Not included" }}</td>
         <td>{{ "Included" if s.x_access else "Not included" }}</td>
-        <td><a class="btn" href="/client/entities/{{ s.entity.id }}">View mentions</a></td>
+        <td><a class="btn" href="/client/entities/{{ s.entity.id }}">View</a></td>
       </tr>
       {% endfor %}
     </tbody>

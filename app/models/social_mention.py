@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -60,5 +60,14 @@ class SocialMention(Base):
         SAEnum(SubjectSentiment, name="subject_sentiment"), nullable=True
     )
     sentiment_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # A single denormalized "how engaged was this" number, recorded once at
+    # fetch time and never updated afterward (re-polling a post's current
+    # counts would cost another billed X read for no product benefit) -
+    # YouTube's is the video's view count, X's is retweet+like+reply+quote
+    # summed (see app/social/x_api.py). Used purely for display/sort
+    # ordering (most-engaged-first, per direct instruction), never for cost
+    # accounting - cost_usd above is the only column that feeds spend math.
+    engagement_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     entity: Mapped["Entity"] = relationship(back_populates="social_mentions")

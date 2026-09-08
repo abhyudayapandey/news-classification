@@ -56,11 +56,23 @@ class ClientSubject(Base):
     # Section 13's own design (fetched for every tracked entity regardless
     # of any client's settings - see EntitySocialConfig's docstring), so
     # this never gates fetching, only whether THIS client's dashboard
-    # renders YouTube mentions for this subject. Defaults to True so every
-    # existing row keeps the visibility it implicitly always had before
-    # this column existed - a client wasn't "missing" YouTube access
-    # before, there was simply no way to turn it off.
-    youtube_access: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    # renders YouTube mentions for this subject. Defaults to False, per
+    # direct instruction: a newly tracked subject starts with nothing
+    # visible on the client's dashboard - YouTube, X, and news coverage
+    # are each turned on explicitly by a super admin once payment is
+    # actually received, never implicitly on just because tracking began.
+    youtube_access: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+    # Same visibility-only shape as youtube_access, for the "News
+    # articles" tab (published_tag-based articles mentioning this entity -
+    # app/routers/client_ui.py). Also defaults False for the same
+    # payment-gating reason - a client's News tab is empty until this is
+    # explicitly turned on for them, even though the underlying articles
+    # themselves are already public-site-published and cost nothing extra
+    # to show (unlike X, there's no real spend being gated here - this is
+    # purely "don't show a paying-nothing-yet client anything until
+    # they've paid," not a cost-control mechanism like x_access is).
+    news_access: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
     client: Mapped["Client"] = relationship(back_populates="subjects")
     entity: Mapped["Entity"] = relationship(back_populates="client_subjects")

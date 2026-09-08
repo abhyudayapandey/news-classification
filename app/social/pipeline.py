@@ -112,7 +112,7 @@ def _store_new_mentions(
             SocialMention(
                 entity_id=entity.id, source=source, content_text=mention.content_text,
                 author=mention.author, posted_at=mention.posted_at, url=mention.url,
-                cost_usd=cost_per_item,
+                cost_usd=cost_per_item, engagement_count=mention.engagement_count,
                 sentiment=sentiment_result.sentiment, sentiment_confidence=sentiment_result.confidence_score,
             )
         )
@@ -147,14 +147,18 @@ def fetch_social_for_entity(
 
     result = EntityFetchResult(entity_id=entity.id)
     config = _get_or_create_config(db, entity.id)
-    max_results = settings.social_fetch_max_results_per_entity
+    # Per-entity overrides (EntitySocialConfig's docstring) take precedence
+    # over the global defaults, but only when actually set - None means
+    # "use the global default", not "fetch zero/unbounded".
+    max_results = config.social_fetch_max_results or settings.social_fetch_max_results_per_entity
+    lookback_days = config.social_fetch_lookback_days
 
     # YouTube: always attempted, free tier, no access gating at all - the
     # only reason it's skipped is a missing API key (caught as a normal
     # fetch error below, same as any other failure).
     if youtube_fetcher is not None:
         try:
-            mentions = youtube_fetcher.fetch(entity, max_results)
+            mentions = youtube_fetcher.fetch(entity, max_results, lookback_days)
             result.youtube_posts_read = len(mentions)
             result.youtube_new_mentions = _store_new_mentions(
                 db, entity, SocialSource.YOUTUBE, mentions, Decimal("0"), sentiment_provider
@@ -176,7 +180,7 @@ def fetch_social_for_entity(
         result.x_skipped_reason = "X_API_BEARER_TOKEN not configured"
     else:
         try:
-            mentions = x_fetcher.fetch(entity, max_results)
+            mentions = x_fetcher.fetch(entity, max_results, lookback_days)
             cost_per_item = Decimal(str(settings.x_cost_per_post_usd))
             # Billed for every post X actually returned, whether or not it
             # turns out to already be stored - see this module's and

@@ -24,7 +24,9 @@ see, by checking their own ClientSubject rows rather than by any
 duplicated per-client copy of the data.
 """
 
-from fastapi import APIRouter, Depends, Form, Request
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
@@ -40,6 +42,30 @@ from app.public.formatting import format_jurisdiction
 
 router = APIRouter(prefix="/client", tags=["client-portal"])
 templates = Jinja2Templates(directory="app/templates")
+
+# Viewing-window options for the YouTube/X tabs (per direct instruction:
+# "just the day's mentions are not enough"). Independent of how far BACK a
+# fetch actually looked (EntitySocialConfig.social_fetch_lookback_days) -
+# this only filters what's already stored, by posted_at, for display.
+SOCIAL_RANGES = ("today", "yesterday", "3d", "7d")
+_DEFAULT_SOCIAL_RANGE = "7d"
+
+
+def _social_range_bounds(range_key: str) -> tuple[datetime, datetime | None]:
+    """Returns (start, end) in UTC for a SOCIAL_RANGES key - end is None
+    meaning "through now". "yesterday" is the only bounded-both-ends option
+    (the single prior calendar day), everything else is an open-ended
+    "since N days ago" window.
+    """
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if range_key == "today":
+        return today_start, None
+    if range_key == "yesterday":
+        return today_start - timedelta(days=1), today_start
+    if range_key == "3d":
+        return today_start - timedelta(days=2), None
+    return today_start - timedelta(days=6), None  # "7d", and the fallback default
 
 
 def render(request: Request, template: str, current_client_user: ClientUser | None, status_code: int = 200, **context):
@@ -99,7 +125,7 @@ def client_dashboard(
         .all()
     )
     rows = [
-        {"entity": s.entity, "x_access": s.x_access, "youtube_access": s.youtube_access}
+        {"entity": s.entity, "x_access": s.x_access, "youtube_access": s.youtube_access, "news_access": s.news_access}
         for s in subjects
     ]
     return render(request, "client_dashboard.html", current_client_user, subjects=rows)
@@ -109,6 +135,7 @@ def client_dashboard(
 def client_entity_detail(
     entity_id: int,
     request: Request,
+    range_param: str = Query(default=_DEFAULT_SOCIAL_RANGE, alias="range"),
     current_client_user: ClientUser = Depends(get_current_client_user),
     db: Session = Depends(get_db),
 ):
@@ -119,55 +146,62 @@ def client_entity_detail(
         # client who isn't tracking it.
         return RedirectResponse("/client/dashboard", status_code=303)
 
-    youtube_mentions = []
-    if subject.youtube_access:
-        youtube_mentions = (
-            db.query(SocialMention)
-            .filter(SocialMention.entity_id == entity_id, SocialMention.source == SocialSource.YOUTUBE)
-            .order_by(SocialMention.fetched_at.desc())
-            .limit(25)
-            .all()
+    social_range = range_param if range_param in SOCIAL_RANGES else _DEFAULT_SOCIAL_RANGE
+    range_start, range_end = _social_range_bounds(social_range)
+
+    def _mentions_for(source: SocialSource) -> list[SocialMention]:
+        # Most-engaged-first per direct instruction (the fetchers
+        # themselves already return/store mentions in that order, but a
+        # later re-fetch's new rows would otherwise appear out of order
+        # against older ones without an explicit ORDER BY here). Ties
+        # (typically 0-engagement rows) fall back to newest-first.
+        q = db.query(SocialMention).filter(
+            SocialMention.entity_id == entity_id, SocialMention.source == source,
+            SocialMention.posted_at.is_not(None), SocialMention.posted_at >= range_start,
         )
-    x_mentions = []
-    if subject.x_access:
-        x_mentions = (
-            db.query(SocialMention)
-            .filter(SocialMention.entity_id == entity_id, SocialMention.source == SocialSource.X)
-            .order_by(SocialMention.fetched_at.desc())
-            .limit(25)
-            .all()
-        )
+        if range_end is not None:
+            q = q.filter(SocialMention.posted_at < range_end)
+        return q.order_by(SocialMention.engagement_count.desc(), SocialMention.posted_at.desc()).limit(25).all()
+
+    youtube_mentions = _mentions_for(SocialSource.YOUTUBE) if subject.youtube_access else []
+    x_mentions = _mentions_for(SocialSource.X) if subject.x_access else []
 
     # Same "published_tag-based data only" standard as the B2C public site
     # (Section 13.6) - an unreviewed article never appears here just
     # because it happens to mention this entity. Eager-loaded outlet/
     # system_tag to avoid the same N+1 pattern already fixed on the admin
-    # queue (app/routers/admin_ui.py's my_queue).
-    stmt = (
-        select(Article)
-        .join(ArticleEntity, ArticleEntity.article_id == Article.id)
-        .where(ArticleEntity.entity_id == entity_id, Article.published_tag.is_not(None))
-        .order_by(Article.published_at.desc())
-        .limit(25)
-        .options(selectinload(Article.system_tag), selectinload(Article.outlet))
-    )
-    articles = list(db.scalars(stmt))
-    news_articles = [
-        {
-            "headline": a.headline,
-            "url": a.url,
-            "outlet_name": a.outlet.name,
-            "published_at": a.published_at,
-            "published_tag": a.published_tag,
-            "jurisdiction": format_jurisdiction(a.system_tag.jurisdiction) if a.system_tag else None,
-            "ruling_party": a.system_tag.ruling_party if a.system_tag else None,
-            "excerpt": make_excerpt(a.body_text) if a.body_text.strip() else None,
-        }
-        for a in articles
-    ]
+    # queue (app/routers/admin_ui.py's my_queue). Gated by news_access,
+    # same visibility-only pattern as youtube_access/x_access above - the
+    # articles exist and are already public regardless, but this client's
+    # News tab stays empty until a super admin turns it on for them.
+    news_articles = []
+    if subject.news_access:
+        stmt = (
+            select(Article)
+            .join(ArticleEntity, ArticleEntity.article_id == Article.id)
+            .where(ArticleEntity.entity_id == entity_id, Article.published_tag.is_not(None))
+            .order_by(Article.published_at.desc())
+            .limit(25)
+            .options(selectinload(Article.system_tag), selectinload(Article.outlet))
+        )
+        articles = list(db.scalars(stmt))
+        news_articles = [
+            {
+                "headline": a.headline,
+                "url": a.url,
+                "outlet_name": a.outlet.name,
+                "published_at": a.published_at,
+                "published_tag": a.published_tag,
+                "jurisdiction": format_jurisdiction(a.system_tag.jurisdiction) if a.system_tag else None,
+                "ruling_party": a.system_tag.ruling_party if a.system_tag else None,
+                "excerpt": make_excerpt(a.body_text) if a.body_text.strip() else None,
+            }
+            for a in articles
+        ]
 
     return render(
         request, "client_entity_detail.html", current_client_user,
         entity=subject.entity, subject=subject,
         news_articles=news_articles, youtube_mentions=youtube_mentions, x_mentions=x_mentions,
+        social_range=social_range, social_ranges=SOCIAL_RANGES,
     )
