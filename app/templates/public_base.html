@@ -99,6 +99,7 @@
 </head>
 <body class="bg-paper text-ink font-sans antialiased min-h-screen flex flex-col">
 
+{% block header %}
 <header class="border-b border-line">
   <div class="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-6 flex-wrap">
     <a href="/" class="flex items-center gap-2.5 no-underline group">
@@ -111,11 +112,13 @@
     </nav>
   </div>
 </header>
+{% endblock %}
 
 <main class="flex-1">
 {% block content %}{% endblock %}
 </main>
 
+{% block footer %}
 <footer class="border-t border-line mt-16">
   <div class="max-w-6xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
     <p class="text-sm leading-relaxed text-ink-faint max-w-prose">
@@ -126,6 +129,7 @@
     <p class="text-xs font-semibold uppercase tracking-[0.12em] text-ink-faint whitespace-nowrap">Proof of concept</p>
   </div>
 </footer>
+{% endblock %}
 
 </body>
 </html>
