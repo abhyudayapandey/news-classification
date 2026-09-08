@@ -6,16 +6,18 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**Phases 1-5 are built**: project scaffolding and the full database schema
+**Phases 1-6 are built**: project scaffolding and the full database schema
 plus RSS ingestion with wire-copy dedup (Phase 1); embedding-based topic
 clustering and pro/anti/apolitical classification with jurisdiction/ruling-
 party resolution (Phase 2 — see §9); the login-gated admin/super-admin
 review UI - queueing, blinding, confirm/override, account management, and
 oversight views (Phase 3 — see §12); the public end-user site - three
 framing columns, cross-outlet agreement/divergence, and date browsing
-(Phase 4 — see §13); and entity tagging + subject-specific sentiment -
+(Phase 4 — see §13); entity tagging + subject-specific sentiment -
 the data-layer groundwork for a future B2B client portal, not the portal
-itself (Phase 5 — see §14).
+itself (Phase 5 — see §14); and social media listening (X + YouTube) with
+per-client, per-entity cost controls on the metered X source - the
+platform's first genuinely metered-cost feature (Phase 6 — see §15).
 
 ---
 
@@ -1306,7 +1308,187 @@ bulk-confirm agreeing with system sentiment for an article never opened;
 and backfill both finding a newly-seeded entity in an already-ingested
 article and staying idempotent (no duplicate rows) on a second run.
 
-## 15. Known gaps carried over from the planning doc
+## 15. Phase 6: Social Listening (Section 13.1, 13.6)
+
+X (formerly Twitter) and YouTube mention tracking per `Entity`, with the
+platform's first genuinely metered-cost feature: X's official pay-per-use
+API bills real dollars per post read. YouTube's Data API is free-tier and
+always fetched once an entity exists - no access gating needed for it at
+all. Scope, per direct instruction: the data model, fetch logic, and cost
+tracking, verifiable via CLI/API - no sentiment classification on social
+content, no client-facing dashboard, and no automatic hard-cutoff on a
+ceiling breach. All of those are explicitly later phases.
+
+### 15.1 The core design question: shared fetch vs. per-client access
+
+A subject like an entity's X mentions is public data - one fetch produces
+the same posts regardless of which client asked for it. But whether a
+*given client* should see (and be billed against) that data is a
+per-contract decision. Collapsing these into one field forces a bad
+choice: a single per-client "fetch X for this entity" flag would either
+(a) fetch and pay for the same public posts once per client tracking that
+entity - wasteful, multiplying real dollar cost by client count for
+identical data - or (b) fetch once globally and let every client see it
+regardless of their own contract - a straight access leak. Neither is
+acceptable, so this phase keeps two separate tables:
+
+- **`EntitySocialConfig`** (one row per `Entity`) is the shared, real-world
+  truth: is X currently active for this entity, and what has actually been
+  spent fetching it. This is where the one real API call per entity per
+  fetch happens, and where its one real cost lands - independent of how
+  many clients benefit from the resulting rows.
+- **`ClientSubject`** (extended; composite `(client_id, entity_id)` key)
+  carries `x_access` (does *this* client see X data for *this* entity) and
+  `x_spend_ceiling_usd` (their own contracted monthly ceiling) - purely an
+  access/reporting layer, contributing nothing to what gets fetched or
+  what it costs.
+
+The gating rule is a live query, not a cached flag: X is fetched for an
+entity if and only if at least one *active* client currently has
+`x_access=True` for it (`app/social/pipeline.py::_entity_has_active_x_access`).
+`EntitySocialConfig.x_active` mirrors this for cheap display on the cost
+screen (§15.4), but the actual fetch decision always re-queries
+`ClientSubject`/`Client` at fetch time - trusting a cached boolean here
+would risk fetching (and billing) for an entity whose last client already
+revoked access, or skipping one that just gained it. `Client.active`
+(deactivate, don't delete - same pattern as `Admin.is_active` from Phase
+3) is part of that same live check, so an offboarded client's stale grant
+can't keep costing money.
+
+Ceiling comparisons are per `(client, entity)`, not a per-client total
+split across every entity they track: each `ClientSubject.x_spend_ceiling_usd`
+is compared directly against *that entity's* shared `EntitySocialConfig.x_spend_usd`
+- a client tracking three entities with X access has three independent
+ceiling checks, not one third of a combined budget. This matches how a
+real contract would actually be written (a ceiling per subject, not an
+opaque blended number) and avoids inventing a proportional-attribution
+scheme that was never asked for.
+
+`SocialMention` (entity_id, source, content_text, author, posted_at, url,
+fetched_at, cost_usd) stores fetched content once regardless of which
+clients can see it, deduplicated via `UNIQUE(entity_id, source, url)` -
+visibility is a query-time join through `ClientSubject`, never duplicated
+storage per client.
+
+### 15.2 Billing accuracy vs. storage deduplication (deliberately not the same number)
+
+X bills per post *read*, not per post *newly stored*. `app/social/x_api.py`
+requests up to `max_results` (X enforces a real 10-100 bound server-side -
+a request for fewer than 10 still returns, and bills, up to 10, a
+cost-relevant floor worth stating rather than silently clamping around).
+The cost accrued to `EntitySocialConfig.x_spend_usd` is
+`x_cost_per_post_usd * len(mentions)` computed from the **raw** API
+response, before deduplication - `app/social/pipeline.py::_store_new_mentions`
+then separately dedupes by URL for storage. A post already stored from an
+earlier fetch is still billed again if a later recent-search call
+re-returns it; the per-row `SocialMention.cost_usd` and the entity-level
+running total will not always reconcile, and that's correct, not a bug -
+X charges for the read, not for whether the platform already had a copy.
+An earlier draft of `x_api.py` truncated the parsed list back down to the
+caller's original `max_results` after already requesting the (floor-
+adjusted) larger amount from the server - caught before it shipped, since
+it would have silently under-counted real spend whenever the 10-post floor
+exceeded what was asked for.
+
+### 15.3 Monthly ceilings, lazily rolled over
+
+`EntitySocialConfig.x_spend_usd` resets to zero whenever
+`x_spend_period_start` no longer matches the first day of the current
+calendar month, checked lazily on the next fetch that touches that entity
+(`_roll_spend_period_if_needed`) - no scheduled job, consistent with
+nothing in this codebase running on its own (ingest/process/assign-queue
+are all the same shape). An entity nobody has fetched X for since last
+month simply carries a stale `x_spend_usd` until its next fetch, which is
+harmless since nothing reads that value as authoritative between fetches
+except the cost screen, which is explicitly informational.
+
+### 15.4 Super-admin cost visibility, deliberately gated and separate
+
+`GET /admin/social-costs` (`social_costs.html`) is the only place real
+spend and ceiling status are visible, and it's the one screen in this
+whole project gated by `require_super_admin` for confidentiality reasons
+rather than an escalation-of-privilege reason - Section 13's own framing
+("could never be the one shared on a client call") calls for this to be
+structurally impossible to put on screen during a client meeting, not
+just a matter of admin discipline. It shows:
+
+- **Entity spend (shared, current period)** - `EntitySocialConfig`'s real
+  running total per entity, `x_active` status, how many clients currently
+  have X access to it, and last-fetched time.
+- **Per-client ceiling status** - every `ClientSubject` that currently has
+  or ever had `x_access=True`, each entity's shared spend compared against
+  that client's own ceiling, classified `OK` / `APPROACHING` (>=
+  `SOCIAL_CEILING_WARN_RATIO`, default 80%, of ceiling) / `HIT` (spend >=
+  ceiling) / `NO_CEILING` (access granted, no ceiling set) / `NO_ACCESS`.
+
+Per direct instruction, a `HIT` or `APPROACHING` status is purely
+informational for a super admin to act on (renegotiate, eat the overage,
+or contact the client) - nothing here throttles fetching or access
+automatically. Automatic cutoff on ceiling breach is an explicitly
+out-of-scope future phase; a real contract might reasonably call for
+eating an overage rather than silently breaking a promised service, and
+that's a business decision this phase deliberately doesn't make for the
+super admin.
+
+`Client`/`ClientSubject` (Section 13.6) didn't exist before this phase -
+Phase 5 explicitly deferred all of Section 13.6 to a later phase. They're
+built now only as the minimum foundation this feature needs: a client to
+grant/deny X access to, and a per-(client, entity) row to hold that grant
+and its ceiling. `ClientUser` (client-facing logins) and any client-facing
+UI are still not built - this stays a super-admin-only capability.
+
+### 15.5 Verifying this phase (fake fetchers, no real API calls)
+
+Same "no real network access in this sandbox" constraint and mocked-
+provider convention as every prior phase (see §10). `SocialFetcher` is a
+small provider-swappable interface (`app/social/base.py`), mirroring
+`app/llm/base.py`'s classification providers but for fetching new external
+content rather than classifying text already on hand. Verified with fake
+`SocialFetcher` implementations standing in for `YouTubeFetcher`/`XFetcher`:
+
+- X fetching is gated correctly - off with no client access, on once one
+  client grants it, independently per entity, and off again once that
+  access is revoked; YouTube keeps fetching regardless of X's state.
+- `grant_x_access` rejects a non-positive ceiling (a ceiling with nothing
+  to alert against isn't meaningful).
+- The shared cost on `EntitySocialConfig` accrues once per fetch, not once
+  per client with access to that entity.
+- Re-fetching re-bills the shared cost without duplicating `SocialMention`
+  storage (§15.2).
+- Ceiling status against a **deliberately tiny fake ceiling**, as asked,
+  before pointing this at a real X key: `OK` well under it, `HIT` once
+  spend exceeds it, `APPROACHING` in the warn-ratio band between the two.
+  A client merely tracking an entity with `x_access=False` never appears
+  in the X cost report at all - it's not a zero/OK row, it's absent.
+- Monthly period rollover resets a stale total to zero.
+- Batch `fetch_social_mentions()` scans multiple entities, and a fetch
+  exception on one source/entity is recorded per-entity without stopping
+  the rest of the run or crashing.
+- `/admin/social-costs` redirects when logged out and renders real data
+  for a logged-in super admin.
+
+Reachable via `python -m app.cli create-client --name ...`,
+`show-clients`, `add-client-subject --client-id --entity-id [--x-ceiling]`,
+`fetch-social [--limit]`, and `social-cost-report`; also
+`POST /social/fetch` and `GET /social/mentions` (unauthenticated debug
+endpoints, same category as `/articles`/`/entities`/`/clusters` - cost and
+ceiling data is deliberately *not* exposed through these, only through the
+gated admin screen).
+
+**Flagged, not free-tier-friendly beyond the deliberate X dollar cost**:
+YouTube's free tier is still a real 10,000-units/day quota, and a single
+`search.list` call costs 100 units - roughly 100 entity-fetches/day across
+the whole platform combined before hitting it, not literally unlimited.
+A quota-exceeded response surfaces as an ordinary fetch error, caught and
+recorded per-entity like any other failure, since there's nothing more
+useful to do about it than wait for the daily reset. Both fetchers query
+only an entity's canonical name, not its aliases, to avoid multiplying
+quota cost (YouTube) or real per-post-read dollar cost (X) by alias count
+- a deliberate coverage-vs-cost tradeoff, same shape as the alias-matching
+tradeoffs already flagged in Phase 5 (§14.4), just for API cost instead of
+match precision.
+
+## 16. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology
