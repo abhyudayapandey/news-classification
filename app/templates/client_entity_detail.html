@@ -110,7 +110,7 @@
         </p>
       </div>
     {% else %}
-    <div class="flex flex-col gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {% for a in news_articles %}
       <article class="bg-surface border border-line rounded-2xl p-5">
         <div class="flex flex-wrap items-center gap-1.5 mb-3">
@@ -190,7 +190,7 @@
         <p class="text-sm text-ink-faint">No YouTube mentions in this window{% if selected_geo %} for this geography{% endif %}.</p>
       </div>
     {% else %}
-    <div class="flex flex-col gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {% for m in youtube_mentions %}{{ mention_card(m, "views") }}{% endfor %}
     </div>
     {% endif %}
@@ -204,7 +204,7 @@
         <p class="text-sm text-ink-faint">No X mentions in this window{% if selected_geo %} for this geography{% endif %}.</p>
       </div>
     {% else %}
-    <div class="flex flex-col gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {% for m in x_mentions %}{{ mention_card(m, "engagements") }}{% endfor %}
     </div>
     {% endif %}

@@ -948,6 +948,7 @@ def grant_client_subject_x_access(
     client_id: int,
     entity_id: int,
     x_ceiling: str = Form(default=""),
+    next: str = Form(default=""),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -963,36 +964,65 @@ def grant_client_subject_x_access(
     except InvalidOperation:
         ceiling = None
     if ceiling is None or ceiling <= 0:
+        target = next if next.startswith("/admin/clients") else f"/admin/clients/{client_id}"
+        separator = "&" if "?" in target else "?"
         return RedirectResponse(
-            f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
+            f"{target}{separator}error=A positive monthly X ceiling is required to grant X access.",
             status_code=303,
         )
     grant_x_access(db, client_id, entity_id, ceiling)
-    return RedirectResponse(f"/admin/clients/{client_id}?message=X access granted.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "X access granted.")
+
+
+def _client_toggle_redirect(client_id: int, next_url: str, message: str) -> RedirectResponse:
+    """Every toggle on this page can be flipped from either the clients
+    LIST (all clients, nested subject rows) or one client's own DETAIL
+    page - previously every toggle hardcoded a redirect back to the detail
+    page regardless of where the click came from, so toggling from the
+    list bounced you to a different page than the one you were looking
+    at. `next_url` is a hidden form field each template sets to its own
+    URL; only ever a same-app "/admin/clients..." path is honored (never
+    an open redirect to an arbitrary next_url).
+    """
+    target = next_url if next_url.startswith("/admin/clients") else f"/admin/clients/{client_id}"
+    separator = "&" if "?" in target else "?"
+    return RedirectResponse(f"{target}{separator}message={message}", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/revoke")
 def revoke_client_subject(
-    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+    client_id: int,
+    entity_id: int,
+    next: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
 ):
     revoke_x_access(db, client_id, entity_id)
-    return RedirectResponse(f"/admin/clients/{client_id}?message=X access revoked.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "X access revoked.")
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/youtube/enable")
 def enable_client_subject_youtube(
-    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+    client_id: int,
+    entity_id: int,
+    next: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
 ):
     subject = db.get(ClientSubject, (client_id, entity_id))
     if subject is not None:
         subject.youtube_access = True
         db.commit()
-    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility enabled.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "YouTube visibility enabled.")
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/youtube/disable")
 def disable_client_subject_youtube(
-    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+    client_id: int,
+    entity_id: int,
+    next: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Visibility-only, unlike X's revoke: YouTube keeps fetching for this
     entity regardless (free, shared, unconditional per Section 13) - this
@@ -1002,23 +1032,31 @@ def disable_client_subject_youtube(
     if subject is not None:
         subject.youtube_access = False
         db.commit()
-    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility disabled.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "YouTube visibility disabled.")
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/news/enable")
 def enable_client_subject_news(
-    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+    client_id: int,
+    entity_id: int,
+    next: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
 ):
     subject = db.get(ClientSubject, (client_id, entity_id))
     if subject is not None:
         subject.news_access = True
         db.commit()
-    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility enabled.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "News visibility enabled.")
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/news/disable")
 def disable_client_subject_news(
-    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+    client_id: int,
+    entity_id: int,
+    next: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Same visibility-only shape as YouTube's disable - the articles
     themselves stay published on the B2C site regardless, this only stops
@@ -1028,7 +1066,7 @@ def disable_client_subject_news(
     if subject is not None:
         subject.news_access = False
         db.commit()
-    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility disabled.", status_code=303)
+    return _client_toggle_redirect(client_id, next, "News visibility disabled.")
 
 
 @router.post("/clients/{client_id}/entities/{entity_id}/social-fetch-config")
