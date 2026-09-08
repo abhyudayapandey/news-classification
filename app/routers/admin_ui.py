@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth.security import hash_password, verify_password
 from app.auth.session import get_current_admin, get_current_admin_optional, require_super_admin
@@ -216,6 +216,15 @@ def my_queue(
         select(Article)
         .where(Article.assigned_admin_id == current_admin.id, ~Article.reviews.any())
         .order_by(Article.published_at.desc())
+        # Eager-load what _queue_item()/_blind_article() touch per article
+        # (system_tag.classification, outlet.name) - both default to
+        # lazy="select", so without this a queue of N articles fires ~2N
+        # extra round-trips (one per article per relationship) instead of
+        # this one extra batched query each. Invisible on an empty/small
+        # test database (never caught in local testing), real once the
+        # queue has actual accumulated volume, especially over a network
+        # connection to a remote DB.
+        .options(selectinload(Article.system_tag), selectinload(Article.outlet))
     )
     articles = list(db.scalars(stmt))
     items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
