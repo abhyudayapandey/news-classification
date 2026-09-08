@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 {% block title %}My Queue{% endblock %}
 
-{% macro section(key, label, items, active_tab) %}
-<div class="tab-panel" data-tab-panel="{{ key }}" {% if key != active_tab %}hidden{% endif %}>
+{% macro queue_table(items) %}
 {% if not items %}
   <div class="card">Nothing here right now.</div>
 {% else %}
@@ -50,6 +49,11 @@
     </p>
   </form>
 {% endif %}
+{% endmacro %}
+
+{% macro section(group, key, items, active_tab) %}
+<div class="tab-panel" data-group="{{ group }}" data-tab-panel="{{ key }}" {% if key != active_tab %}hidden{% endif %}>
+  {{ queue_table(items) }}
 </div>
 {% endmacro %}
 
@@ -58,32 +62,81 @@
 <p class="muted">Newest first within each category. {{ total }} article(s) awaiting your review.</p>
 
 <div class="tabs" role="tablist">
-  <button type="button" class="tab-btn{% if active_tab == 'pro' %} active{% endif %}" data-tab="pro" role="tab" aria-selected="{{ 'true' if active_tab == 'pro' else 'false' }}">
-    Pro-Establishment <span class="muted">({{ pro_items|length }})</span>
+  <button type="button" class="tab-btn active" data-group="top" data-tab="users" role="tab" aria-selected="true">
+    Users <span class="muted">({{ total }})</span>
   </button>
-  <button type="button" class="tab-btn{% if active_tab == 'anti' %} active{% endif %}" data-tab="anti" role="tab" aria-selected="{{ 'true' if active_tab == 'anti' else 'false' }}">
-    Anti-Establishment <span class="muted">({{ anti_items|length }})</span>
-  </button>
-  <button type="button" class="tab-btn{% if active_tab == 'apolitical' %} active{% endif %}" data-tab="apolitical" role="tab" aria-selected="{{ 'true' if active_tab == 'apolitical' else 'false' }}">
-    Apolitical <span class="muted">({{ apolitical_items|length }})</span>
+  <button type="button" class="tab-btn" data-group="top" data-tab="clients" role="tab" aria-selected="false">
+    Clients <span class="muted">({{ client_groups|length }})</span>
   </button>
 </div>
 
-{{ section("pro", "Pro-Establishment", pro_items, active_tab) }}
-{{ section("anti", "Anti-Establishment", anti_items, active_tab) }}
-{{ section("apolitical", "Apolitical", apolitical_items, active_tab) }}
+<div class="tab-panel" data-group="top" data-tab-panel="users">
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab-btn{% if active_tab == 'pro' %} active{% endif %}" data-group="users" data-tab="pro" role="tab" aria-selected="{{ 'true' if active_tab == 'pro' else 'false' }}">
+      Pro-Establishment <span class="muted">({{ pro_items|length }})</span>
+    </button>
+    <button type="button" class="tab-btn{% if active_tab == 'anti' %} active{% endif %}" data-group="users" data-tab="anti" role="tab" aria-selected="{{ 'true' if active_tab == 'anti' else 'false' }}">
+      Anti-Establishment <span class="muted">({{ anti_items|length }})</span>
+    </button>
+    <button type="button" class="tab-btn{% if active_tab == 'apolitical' %} active{% endif %}" data-group="users" data-tab="apolitical" role="tab" aria-selected="{{ 'true' if active_tab == 'apolitical' else 'false' }}">
+      Apolitical <span class="muted">({{ apolitical_items|length }})</span>
+    </button>
+  </div>
+
+  {{ section("users", "pro", pro_items, active_tab) }}
+  {{ section("users", "anti", anti_items, active_tab) }}
+  {{ section("users", "apolitical", apolitical_items, active_tab) }}
+</div>
+
+<div class="tab-panel" data-group="top" data-tab-panel="clients" hidden>
+  {% if not client_groups %}
+    <p class="muted">No pending article relates to any B2B client's tracked subject right now.</p>
+  {% else %}
+  <div class="tabs" role="tablist">
+    {% for c in client_groups %}
+    <button type="button" class="tab-btn{% if loop.first %} active{% endif %}" data-group="clients" data-tab="client-{{ c.client_id }}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}">
+      {{ c.client_name }} <span class="muted">({{ c.count }})</span>
+    </button>
+    {% endfor %}
+  </div>
+
+  {% for c in client_groups %}
+  <div class="tab-panel" data-group="clients" data-tab-panel="client-{{ c.client_id }}" {% if not loop.first %}hidden{% endif %}>
+    <div class="tabs" role="tablist">
+      {% for s in c.subjects %}
+      <button type="button" class="tab-btn{% if loop.first %} active{% endif %}" data-group="subjects-{{ c.client_id }}" data-tab="subject-{{ s.entity_id }}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}">
+        {{ s.entity_name }} <span class="muted">({{ s.queue_items|length }})</span>
+      </button>
+      {% endfor %}
+    </div>
+    {% for s in c.subjects %}
+    <div class="tab-panel" data-group="subjects-{{ c.client_id }}" data-tab-panel="subject-{{ s.entity_id }}" {% if not loop.first %}hidden{% endif %}>
+      {{ queue_table(s.queue_items) }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
 
 <script>
+// Every independent tab group on this page (top-level Users/Clients, the
+// Users tab's own Pro/Anti/Apolitical tabs, and one per-client subject
+// group) shares this one handler - a click only affects buttons/panels
+// carrying the SAME data-group value as the button clicked, so nested
+// groups never interfere with each other regardless of how deep the
+// nesting goes.
 document.querySelectorAll(".tab-btn").forEach(function (btn) {
   btn.addEventListener("click", function () {
-    document.querySelectorAll(".tab-btn").forEach(function (b) {
+    var group = btn.dataset.group;
+    document.querySelectorAll('.tab-btn[data-group="' + group + '"]').forEach(function (b) {
       b.classList.remove("active");
       b.setAttribute("aria-selected", "false");
     });
-    document.querySelectorAll(".tab-panel").forEach(function (p) { p.hidden = true; });
+    document.querySelectorAll('.tab-panel[data-group="' + group + '"]').forEach(function (p) { p.hidden = true; });
     btn.classList.add("active");
     btn.setAttribute("aria-selected", "true");
-    document.querySelector('.tab-panel[data-tab-panel="' + btn.dataset.tab + '"]').hidden = false;
+    document.querySelector('.tab-panel[data-group="' + group + '"][data-tab-panel="' + btn.dataset.tab + '"]').hidden = false;
   });
 });
 

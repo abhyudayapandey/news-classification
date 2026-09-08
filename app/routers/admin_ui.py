@@ -19,7 +19,7 @@ from app.auth.security import hash_password, verify_password
 from app.auth.session import get_current_admin, get_current_admin_optional, require_super_admin
 from app.config import settings
 from app.db import get_db
-from app.models import Admin, Article, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
+from app.models import Admin, Article, ArticleEntity, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
 from app.models.enums import AdminRole, ClassificationTag, EntityProminence, ReviewDecision, SubjectSentiment
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -185,6 +185,67 @@ def _queue_item(article: Article) -> dict:
     }
 
 
+def _build_client_queue_groups(db: Session, articles: list[Article]) -> list[dict]:
+    """Section 13.6's own "Operational note": admins need visibility into
+    which pending articles relate to a paying client's tracked subject, so
+    review priority isn't dependent on a side conversation. This is a
+    priority LENS over the same one queue `my_queue` already builds, not a
+    second parallel queue - the same article still needs the same single
+    review action either way, whichever tab it was found through.
+
+    An article mentioning entities tracked by more than one client (or
+    several subjects for the same client) appears under every relevant
+    one, not just the first match - a client whose tracked subject is
+    genuinely mentioned should never be missing it just because some
+    other client also tracks a co-mentioned entity.
+    """
+    all_entity_ids = {ae.entity_id for article in articles for ae in article.entity_mentions}
+    if not all_entity_ids:
+        return []
+
+    # entity_id -> [(client_id, client_name), ...] - only active clients,
+    # same "an offboarded client's grant doesn't keep mattering" posture
+    # already applied to X-fetch gating (app/social/pipeline.py).
+    entity_to_clients: dict[int, list[tuple[int, str]]] = {}
+    rows = (
+        db.query(ClientSubject.entity_id, Client.id, Client.name)
+        .join(Client, Client.id == ClientSubject.client_id)
+        .filter(ClientSubject.entity_id.in_(all_entity_ids), Client.active.is_(True))
+        .all()
+    )
+    for entity_id, client_id, client_name in rows:
+        entity_to_clients.setdefault(entity_id, []).append((client_id, client_name))
+    if not entity_to_clients:
+        return []
+
+    # client_id -> {name, article_ids (for the count, deduped), subjects: {entity_id: {entity_name, articles}}}
+    by_client: dict[int, dict] = {}
+    for article in articles:
+        for ae in article.entity_mentions:
+            for client_id, client_name in entity_to_clients.get(ae.entity_id, []):
+                bucket = by_client.setdefault(client_id, {"name": client_name, "article_ids": set(), "subjects": {}})
+                bucket["article_ids"].add(article.id)
+                subject = bucket["subjects"].setdefault(ae.entity_id, {"entity_name": ae.entity.name, "articles": []})
+                subject["articles"].append(article)
+
+    groups = []
+    for client_id, data in sorted(by_client.items(), key=lambda kv: kv[1]["name"]):
+        subjects = [
+            # "queue_items", not "items" - a plain dict's own .items()
+            # method shadows a same-named key when accessed via Jinja's
+            # dot notation, silently returning the bound method instead
+            # of the list (caught while testing: `len(s.items)` blew up
+            # with "builtin_function_or_method has no len()").
+            {"entity_id": eid, "entity_name": s["entity_name"], "queue_items": [_queue_item(a) for a in s["articles"]]}
+            for eid, s in sorted(data["subjects"].items(), key=lambda kv: kv[1]["entity_name"])
+        ]
+        groups.append({
+            "client_id": client_id, "client_name": data["name"],
+            "count": len(data["article_ids"]), "subjects": subjects,
+        })
+    return groups
+
+
 @router.get("/queue", response_class=HTMLResponse)
 def my_queue(
     request: Request,
@@ -224,7 +285,10 @@ def my_queue(
         # test database (never caught in local testing), real once the
         # queue has actual accumulated volume, especially over a network
         # connection to a remote DB.
-        .options(selectinload(Article.system_tag), selectinload(Article.outlet))
+        .options(
+            selectinload(Article.system_tag), selectinload(Article.outlet),
+            selectinload(Article.entity_mentions).selectinload(ArticleEntity.entity),
+        )
     )
     articles = list(db.scalars(stmt))
     items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
@@ -244,6 +308,8 @@ def my_queue(
     else:
         active_tab = "apolitical"
 
+    client_groups = _build_client_queue_groups(db, articles)
+
     return render(
         request, "queue.html", current_admin,
         pro_items=pro_items,
@@ -251,6 +317,7 @@ def my_queue(
         apolitical_items=apolitical_items,
         active_tab=active_tab,
         total=len(articles),
+        client_groups=client_groups,
     )
 
 
