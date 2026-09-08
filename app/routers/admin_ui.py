@@ -230,15 +230,31 @@ def _build_client_queue_groups(db: Session, articles: list[Article]) -> list[dic
 
     groups = []
     for client_id, data in sorted(by_client.items(), key=lambda kv: kv[1]["name"]):
-        subjects = [
-            # "queue_items", not "items" - a plain dict's own .items()
-            # method shadows a same-named key when accessed via Jinja's
-            # dot notation, silently returning the bound method instead
-            # of the list (caught while testing: `len(s.items)` blew up
-            # with "builtin_function_or_method has no len()").
-            {"entity_id": eid, "entity_name": s["entity_name"], "queue_items": [_queue_item(a) for a in s["articles"]]}
-            for eid, s in sorted(data["subjects"].items(), key=lambda kv: kv[1]["entity_name"])
-        ]
+        subjects = []
+        for eid, s in sorted(data["subjects"].items(), key=lambda kv: kv[1]["entity_name"]):
+            # Same Pro/Anti/Apolitical split as the Users tab (my_queue
+            # itself) - requested directly, so a client's own subject
+            # queue isn't one undifferentiated list just because it's a
+            # narrower slice of the same underlying queue.
+            pro_items, anti_items, apolitical_items = [], [], []
+            for a in s["articles"]:
+                bucket_items = {
+                    ClassificationTag.PRO_ESTABLISHMENT: pro_items,
+                    ClassificationTag.ANTI_ESTABLISHMENT: anti_items,
+                    ClassificationTag.APOLITICAL: apolitical_items,
+                }[a.system_tag.classification]
+                bucket_items.append(_queue_item(a))
+            if pro_items:
+                active_sub_tab = "pro"
+            elif anti_items:
+                active_sub_tab = "anti"
+            else:
+                active_sub_tab = "apolitical"
+            subjects.append({
+                "entity_id": eid, "entity_name": s["entity_name"],
+                "pro_items": pro_items, "anti_items": anti_items, "apolitical_items": apolitical_items,
+                "count": len(s["articles"]), "active_sub_tab": active_sub_tab,
+            })
         groups.append({
             "client_id": client_id, "client_name": data["name"],
             "count": len(data["article_ids"]), "subjects": subjects,

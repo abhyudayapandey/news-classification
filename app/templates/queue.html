@@ -105,13 +105,33 @@
     <div class="tabs" role="tablist">
       {% for s in c.subjects %}
       <button type="button" class="tab-btn{% if loop.first %} active{% endif %}" data-group="subjects-{{ c.client_id }}" data-tab="subject-{{ s.entity_id }}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}">
-        {{ s.entity_name }} <span class="muted">({{ s.queue_items|length }})</span>
+        {{ s.entity_name }} <span class="muted">({{ s.count }})</span>
       </button>
       {% endfor %}
     </div>
     {% for s in c.subjects %}
+    {% set tag_group = "tags-" ~ c.client_id ~ "-" ~ s.entity_id %}
     <div class="tab-panel" data-group="subjects-{{ c.client_id }}" data-tab-panel="subject-{{ s.entity_id }}" {% if not loop.first %}hidden{% endif %}>
-      {{ queue_table(s.queue_items) }}
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab-btn{% if s.active_sub_tab == 'pro' %} active{% endif %}" data-group="{{ tag_group }}" data-tab="pro" role="tab" aria-selected="{{ 'true' if s.active_sub_tab == 'pro' else 'false' }}">
+          Pro-Establishment <span class="muted">({{ s.pro_items|length }})</span>
+        </button>
+        <button type="button" class="tab-btn{% if s.active_sub_tab == 'anti' %} active{% endif %}" data-group="{{ tag_group }}" data-tab="anti" role="tab" aria-selected="{{ 'true' if s.active_sub_tab == 'anti' else 'false' }}">
+          Anti-Establishment <span class="muted">({{ s.anti_items|length }})</span>
+        </button>
+        <button type="button" class="tab-btn{% if s.active_sub_tab == 'apolitical' %} active{% endif %}" data-group="{{ tag_group }}" data-tab="apolitical" role="tab" aria-selected="{{ 'true' if s.active_sub_tab == 'apolitical' else 'false' }}">
+          Apolitical <span class="muted">({{ s.apolitical_items|length }})</span>
+        </button>
+      </div>
+      <div class="tab-panel" data-group="{{ tag_group }}" data-tab-panel="pro" {% if s.active_sub_tab != 'pro' %}hidden{% endif %}>
+        {{ queue_table(s.pro_items) }}
+      </div>
+      <div class="tab-panel" data-group="{{ tag_group }}" data-tab-panel="anti" {% if s.active_sub_tab != 'anti' %}hidden{% endif %}>
+        {{ queue_table(s.anti_items) }}
+      </div>
+      <div class="tab-panel" data-group="{{ tag_group }}" data-tab-panel="apolitical" {% if s.active_sub_tab != 'apolitical' %}hidden{% endif %}>
+        {{ queue_table(s.apolitical_items) }}
+      </div>
     </div>
     {% endfor %}
   </div>
