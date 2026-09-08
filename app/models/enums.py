@@ -52,6 +52,21 @@ class SocialSource(str, enum.Enum):
     YOUTUBE = "youtube"
 
 
+class SeatType(str, enum.Enum):
+    """Which house a piece of content's guessed `constituency` refers to -
+    Lok Sabha (MP) and Vidhan Sabha (MLA) seats are delimited independently
+    of each other and of district boundaries in India, so a bare
+    constituency name is ambiguous without this. Set alongside
+    `constituency` wherever app/processing/geography.py's text heuristic
+    actually finds one named (e.g. "Baramati Lok Sabha seat") - see that
+    module's docstring for why this is content-derived, not a seeded
+    master list or anything manually assigned to an Entity.
+    """
+
+    MP = "mp"
+    MLA = "mla"
+
+
 class SubjectSentiment(str, enum.Enum):
     """Section 13.2's subject-specific sentiment axis - deliberately named
     favorable/unfavorable/neutral rather than reusing pro/anti-establishment

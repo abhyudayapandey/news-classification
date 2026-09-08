@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.enums import SocialSource, SubjectSentiment
+from app.models.enums import SeatType, SocialSource, SubjectSentiment
 
 
 class SocialMention(Base):
@@ -69,5 +69,16 @@ class SocialMention(Base):
     # ordering (most-engaged-first, per direct instruction), never for cost
     # accounting - cost_usd above is the only column that feeds spend math.
     engagement_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Same content-derived geography axis as SystemTag's state/district/
+    # constituency/seat_type (app/processing/geography.py), guessed from
+    # `content_text` at storage time - never from anything assigned to the
+    # Entity this mention is about. Set once when a mention is newly
+    # stored (app/social/pipeline.py's _store_new_mentions), same "never
+    # re-computed on re-fetch" discipline as sentiment above.
+    state: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    constituency: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seat_type: Mapped[SeatType | None] = mapped_column(SAEnum(SeatType, name="seat_type", create_type=False), nullable=True)
 
     entity: Mapped["Entity"] = relationship(back_populates="social_mentions")

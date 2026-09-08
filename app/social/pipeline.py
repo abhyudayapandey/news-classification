@@ -17,6 +17,7 @@ from app.config import settings
 from app.llm.base import EntitySentimentProvider
 from app.models import Client, ClientSubject, Entity, EntitySocialConfig, SocialMention
 from app.models.enums import SocialSource
+from app.processing.geography import guess_geography
 from app.social.base import FetchedMention, SocialFetcher
 
 logger = logging.getLogger(__name__)
@@ -108,12 +109,20 @@ def _store_new_mentions(
         sentiment_result = sentiment_provider.classify_subject_sentiment(
             headline="", body_text=mention.content_text, entity_name=entity.name
         )
+        # Content-derived geography, same text-based heuristic as articles
+        # (app/processing/geography.py) - a tweet or video's own text is
+        # all that's realistically available here (see that module's
+        # docstring on why real geotag metadata isn't used), computed once
+        # at storage time, never re-guessed on a later re-fetch.
+        geography = guess_geography(mention.content_text)
         db.add(
             SocialMention(
                 entity_id=entity.id, source=source, content_text=mention.content_text,
                 author=mention.author, posted_at=mention.posted_at, url=mention.url,
                 cost_usd=cost_per_item, engagement_count=mention.engagement_count,
                 sentiment=sentiment_result.sentiment, sentiment_confidence=sentiment_result.confidence_score,
+                state=geography.state, district=geography.district,
+                constituency=geography.constituency, seat_type=geography.seat_type,
             )
         )
         existing_urls.add(mention.url)  # guards against a duplicate URL within the same fetch response

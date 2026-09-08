@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.public.formatting import format_date_long, recent_date_options
-from app.public.queries import get_cluster_comparison, get_home_columns, today_ist
+from app.public.queries import get_cluster_comparison, get_home_columns, list_available_states, today_ist
 
 router = APIRouter(tags=["public"])
 templates = Jinja2Templates(directory="app/templates")
@@ -32,6 +32,9 @@ def home(
         description="YYYY-MM-DD, IST calendar day - defaults to today. A future date redirects to today.",
     ),
     limit: int = Query(default=15, le=50, description="Max story clusters shown per column"),
+    state: str | None = Query(
+        default=None, description="Content-derived state to filter to - good-to-have, per direct instruction"
+    ),
     db: Session = Depends(get_db),
 ):
     today = today_ist()
@@ -59,7 +62,10 @@ def home(
         # selected while the page itself is showing an older date.
         date_options = [(selected_date.isoformat(), format_date_long(selected_date)), *date_options]
 
-    columns = get_home_columns(db, limit_per_column=limit, day=selected_date)
+    state_options = list_available_states(db)
+    selected_state = state if state in state_options else None
+
+    columns = get_home_columns(db, limit_per_column=limit, day=selected_date, state=selected_state)
     return templates.TemplateResponse(
         request,
         "public_home.html",
@@ -69,6 +75,8 @@ def home(
             "selected_date_display": format_date_long(selected_date),
             "date_options": date_options,
             "is_today": selected_date == today,
+            "state_options": state_options,
+            "selected_state": selected_state,
         },
     )
 

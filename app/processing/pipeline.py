@@ -31,6 +31,7 @@ from app.models.enums import ClassificationTag
 from app.processing.clustering import find_or_create_cluster
 from app.processing.entities import extract_entities_for_article
 from app.processing.entity_triggers import has_trigger_entity
+from app.processing.geography import guess_geography
 from app.processing.jurisdiction import resolve_ruling_party
 from app.processing.topics import TopicAssigner
 
@@ -139,12 +140,22 @@ def _process_one(
                     article.id,
                 )
 
+    # Content-derived geography - computed for every article regardless of
+    # classification, independent of the pro/anti-only jurisdiction/
+    # ruling_party pair just above. See app/processing/geography.py and
+    # SystemTag's own docstring for why these are a separate axis.
+    geography = guess_geography(text)
+
     db.add(
         SystemTag(
             article_id=article.id,
             classification=classification.classification,
             jurisdiction=classification.jurisdiction,
             ruling_party=ruling_party,
+            state=geography.state,
+            district=geography.district,
+            constituency=geography.constituency,
+            seat_type=geography.seat_type,
             confidence_score=classification.confidence_score,
             provider=classification_provider.name,
         )

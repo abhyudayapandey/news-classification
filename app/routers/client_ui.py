@@ -131,11 +131,45 @@ def client_dashboard(
     return render(request, "client_dashboard.html", current_client_user, subjects=rows)
 
 
+def _geo_options_from(*item_lists) -> list[dict]:
+    """Distinct (kind, value) geography tags actually present across the
+    given items - state/district/constituency alike, each kept as its own
+    option rather than merged, since a client might want to filter by
+    exactly one of these axes. Per direct instruction ("whatever is
+    available"): only ever offers what's actually tagged on content
+    currently in view, never a fixed master list.
+    """
+    seen: dict[tuple[str, str], dict] = {}
+    for items in item_lists:
+        for item in items:
+            state = item.get("state") if isinstance(item, dict) else item.state
+            district = item.get("district") if isinstance(item, dict) else item.district
+            constituency = item.get("constituency") if isinstance(item, dict) else item.constituency
+            seat_type = item.get("seat_type") if isinstance(item, dict) else item.seat_type
+            if state:
+                seen[("state", state)] = {"key": f"state:{state}", "label": f"State: {state}"}
+            if district:
+                seen[("district", district)] = {"key": f"district:{district}", "label": f"District: {district}"}
+            if constituency:
+                seat_label = f" ({seat_type.value.upper()})" if seat_type else ""
+                seen[("constituency", constituency)] = {
+                    "key": f"constituency:{constituency}",
+                    "label": f"Constituency: {constituency}{seat_label}",
+                }
+    return sorted(seen.values(), key=lambda o: o["label"])
+
+
+def _matches_geo(item, geo_kind: str, geo_value: str) -> bool:
+    value = item.get(geo_kind) if isinstance(item, dict) else getattr(item, geo_kind)
+    return value == geo_value
+
+
 @router.get("/entities/{entity_id}", response_class=HTMLResponse)
 def client_entity_detail(
     entity_id: int,
     request: Request,
     range_param: str = Query(default=_DEFAULT_SOCIAL_RANGE, alias="range"),
+    geo: str | None = Query(default=None, description="'state:<name>' / 'district:<name>' / 'constituency:<name>'"),
     current_client_user: ClientUser = Depends(get_current_client_user),
     db: Session = Depends(get_db),
 ):
@@ -194,14 +228,31 @@ def client_entity_detail(
                 "published_tag": a.published_tag,
                 "jurisdiction": format_jurisdiction(a.system_tag.jurisdiction) if a.system_tag else None,
                 "ruling_party": a.system_tag.ruling_party if a.system_tag else None,
+                "state": a.system_tag.state if a.system_tag else None,
+                "district": a.system_tag.district if a.system_tag else None,
+                "constituency": a.system_tag.constituency if a.system_tag else None,
+                "seat_type": a.system_tag.seat_type if a.system_tag else None,
                 "excerpt": make_excerpt(a.body_text) if a.body_text.strip() else None,
             }
             for a in articles
         ]
+
+    # Content-derived geography filter (app/processing/geography.py) -
+    # applied across all three lists uniformly, after the range filter
+    # above, and only ever offering options actually present in what's
+    # currently in view (per direct instruction: "whatever is available").
+    geo_options = _geo_options_from(news_articles, youtube_mentions, x_mentions)
+    selected_geo = geo if geo in {o["key"] for o in geo_options} else None
+    if selected_geo is not None:
+        geo_kind, geo_value = selected_geo.split(":", 1)
+        news_articles = [a for a in news_articles if _matches_geo(a, geo_kind, geo_value)]
+        youtube_mentions = [m for m in youtube_mentions if _matches_geo(m, geo_kind, geo_value)]
+        x_mentions = [m for m in x_mentions if _matches_geo(m, geo_kind, geo_value)]
 
     return render(
         request, "client_entity_detail.html", current_client_user,
         entity=subject.entity, subject=subject,
         news_articles=news_articles, youtube_mentions=youtube_mentions, x_mentions=x_mentions,
         social_range=social_range, social_ranges=SOCIAL_RANGES,
+        geo_options=geo_options, selected_geo=selected_geo,
     )
