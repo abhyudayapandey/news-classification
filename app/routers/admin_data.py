@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth.security import hash_password
+from app.data.entity_seed import seed_entities
 from app.data.jurisdiction_seed import seed_jurisdictions
 from app.db import get_db
 from app.models import Admin
@@ -24,6 +25,16 @@ def trigger_seed_jurisdictions(db: Session = Depends(get_db)) -> dict:
         "inserted": inserted,
         "updated": updated,
         "note": "See app/data/jurisdiction_seed.py's module docstring for what's confirmed vs. still needs verification.",
+    }
+
+
+@router.post("/seed-entities")
+def trigger_seed_entities(db: Session = Depends(get_db)) -> dict:
+    inserted, updated = seed_entities(db)
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "note": "See app/data/entity_seed.py's module docstring for what's confidently seeded vs. flagged gaps.",
     }
 
 

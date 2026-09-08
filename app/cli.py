@@ -13,6 +13,9 @@ Usage:
     python -m app.cli divert-unreviewable # Phase 3: one-time cleanup, move textless articles to Manual Review
     python -m app.cli retry-failed-scrapes # Phase 3: re-attempt scraping for articles with a scrape_error
     python -m app.cli create-admin        # Phase 3: create an admin/super_admin account
+    python -m app.cli seed-entities       # Phase 5: upsert app/data/entity_seed.py
+    python -m app.cli backfill-entities   # Phase 5: (re-)run entity extraction against already-ingested articles
+    python -m app.cli show-entities       # Phase 5: list seeded entities
 """
 
 import argparse
@@ -91,6 +94,8 @@ def cmd_process(args: argparse.Namespace) -> int:
     print(f"entity-trigger overrides:     {result.entity_trigger_overrides}")
     print(f"clusters flagged needs_review:{result.clusters_flagged_needs_review}")
     print(f"unresolved ruling party:      {result.unresolved_ruling_party}")
+    print(f"entity mentions found:        {result.entity_mentions_found}")
+    print(f"entity sentiments classified: {result.entity_sentiments_classified}")
     print(f"remaining unprocessed:        {result.remaining_unprocessed}")
     print("-" * 60)
     if result.errors:
@@ -261,6 +266,53 @@ def cmd_retry_failed_scrapes(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_seed_entities(_args: argparse.Namespace) -> int:
+    from app.data.entity_seed import seed_entities
+
+    db = SessionLocal()
+    try:
+        inserted, updated = seed_entities(db)
+    finally:
+        db.close()
+    print(f"Inserted {inserted} new entit(y/ies), updated {updated} existing one(s).")
+    print("See app/data/entity_seed.py's module docstring for what's confidently seeded vs. flagged gaps.")
+    return 0
+
+
+def cmd_backfill_entities(args: argparse.Namespace) -> int:
+    from app.processing.entities import backfill_entities
+
+    db = SessionLocal()
+    try:
+        result = backfill_entities(db, limit=args.limit, rescan_all=args.rescan_all)
+    finally:
+        db.close()
+    print(f"Scanned {result.scanned} article(s).")
+    print(f"Ran {result.new_mentions_classified} new sentiment classification(s) (skipped for pairs already scored).")
+    print(f"{result.remaining} article(s) still left to scan this mode.")
+    if result.remaining:
+        print("Run again (same flags) to continue.")
+    return 0
+
+
+def cmd_show_entities(args: argparse.Namespace) -> int:
+    from app.models import Entity
+
+    db = SessionLocal()
+    try:
+        entities = db.query(Entity).order_by(Entity.type, Entity.name).limit(args.limit).all()
+        if not entities:
+            print("No entities seeded yet. Run `python -m app.cli seed-entities` first.")
+            return 0
+        for e in entities:
+            alias_str = f" (aka {', '.join(e.aliases)})" if e.aliases else ""
+            mention_count = len(e.mentions)
+            print(f"#{e.id:<4d} [{e.type.value:6s}] {e.name}{alias_str} - {mention_count} article mention(s)")
+    finally:
+        db.close()
+    return 0
+
+
 def cmd_create_admin(args: argparse.Namespace) -> int:
     from app.auth.security import hash_password
     from app.models import Admin
@@ -350,6 +402,22 @@ def main() -> int:
     create_admin_parser.add_argument("--name", required=True)
     create_admin_parser.add_argument("--role", choices=["admin", "super_admin"], default="admin")
 
+    subparsers.add_parser("seed-entities", help="Upsert the Entity table from app/data/entity_seed.py")
+
+    backfill_entities_parser = subparsers.add_parser(
+        "backfill-entities", help="(Re-)run entity extraction against already-ingested, classified articles"
+    )
+    backfill_entities_parser.add_argument(
+        "--limit", type=int, default=None, help="Max articles to scan this run (default: no limit)"
+    )
+    backfill_entities_parser.add_argument(
+        "--rescan-all", action="store_true",
+        help="Re-scan every classified article, not just ones never scanned before (use after adding a new entity)",
+    )
+
+    show_entities_parser = subparsers.add_parser("show-entities", help="List seeded entities and their mention counts")
+    show_entities_parser.add_argument("--limit", type=int, default=100)
+
     args = parser.parse_args()
 
     if args.command == "ingest":
@@ -376,6 +444,12 @@ def main() -> int:
         return cmd_retry_failed_scrapes(args)
     if args.command == "create-admin":
         return cmd_create_admin(args)
+    if args.command == "seed-entities":
+        return cmd_seed_entities(args)
+    if args.command == "backfill-entities":
+        return cmd_backfill_entities(args)
+    if args.command == "show-entities":
+        return cmd_show_entities(args)
 
     parser.print_help()
     return 1

@@ -42,10 +42,48 @@
   {% endif %}
 </div>
 
-<div class="card">
-  <h2>Your decision</h2>
-  {% if error %}<div class="error">{{ error }}</div>{% endif %}
-  <form method="post" action="/admin/review/{{ article.id }}">
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<form method="post" action="/admin/review/{{ article.id }}">
+
+  {% if entity_mentions %}
+  <div class="card">
+    <h2>Entities mentioned ({{ entity_mentions|length }})</h2>
+    <p class="muted">
+      Sentiment toward each entity below is scored independently of the establishment tag above - an
+      anti-establishment article can still be favorable toward an entity it quotes approvingly.
+      {% if entity_mentions|length > 6 %}
+        This article mentions a lot of entities - the system's suggested sentiment is pre-selected for each;
+        spend your time on the ones that look wrong rather than re-checking every one.
+      {% endif %}
+    </p>
+    {% for ae in entity_mentions %}
+      <div style="padding:0.75rem 0; border-top:1px solid #e5e7eb;">
+        <p style="margin-bottom:0.4rem;">
+          <strong>{{ ae.entity.name }}</strong>
+          <span class="muted">{{ ae.entity.type.value }} - {{ ae.prominence.value }} mention, {{ ae.mention_count }}x{% if ae.in_headline %}, in headline{% endif %}</span>
+        </p>
+        <label>
+          <input type="radio" name="entity_sentiment_{{ ae.entity_id }}" value="favorable"
+            {% if ae.system_subject_sentiment.value == "favorable" %}checked{% endif %} style="width:auto; display:inline;">
+          Favorable
+        </label>
+        <label>
+          <input type="radio" name="entity_sentiment_{{ ae.entity_id }}" value="unfavorable"
+            {% if ae.system_subject_sentiment.value == "unfavorable" %}checked{% endif %} style="width:auto; display:inline;">
+          Unfavorable
+        </label>
+        <label>
+          <input type="radio" name="entity_sentiment_{{ ae.entity_id }}" value="neutral"
+            {% if ae.system_subject_sentiment.value == "neutral" %}checked{% endif %} style="width:auto; display:inline;">
+          Neutral
+        </label>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Your decision</h2>
     <label>
       <input type="radio" name="final_tag" value="pro-establishment"
         {% if system_tag.classification.value == "pro-establishment" %}checked{% endif %} style="width:auto; display:inline;">
@@ -63,6 +101,6 @@
     </label>
     <p class="muted">Leaving the pre-selected option and submitting confirms the system tag; picking a different one overrides it. Choose whichever tag actually reflects the article, regardless of what the system suggested.</p>
     <button class="btn btn-primary" type="submit" style="margin-top:0.5rem;">Submit decision</button>
-  </form>
-</div>
+  </div>
+</form>
 {% endblock %}

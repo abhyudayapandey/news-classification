@@ -121,6 +121,16 @@ class Article(Base):
     # link to read and classify it, which was the whole point).
     needs_manual_link_review: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
 
+    # --- Section 13.1 addition: entity tagging ---
+
+    # When app/processing/entities.py last (re-)scanned this article against
+    # the Entity table. NULL means "never scanned" - the default backfill
+    # target (app/processing/entities.backfill_entities) for articles
+    # ingested before this feature existed. Set every time a scan runs,
+    # including a re-scan, so "never scanned" stays a meaningful signal
+    # rather than a stale one.
+    entities_extracted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -135,4 +145,7 @@ class Article(Base):
     )
     reviews: Mapped[list["Review"]] = relationship(
         back_populates="article", cascade="all, delete-orphan", order_by="Review.timestamp"
+    )
+    entity_mentions: Mapped[list["ArticleEntity"]] = relationship(
+        back_populates="article", cascade="all, delete-orphan"
     )

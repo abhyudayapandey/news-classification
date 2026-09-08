@@ -19,7 +19,7 @@ from app.auth.session import get_current_admin, get_current_admin_optional, requ
 from app.config import settings
 from app.db import get_db
 from app.models import Admin, Article, Review
-from app.models.enums import AdminRole, ClassificationTag, ReviewDecision
+from app.models.enums import AdminRole, ClassificationTag, EntityProminence, ReviewDecision, SubjectSentiment
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
 from app.review.assignment import reassign_admin_queue
@@ -103,6 +103,47 @@ def _record_review(db: Session, article: Article, admin: Admin, final_tag: str) 
     )
     db.add(Review(article_id=article.id, admin_id=admin.id, final_tag=final_tag, decision=decision))
     article.published_tag = final_tag
+    db.commit()
+
+
+_ENTITY_SENTIMENT_FIELD_PREFIX = "entity_sentiment_"
+_VALID_SENTIMENT_VALUES = {s.value for s in SubjectSentiment}
+_PROMINENCE_SORT_ORDER = {EntityProminence.PRIMARY: 0, EntityProminence.SECONDARY: 1, EntityProminence.MENTIONED: 2}
+
+
+def _sorted_entity_mentions(article: Article) -> list:
+    """Most-central entities first, so an admin scanning a many-entity
+    article (see the review.html card's own note on this) at least sees
+    the entities most likely to matter before the incidental ones."""
+    return sorted(
+        article.entity_mentions,
+        key=lambda ae: (_PROMINENCE_SORT_ORDER[ae.prominence], -ae.mention_count),
+    )
+
+
+def _record_entity_sentiment_reviews(db: Session, article: Article, admin: Admin, submitted_by_entity_id: dict[int, str]) -> None:
+    """Section 13.2: folded into the SAME admin action that reviews the
+    article's establishment tag (submit_review / submit_manual_review),
+    per direct instruction - one submit records both axes, no second
+    queue. An entity missing from `submitted_by_entity_id` (the bulk-
+    confirm path never renders the full form at all) defaults to agreeing
+    with its system sentiment - the same "didn't open it, agreeing with
+    everything system-generated" semantics bulk-confirm already uses for
+    the establishment tag.
+    """
+    now = datetime.now(timezone.utc)
+    for ae in article.entity_mentions:
+        submitted = submitted_by_entity_id.get(ae.entity_id, ae.system_subject_sentiment.value)
+        if submitted not in _VALID_SENTIMENT_VALUES:
+            submitted = ae.system_subject_sentiment.value
+        ae.published_subject_sentiment = submitted
+        ae.subject_sentiment_decision = (
+            ReviewDecision.AGREED_WITH_SYSTEM
+            if submitted == ae.system_subject_sentiment.value
+            else ReviewDecision.OVERRODE
+        )
+        ae.subject_sentiment_reviewed_by_id = admin.id
+        ae.subject_sentiment_reviewed_at = now
     db.commit()
 
 
@@ -224,12 +265,13 @@ def review_article(
         blinded_body=blinded_body,
         body_source=body_source,
         system_tag=article.system_tag,
+        entity_mentions=_sorted_entity_mentions(article),
         overdue=hours_elapsed > settings.review_sla_hours,
     )
 
 
 @router.post("/review/{article_id}")
-def submit_review(
+async def submit_review(
     article_id: int,
     request: Request,
     final_tag: str = Form(...),
@@ -249,11 +291,24 @@ def submit_review(
         return render(
             request, "review.html", current_admin, status_code=400,
             article=article, blinded_headline=blinded_headline, blinded_body=blinded_body,
-            body_source=body_source, system_tag=article.system_tag, overdue=False,
+            body_source=body_source, system_tag=article.system_tag,
+            entity_mentions=_sorted_entity_mentions(article), overdue=False,
             error="Choose one of the tags.",
         )
 
+    # Entity sentiment radios use a dynamic field name per entity
+    # (entity_sentiment_<id>) since an article can carry any number of
+    # them - read via the raw form rather than a fixed set of Form(...)
+    # params, which can't express a per-article-variable field set.
+    form = await request.form()
+    submitted_by_entity_id = {
+        int(key[len(_ENTITY_SENTIMENT_FIELD_PREFIX):]): value
+        for key, value in form.items()
+        if key.startswith(_ENTITY_SENTIMENT_FIELD_PREFIX)
+    }
+
     _record_review(db, article, current_admin, final_tag)
+    _record_entity_sentiment_reviews(db, article, current_admin, submitted_by_entity_id)
     return RedirectResponse("/admin/queue", status_code=303)
 
 
@@ -281,6 +336,13 @@ def bulk_confirm(
         for article in db.scalars(stmt):
             if article.system_tag is not None:
                 _record_review(db, article, current_admin, article.system_tag.classification.value)
+                # No form was ever opened for this article, so there's
+                # nothing "submitted" for any of its entities either -
+                # an empty dict makes _record_entity_sentiment_reviews
+                # agree with the system sentiment for every one of them,
+                # consistent with what bulk-confirming already means for
+                # the establishment tag above.
+                _record_entity_sentiment_reviews(db, article, current_admin, {})
     return RedirectResponse("/admin/queue", status_code=303)
 
 
@@ -320,12 +382,13 @@ def manual_review_article(
     if article is None or not article.needs_manual_link_review or article.reviews or article.system_tag is None:
         return RedirectResponse("/admin/manual-review", status_code=303)
     return render(
-        request, "manual_review_detail.html", current_admin, article=article, system_tag=article.system_tag
+        request, "manual_review_detail.html", current_admin, article=article, system_tag=article.system_tag,
+        entity_mentions=_sorted_entity_mentions(article),
     )
 
 
 @router.post("/manual-review/{article_id}")
-def submit_manual_review(
+async def submit_manual_review(
     article_id: int,
     request: Request,
     final_tag: str = Form(...),
@@ -343,10 +406,19 @@ def submit_manual_review(
     ):
         return render(
             request, "manual_review_detail.html", current_admin, status_code=400,
-            article=article, system_tag=article.system_tag, error="Choose one of the tags.",
+            article=article, system_tag=article.system_tag,
+            entity_mentions=_sorted_entity_mentions(article), error="Choose one of the tags.",
         )
 
+    form = await request.form()
+    submitted_by_entity_id = {
+        int(key[len(_ENTITY_SENTIMENT_FIELD_PREFIX):]): value
+        for key, value in form.items()
+        if key.startswith(_ENTITY_SENTIMENT_FIELD_PREFIX)
+    }
+
     _record_review(db, article, current_admin, final_tag)
+    _record_entity_sentiment_reviews(db, article, current_admin, submitted_by_entity_id)
     return RedirectResponse("/admin/manual-review", status_code=303)
 
 

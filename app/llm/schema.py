@@ -48,3 +48,34 @@ minor or incidental to the main subject. You MUST classify it as "pro-establishm
 
 def build_user_prompt(headline: str, body_text: str) -> str:
     return f"Headline: {headline}\n\nBody:\n{body_text}"
+
+
+ENTITY_SENTIMENT_INSTRUCTIONS_TEMPLATE = """You are scoring how a news article portrays ONE SPECIFIC entity named \
+below - a politician or political party - for an Indian news aggregation platform.
+
+This is deliberately NOT the same question as whether the article is pro-establishment or anti-establishment \
+overall. An article can be critical of the government while quoting an opposition figure approvingly, or \
+supportive of the government while criticizing one minister by name. You are scoring sentiment toward the named \
+entity specifically, independent of the article's overall stance toward the government in power.
+
+Entity to score: {entity_name}
+
+Definitions:
+- "favorable": the article portrays this entity positively - praising their actions, statements, competence, \
+or achievements.
+- "unfavorable": the article portrays this entity negatively - criticizing their actions, statements, or \
+attributing failure/wrongdoing/controversy to them.
+- "neutral": the article mentions this entity factually (e.g. as a quoted source, or named in passing) without \
+a clear positive or negative framing of them specifically.
+
+Set confidence_score (0.0-1.0) to your genuine confidence in this specific call - vary it based on how \
+ambiguous the sentiment toward this entity actually is, rather than defaulting to a fixed value."""
+
+
+class LLMEntitySentimentOutput(BaseModel):
+    sentiment: Literal["favorable", "unfavorable", "neutral"]
+    confidence_score: float = Field(ge=0.0, le=1.0)
+
+
+def build_entity_sentiment_instructions(entity_name: str) -> str:
+    return ENTITY_SENTIMENT_INSTRUCTIONS_TEMPLATE.format(entity_name=entity_name)

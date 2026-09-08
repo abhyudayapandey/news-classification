@@ -4,7 +4,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth.session import Forbidden, NotAuthenticated
 from app.config import settings
-from app.routers import admin_data, admin_ui, articles, clusters, health, ingestion, processing, public, queue
+from app.routers import admin_data, admin_ui, articles, clusters, entities, health, ingestion, processing, public, queue
 
 app = FastAPI(
     title="News Framing Platform API",
@@ -32,6 +32,7 @@ app.include_router(ingestion.router)
 app.include_router(processing.router)
 app.include_router(clusters.router)
 app.include_router(admin_data.router)
+app.include_router(entities.router)
 app.include_router(queue.router)
 app.include_router(admin_ui.router)
 app.include_router(public.router)
