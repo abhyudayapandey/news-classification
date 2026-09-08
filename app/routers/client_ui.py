@@ -249,10 +249,20 @@ def client_entity_detail(
         youtube_mentions = [m for m in youtube_mentions if _matches_geo(m, geo_kind, geo_value)]
         x_mentions = [m for m in x_mentions if _matches_geo(m, geo_kind, geo_value)]
 
+    # Grouped into the same three framing columns the B2C public site uses
+    # (Section 8-9) - per direct instruction, the client's own News tab
+    # should look like what end users see, not one mixed list with an
+    # inline tag badge per card. Newest-first within each column, same
+    # order the query itself already returned.
+    pro_articles = [a for a in news_articles if a["published_tag"] == "pro-establishment"]
+    anti_articles = [a for a in news_articles if a["published_tag"] == "anti-establishment"]
+    apolitical_articles = [a for a in news_articles if a["published_tag"] == "apolitical"]
+
     return render(
         request, "client_entity_detail.html", current_client_user,
         entity=subject.entity, subject=subject,
         news_articles=news_articles, youtube_mentions=youtube_mentions, x_mentions=x_mentions,
+        pro_articles=pro_articles, anti_articles=anti_articles, apolitical_articles=apolitical_articles,
         social_range=social_range, social_ranges=SOCIAL_RANGES,
         geo_options=geo_options, selected_geo=selected_geo,
     )
