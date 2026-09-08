@@ -6,7 +6,7 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**Phases 1-6 are built**: project scaffolding and the full database schema
+**Phases 1-7 are built**: project scaffolding and the full database schema
 plus RSS ingestion with wire-copy dedup (Phase 1); embedding-based topic
 clustering and pro/anti/apolitical classification with jurisdiction/ruling-
 party resolution (Phase 2 — see §9); the login-gated admin/super-admin
@@ -15,9 +15,13 @@ oversight views (Phase 3 — see §12); the public end-user site - three
 framing columns, cross-outlet agreement/divergence, and date browsing
 (Phase 4 — see §13); entity tagging + subject-specific sentiment -
 the data-layer groundwork for a future B2B client portal, not the portal
-itself (Phase 5 — see §14); and social media listening (X + YouTube) with
+itself (Phase 5 — see §14); social media listening (X + YouTube) with
 per-client, per-entity cost controls on the metered X source - the
-platform's first genuinely metered-cost feature (Phase 6 — see §15).
+platform's first genuinely metered-cost feature (Phase 6 — see §15); and
+the actual B2B client portal - super-admin client/subject/access
+management plus a client-facing login and read-only social-listening
+dashboard, scoped so each client sees only their own tracked entities and
+their own contract (Phase 7 — see §16).
 
 ---
 
@@ -1488,7 +1492,128 @@ quota cost (YouTube) or real per-post-read dollar cost (X) by alias count
 tradeoffs already flagged in Phase 5 (§14.4), just for API cost instead of
 match precision.
 
-## 16. Known gaps carried over from the planning doc
+## 16. Phase 7: B2B Client Portal (Section 13.6)
+
+The actual portal Section 13.6 describes and Phase 5/6 deliberately kept
+deferring: a super admin can create a client, decide which entities they
+track and whether that includes metered X access with a ceiling, and
+issue them a login - and the client can log in and see exactly (and only)
+what they're entitled to. Scope: the admin-side CRUD and the client-facing
+login + read-only dashboard. Not built (still future phases, not asked
+for here): self-service signup, quote/invoice generation, sentiment or
+article-level content in the portal (this phase is social-listening data
+only), and any password-reset flow (a super admin resets a client's
+password the same way admin passwords are reset today - by setting a new
+one, there's no forgot-password email flow anywhere in this project).
+
+### 16.1 `ClientUser` - the login table Client's own docstring said didn't exist yet
+
+Client (Phase 6) and ClientSubject (Phase 6) already existed; `ClientUser`
+is new. One row per login, `client_id` FK to exactly one `Client` - a
+client can have zero, one, or several logins (e.g. two people at the same
+PR agency), and deactivating one login (`is_active=False`, same
+deactivate-don't-delete posture as `Admin`/`Client`) never touches the
+`Client` record or any other login on it. Password hashing reuses
+`app/auth/security.py` (bcrypt) unchanged - it was already a generic
+"verify a password against a stored hash" module, not something specific
+to `Admin`.
+
+### 16.2 Why client auth is a separate session key, not reused admin auth
+
+`app/auth/client_session.py` mirrors `app/auth/session.py`'s shape
+(`get_current_client_user` / `_optional`, a `ClientNotAuthenticated`
+exception) but is a genuinely separate module, not a shared one with a
+role check bolted on. Two reasons: a `ClientUser` and an `Admin` are
+different account types with no shared identity (there's no "the same
+login works for both" case to support), and an auth failure needs to
+redirect to a different login page (`/client/login` vs `/admin/login`) -
+`app/main.py` registers a separate exception handler per exception type
+for exactly that. The session key itself (`client_user_id` vs
+`admin_id`) is also different, and the client-side auth check clears only
+its own key on a stale/deactivated session
+(`request.session.pop("client_user_id", None)`) rather than the full
+`request.session.clear()` the admin side uses - defensive against the
+unlikely case of one browser somehow carrying both, at no real cost.
+
+Both the login itself and every live session are checked against
+`ClientUser.is_active` **and** `ClientUser.client.active` on every
+request, not just at login time - deactivating a login kills an already-
+open browser tab immediately (verified directly, not just future login
+attempts), and deactivating the client itself locks out every login it
+has, even ones that were perfectly valid a request ago. This is the same
+"live check, not cached" discipline Phase 6 applied to the X-fetch-gating
+decision, applied here to auth instead of billing.
+
+### 16.3 Admin side: `/admin/clients` (super-admin gated, like `/admin/social-costs`)
+
+Everything here was previously CLI-only (`create-client`,
+`add-client-subject`, `python -m app.cli social-cost-report`) - same
+underlying functions (`app.social.costs.grant_x_access` / `revoke_x_access`),
+now also reachable as web forms:
+
+- **`/admin/clients`** - list clients with entity/X-grant/login counts,
+  deactivate/reactivate.
+- **`/admin/clients/{id}`** - the main management page: add a tracked
+  entity (with or without granting X access + a monthly ceiling in the
+  same form submit), revoke X access or stop tracking an entity entirely,
+  and create/deactivate/reactivate client logins - all in one page, same
+  "one screen per client" shape as `/admin/admins` is for admin accounts.
+
+`status_for` (X-ceiling OK/APPROACHING/HIT/NO_ACCESS/NO_CEILING
+classification) was promoted from a private helper in `app/social/costs.py`
+to a shared public function once this page needed the same classification
+`list_client_cost_statuses` already computed - one function, two callers,
+rather than a second copy of the same comparison logic.
+
+### 16.4 Client side: `/client/*` (what the client actually sees)
+
+- **`/client/login`** - separate branded header ("... Client Portal", not
+  "News Review") from a `{% block header %}` added to `base.html` for
+  exactly this purpose - existing admin pages don't override it, so their
+  rendering is unchanged.
+- **`/client/dashboard`** - every entity this client tracks, whether X is
+  included for it, and - only where it is - their own current spend
+  against their own contracted ceiling. Never another client's data, and
+  never the cross-client aggregate `/admin/social-costs` shows - Section
+  13's "could never be the one shared on a client call" instruction was
+  about that internal screen specifically; a client seeing their *own*
+  usage against their *own* contract is a narrower, ordinary thing for a
+  paying customer's portal to show.
+- **`/client/entities/{id}`** - recent YouTube mentions (always, for any
+  tracked entity) and recent X mentions (**only** rendered into the page
+  at all when `ClientSubject.x_access` is true for that entity - verified
+  directly that the section is genuinely absent from the HTML, not merely
+  empty, when access isn't granted). Requesting an entity the client
+  doesn't track at all redirects to their dashboard rather than 404ing -
+  a 404 would confirm the entity exists in the system at all, which isn't
+  this client's business to know.
+
+### 16.5 Verifying this phase
+
+Same "no real network access, mocked/local test DB" approach as every
+prior phase (see §10) - `fastapi.testclient.TestClient` driving the real
+FastAPI app end-to-end through both the admin forms and the client login,
+against the local Postgres test database, no browser needed. Verified:
+admin-side CRUD is super-admin gated; a client granted X access on one
+entity and tracking-only on another sees exactly that distinction
+reflected on their dashboard and entity pages; the X section is absent
+(not empty) from the page HTML when access isn't granted; an untracked
+entity redirects rather than leaking its existence; deactivating a login
+invalidates its live session immediately, not just future logins; and
+deactivating the `Client` record itself locks out every login on it, not
+just the one being tested. Full existing regression suite (all prior
+phases) re-run with zero regressions.
+
+**Not free-tier relevant, flagged for correctness anyway**: dashboard and
+entity-page "current spend" default to `$0.0000` rather than crashing when
+`EntitySocialConfig` doesn't exist yet for an entity with X access granted
+but never fetched (`EntitySocialConfig` rows are created lazily on first
+fetch, per Phase 6 - a freshly-granted subject legitimately has none yet).
+Caught during manual walkthrough testing, not by the automated test file
+initially - since fixed and the automated test now asserts the `$0.0000`
+render explicitly rather than just checking for a 200 status.
+
+## 17. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology

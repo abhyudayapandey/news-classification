@@ -62,6 +62,7 @@
 </style>
 </head>
 <body>
+{% block header %}
 <header>
   <div>
     <span class="brand">News Review</span>
@@ -72,6 +73,7 @@
         <a href="/admin/reviews">Reviews</a>
         <a href="/admin/manual-review">Manual Review</a>
         <a href="/admin/social-costs">Social Costs</a>
+        <a href="/admin/clients">Clients</a>
       {% endif %}
     {% endif %}
   </div>
@@ -84,6 +86,7 @@
     </div>
   {% endif %}
 </header>
+{% endblock %}
 <main>
 {% block content %}{% endblock %}
 </main>

@@ -6,7 +6,8 @@ section for what's deliberately not built and why that's an acceptable
 POC-scale tradeoff, not an oversight.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,14 +19,20 @@ from app.auth.security import hash_password, verify_password
 from app.auth.session import get_current_admin, get_current_admin_optional, require_super_admin
 from app.config import settings
 from app.db import get_db
-from app.models import Admin, Article, Review
+from app.models import Admin, Article, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
 from app.models.enums import AdminRole, ClassificationTag, EntityProminence, ReviewDecision, SubjectSentiment
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
 from app.review.assignment import reassign_admin_queue
 from app.review.blinding import blind_headline_and_body
 from app.review.queries import ReviewFilters, query_reviews
-from app.social.costs import list_client_cost_statuses, list_entity_spend_summaries
+from app.social.costs import (
+    grant_x_access,
+    list_client_cost_statuses,
+    list_entity_spend_summaries,
+    revoke_x_access,
+    status_for,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin-ui"])
 templates = Jinja2Templates(directory="app/templates")
@@ -617,3 +624,216 @@ def social_costs(
         entity_summaries=list_entity_spend_summaries(db),
         client_statuses=list_client_cost_statuses(db),
     )
+
+
+# --- Super admin: B2B client CRUD (Section 13.6's actual portal) ---
+#
+# Everything below was previously CLI-only (create-client, add-client-
+# subject, python -m app.cli social-cost-report) - this is the same
+# underlying data (Client, ClientSubject, app.social.costs.grant_x_access/
+# revoke_x_access) exposed as web forms once a real end-to-end walkthrough
+# (create a client, grant/revoke X access, create their login, see their
+# dashboard) was asked for, rather than CLI-only interaction.
+
+
+@router.get("/clients", response_class=HTMLResponse)
+def list_clients(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+):
+    clients = db.query(Client).order_by(Client.created_at.asc()).all()
+    rows = [
+        {
+            "client": c,
+            "subject_count": len(c.subjects),
+            "x_grant_count": sum(1 for s in c.subjects if s.x_access),
+            "user_count": len(c.users),
+        }
+        for c in clients
+    ]
+    return render(request, "clients_list.html", current_admin, rows=rows, message=message, error=error)
+
+
+@router.get("/clients/new", response_class=HTMLResponse)
+def new_client_form(request: Request, current_admin: Admin = Depends(require_super_admin)):
+    return render(request, "client_form.html", current_admin)
+
+
+@router.post("/clients/new")
+def create_client(
+    name: str = Form(...),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    client = Client(name=name, contract_start=date.today())
+    db.add(client)
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client.id}?message=Created {name}.", status_code=303)
+
+
+@router.post("/clients/{client_id}/deactivate")
+def deactivate_client(client_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)):
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+    # Deactivate, don't delete - same posture as Admin.is_active (Phase 3).
+    # app/social/pipeline.py's live access check already excludes inactive
+    # clients, so this alone stops any further X spend on their grants
+    # without erasing what they used to have access to.
+    client.active = False
+    db.commit()
+    return RedirectResponse(f"/admin/clients?message=Deactivated {client.name}.", status_code=303)
+
+
+@router.post("/clients/{client_id}/reactivate")
+def reactivate_client(client_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)):
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+    client.active = True
+    db.commit()
+    return RedirectResponse(f"/admin/clients?message=Reactivated {client.name}.", status_code=303)
+
+
+@router.get("/clients/{client_id}", response_class=HTMLResponse)
+def client_detail(
+    client_id: int,
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+):
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+
+    subject_rows = []
+    for s in sorted(client.subjects, key=lambda s: s.entity.name):
+        config = db.get(EntitySocialConfig, s.entity_id)
+        current_spend = config.x_spend_usd if config is not None else Decimal("0")
+        subject_rows.append({
+            "entity": s.entity,
+            "x_access": s.x_access,
+            "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
+            "current_spend_usd": current_spend,
+            "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
+        })
+
+    tracked_entity_ids = {s.entity_id for s in client.subjects}
+    entities_query = db.query(Entity).order_by(Entity.name.asc())
+    if tracked_entity_ids:
+        entities_query = entities_query.filter(~Entity.id.in_(tracked_entity_ids))
+    available_entities = entities_query.all()
+
+    return render(
+        request, "client_detail.html", current_admin,
+        client=client, subject_rows=subject_rows, available_entities=available_entities,
+        client_users=sorted(client.users, key=lambda u: u.created_at),
+        message=message, error=error,
+    )
+
+
+@router.post("/clients/{client_id}/subjects/new")
+def add_client_subject(
+    client_id: int,
+    entity_id: int = Form(...),
+    grant_x: str | None = Form(default=None),
+    x_ceiling: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+
+    if grant_x == "1":
+        try:
+            ceiling = Decimal(x_ceiling) if x_ceiling.strip() else None
+        except InvalidOperation:
+            ceiling = None
+        if ceiling is None or ceiling <= 0:
+            return RedirectResponse(
+                f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
+                status_code=303,
+            )
+        grant_x_access(db, client_id, entity_id, ceiling)
+    else:
+        # Track without X access - same as the CLI's add-client-subject
+        # with no --x-ceiling: a real ClientSubject row exists (so the
+        # entity shows up on the client's dashboard, YouTube included),
+        # just with x_access left at its default False.
+        if db.get(ClientSubject, (client_id, entity_id)) is None:
+            db.add(ClientSubject(client_id=client_id, entity_id=entity_id))
+            db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Tracking updated.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/revoke")
+def revoke_client_subject(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    revoke_x_access(db, client_id, entity_id)
+    return RedirectResponse(f"/admin/clients/{client_id}?message=X access revoked.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/remove")
+def remove_client_subject(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        db.delete(subject)
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Stopped tracking that entity.", status_code=303)
+
+
+@router.post("/clients/{client_id}/users/new")
+def create_client_user(
+    client_id: int,
+    username: str = Form(...),
+    name: str = Form(...),
+    password: str = Form(...),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+    if db.query(ClientUser).filter(ClientUser.username == username).one_or_none() is not None:
+        return RedirectResponse(f"/admin/clients/{client_id}?error=Username already taken.", status_code=303)
+    try:
+        password_hash = hash_password(password)
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/clients/{client_id}?error={exc}", status_code=303)
+
+    db.add(ClientUser(client_id=client_id, username=username, name=name, password_hash=password_hash))
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Created login '{username}'.", status_code=303)
+
+
+@router.post("/clients/{client_id}/users/{user_id}/deactivate")
+def deactivate_client_user(
+    client_id: int, user_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    user = db.get(ClientUser, user_id)
+    if user is None or user.client_id != client_id:
+        return RedirectResponse(f"/admin/clients/{client_id}", status_code=303)
+    user.is_active = False
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Deactivated login '{user.username}'.", status_code=303)
+
+
+@router.post("/clients/{client_id}/users/{user_id}/reactivate")
+def reactivate_client_user(
+    client_id: int, user_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    user = db.get(ClientUser, user_id)
+    if user is None or user.client_id != client_id:
+        return RedirectResponse(f"/admin/clients/{client_id}", status_code=303)
+    user.is_active = True
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Reactivated login '{user.username}'.", status_code=303)

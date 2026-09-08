@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}B2B Clients{% endblock %}
+{% block content %}
+<h1>B2B clients</h1>
+<p><a class="btn btn-primary" href="/admin/clients/new">+ New client</a></p>
+
+{% if message %}<div class="success">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% if not rows %}
+<p class="muted">No clients yet.</p>
+{% else %}
+<div class="card" style="padding:0;">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Status</th><th>Tracked entities</th><th>X grants</th><th>Logins</th><th>Created</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><a href="/admin/clients/{{ r.client.id }}">{{ r.client.name }}</a></td>
+        <td>
+          {% if r.client.active %}<span class="badge badge-ok">active</span>
+          {% else %}<span class="badge badge-overdue">inactive</span>{% endif %}
+        </td>
+        <td>{{ r.subject_count }}</td>
+        <td>{{ r.x_grant_count }}</td>
+        <td>{{ r.user_count }}</td>
+        <td class="muted">{{ r.client.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <a class="btn" href="/admin/clients/{{ r.client.id }}">Manage</a>
+          {% if r.client.active %}
+          <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/deactivate">
+            <button class="btn btn-danger" type="submit" onclick="return confirm('Deactivate {{ r.client.name }}? Their X access grants will stop triggering new fetches.');">Deactivate</button>
+          </form>
+          {% else %}
+          <form class="inline" method="post" action="/admin/clients/{{ r.client.id }}/reactivate">
+            <button class="btn" type="submit">Reactivate</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

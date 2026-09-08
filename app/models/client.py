@@ -11,9 +11,13 @@ class Client(Base):
     identity record. Built now, ahead of the portal itself, because
     per-client social-listening access (ClientSubject.x_access, this
     phase) has nowhere to attach without it - NOT a signal that the portal
-    (login accounts, client-facing dashboards) is starting now. There is
-    deliberately no ClientUser here yet (Section 13.6's login-account
-    table) - nothing in this phase needs a client to ever log in.
+    (login accounts, client-facing dashboards) is starting now.
+
+    ClientUser (Section 13.6's login-account table) was added in a later
+    pass once the actual portal - admin-side client/subject management and
+    a client-facing login + dashboard, see app/routers/client_ui.py - was
+    asked for. A client can have zero, one, or several ClientUser logins;
+    deactivating a login doesn't touch the Client record itself.
 
     `active=False` (rather than deleting a row) is the same "deactivate,
     don't hard-delete" posture as Admin (Phase 3) - a cancelled client's
@@ -32,3 +36,4 @@ class Client(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     subjects: Mapped[list["ClientSubject"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    users: Mapped[list["ClientUser"]] = relationship(back_populates="client", cascade="all, delete-orphan")
