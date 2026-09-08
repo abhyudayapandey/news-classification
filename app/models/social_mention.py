@@ -51,7 +51,7 @@ class SocialMention(Base):
     # (Section 13.2) - favorable/unfavorable/neutral toward the entity this
     # mention is about, not the platform's separate pro/anti-establishment
     # framing axis. Nullable: only ever set at storage time for a NEWLY
-    # fetched mention (app/social/pipeline.py's _store_new_mentions) - never
+    # fetched mention (app/social/pipeline.py's store_new_mentions) - never
     # backfilled automatically for rows stored before this column existed.
     # Deliberately no review/approval workflow yet, unlike the article axis'
     # admin-reviewed published_subject_sentiment - this is system-generated
@@ -74,7 +74,7 @@ class SocialMention(Base):
     # constituency/seat_type (app/processing/geography.py), guessed from
     # `content_text` at storage time - never from anything assigned to the
     # Entity this mention is about. Set once when a mention is newly
-    # stored (app/social/pipeline.py's _store_new_mentions), same "never
+    # stored (app/social/pipeline.py's store_new_mentions), same "never
     # re-computed on re-fetch" discipline as sentiment above.
     state: Mapped[str | None] = mapped_column(String(128), nullable=True)
     district: Mapped[str | None] = mapped_column(String(128), nullable=True)

@@ -1382,7 +1382,7 @@ a request for fewer than 10 still returns, and bills, up to 10, a
 cost-relevant floor worth stating rather than silently clamping around).
 The cost accrued to `EntitySocialConfig.x_spend_usd` is
 `x_cost_per_post_usd * len(mentions)` computed from the **raw** API
-response, before deduplication - `app/social/pipeline.py::_store_new_mentions`
+response, before deduplication - `app/social/pipeline.py::store_new_mentions`
 then separately dedupes by URL for storage. A post already stored from an
 earlier fetch is still billed again if a later recent-search call
 re-returns it; the per-row `SocialMention.cost_usd` and the entity-level

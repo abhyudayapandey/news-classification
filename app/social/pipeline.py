@@ -67,7 +67,7 @@ def _entity_has_active_x_access(db: Session, entity_id: int) -> bool:
     return db.execute(stmt).first() is not None
 
 
-def _store_new_mentions(
+def store_new_mentions(
     db: Session,
     entity: Entity,
     source: SocialSource,
@@ -169,7 +169,7 @@ def fetch_social_for_entity(
         try:
             mentions = youtube_fetcher.fetch(entity, max_results, lookback_days)
             result.youtube_posts_read = len(mentions)
-            result.youtube_new_mentions = _store_new_mentions(
+            result.youtube_new_mentions = store_new_mentions(
                 db, entity, SocialSource.YOUTUBE, mentions, Decimal("0"), sentiment_provider
             )
             config.youtube_last_fetched_at = datetime.now(timezone.utc)
@@ -199,7 +199,7 @@ def fetch_social_for_entity(
             config.x_spend_usd = config.x_spend_usd + incurred
             config.x_last_fetched_at = datetime.now(timezone.utc)
             result.x_posts_read = len(mentions)
-            result.x_new_mentions = _store_new_mentions(
+            result.x_new_mentions = store_new_mentions(
                 db, entity, SocialSource.X, mentions, cost_per_item, sentiment_provider
             )
             result.x_cost_incurred_usd = incurred
@@ -208,6 +208,57 @@ def fetch_social_for_entity(
             result.errors.append(f"x: {exc}")
 
     return result
+
+
+def fetch_youtube_historical(
+    db: Session,
+    entity: Entity,
+    published_before: datetime,
+    published_after: datetime | None = None,
+    max_results: int | None = None,
+    youtube_fetcher: SocialFetcher | None = None,
+    sentiment_provider: EntitySentimentProvider | None = None,
+) -> int:
+    """A deliberately separate entry point from fetch_social_for_entity
+    above, not a parameter bolted onto it: that function's whole shape is
+    "what's new since last check" (per-entity config, cost-ledger
+    updates, batched across every tracked entity) for the regular
+    scheduled scan, whereas this is a one-off, explicitly-scoped "give me
+    this entity's coverage from this historical window" pull for one
+    entity at a time - genuinely different callers, both in when they'd
+    be invoked and in what they need to know.
+
+    Free tier, same as any other YouTube call - no cost-ledger touched
+    (that only exists for X). `published_after` narrows the window
+    further, still no artificial cutoff at 7 days the way X's recent-
+    search endpoint has - YouTube's search.list accepts any
+    publishedBefore/publishedAfter range.
+
+    Returns how many mentions were newly stored (already-stored URLs in
+    the window are skipped, same idempotency as every other fetch path).
+    """
+    if youtube_fetcher is None:
+        from app.social.youtube import YouTubeFetcher
+
+        youtube_fetcher = YouTubeFetcher()
+    if sentiment_provider is None:
+        from app.llm.factory import get_entity_sentiment_provider
+
+        sentiment_provider = get_entity_sentiment_provider()
+
+    lookback_days = None
+    if published_after is not None:
+        lookback_days = max((published_before - published_after).days, 0)
+
+    mentions = youtube_fetcher.fetch(
+        entity,
+        max_results or settings.social_fetch_max_results_per_entity,
+        lookback_days=lookback_days,
+        published_before=published_before,
+    )
+    new_count = store_new_mentions(db, entity, SocialSource.YOUTUBE, mentions, Decimal("0"), sentiment_provider)
+    db.commit()
+    return new_count
 
 
 @dataclass

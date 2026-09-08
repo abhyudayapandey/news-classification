@@ -4,6 +4,8 @@ which has no interactive shell. Same unauthenticated-debug-endpoint caveat
 as the other routers here: not the Phase 3 admin API.
 """
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -12,9 +14,10 @@ from app.auth.security import hash_password
 from app.data.entity_seed import seed_entities
 from app.data.jurisdiction_seed import seed_jurisdictions
 from app.db import get_db
-from app.models import Admin
+from app.models import Admin, Entity
 from app.models.enums import AdminRole
 from app.social.backfill import backfill_social_mentions
+from app.social.pipeline import fetch_youtube_historical
 
 router = APIRouter(prefix="/admin-data", tags=["admin-data"])
 
@@ -61,6 +64,39 @@ def trigger_backfill_social_mentions(
         "errors": result.errors,
         "note": "X engagement is not backfilled here - it would mean a fresh, separately-billed X API read.",
     }
+
+
+@router.post("/fetch-youtube-historical")
+def trigger_fetch_youtube_historical(
+    entity_id: int = Query(...),
+    before: str = Query(..., description="ISO date/datetime - only videos published before this"),
+    after: str | None = Query(default=None, description="ISO date/datetime - only videos published after this"),
+    max_results: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """HTTP counterpart to `python -m app.cli fetch-youtube-historical` -
+    same Render-has-no-shell reasoning as this module's other endpoints.
+    Unlike X's recent-search (hard-capped to the last 7 days by the
+    endpoint itself), YouTube's search.list accepts an arbitrary
+    publishedBefore/publishedAfter window, so this genuinely reaches
+    further back than the regular fetch-social scan can - see
+    app/social/pipeline.py's fetch_youtube_historical for why this is a
+    separate, single-entity entry point rather than a parameter on the
+    regular multi-entity scan.
+    """
+    entity = db.get(Entity, entity_id)
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"No entity with id={entity_id}")
+    try:
+        published_before = datetime.fromisoformat(before).replace(tzinfo=timezone.utc)
+        published_after = datetime.fromisoformat(after).replace(tzinfo=timezone.utc) if after else None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid date: {exc}") from exc
+
+    new_count = fetch_youtube_historical(
+        db, entity, published_before, published_after=published_after, max_results=max_results,
+    )
+    return {"entity": entity.name, "new_mentions_stored": new_count}
 
 
 class BootstrapSuperAdminRequest(BaseModel):

@@ -20,6 +20,7 @@ Usage:
     python -m app.cli show-clients        # Phase 6: list clients
     python -m app.cli add-client-subject  # Phase 6: have a client track an entity, optionally with X access
     python -m app.cli fetch-social        # Phase 6: fetch YouTube/X mentions for tracked entities
+    python -m app.cli fetch-youtube-historical # Phase 6: fetch one entity's YouTube coverage from a specific past window
     python -m app.cli backfill-social-mentions # Phase 6: re-score sentiment/geography + real YouTube view counts for pre-existing rows
     python -m app.cli social-cost-report  # Phase 6: super-admin cost view
 """
@@ -398,6 +399,31 @@ def cmd_fetch_social(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch_youtube_historical(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    from app.models import Entity
+    from app.social.pipeline import fetch_youtube_historical
+
+    db = SessionLocal()
+    try:
+        entity = db.get(Entity, args.entity_id)
+        if entity is None:
+            print(f"No entity with id={args.entity_id}")
+            return 1
+        published_before = datetime.fromisoformat(args.before).replace(tzinfo=timezone.utc)
+        published_after = (
+            datetime.fromisoformat(args.after).replace(tzinfo=timezone.utc) if args.after else None
+        )
+        new_count = fetch_youtube_historical(
+            db, entity, published_before, published_after=published_after, max_results=args.max_results,
+        )
+    finally:
+        db.close()
+    print(f"New YouTube mentions stored for {entity.name}: {new_count}")
+    return 0
+
+
 def cmd_backfill_social_mentions(args: argparse.Namespace) -> int:
     from app.social.backfill import backfill_social_mentions
 
@@ -570,6 +596,15 @@ def main() -> int:
     )
     fetch_social_parser.add_argument("--limit", type=int, default=None, help="Max entities to scan this run")
 
+    fetch_yt_historical_parser = subparsers.add_parser(
+        "fetch-youtube-historical",
+        help="Fetch YouTube videos for one entity from a specific historical window (unlike X, not capped to the last 7 days)",
+    )
+    fetch_yt_historical_parser.add_argument("--entity-id", type=int, required=True)
+    fetch_yt_historical_parser.add_argument("--before", required=True, help="ISO date/datetime - only videos published before this")
+    fetch_yt_historical_parser.add_argument("--after", default=None, help="ISO date/datetime - only videos published after this (optional)")
+    fetch_yt_historical_parser.add_argument("--max-results", type=int, default=None)
+
     backfill_social_parser = subparsers.add_parser(
         "backfill-social-mentions",
         help="Re-score sentiment/geography and re-fetch real YouTube view counts for SocialMention rows stored before those existed",
@@ -620,6 +655,8 @@ def main() -> int:
         return cmd_add_client_subject(args)
     if args.command == "fetch-social":
         return cmd_fetch_social(args)
+    if args.command == "fetch-youtube-historical":
+        return cmd_fetch_youtube_historical(args)
     if args.command == "backfill-social-mentions":
         return cmd_backfill_social_mentions(args)
     if args.command == "social-cost-report":
