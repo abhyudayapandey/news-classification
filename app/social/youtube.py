@@ -31,7 +31,13 @@ class YouTubeFetcher(SocialFetcher):
         if not self.api_key:
             raise ValueError("YOUTUBE_API_KEY is not set - required to use YouTubeFetcher.")
 
-    def fetch(self, entity: Entity, max_results: int, lookback_days: int | None = None) -> list[FetchedMention]:
+    def fetch(
+        self,
+        entity: Entity,
+        max_results: int,
+        lookback_days: int | None = None,
+        published_before: datetime | None = None,
+    ) -> list[FetchedMention]:
         # Query on the canonical name only, not every alias - querying N
         # aliases would mean N searches (and N x the quota cost) for one
         # entity. A deliberate coverage-vs-cost tradeoff, same shape as
@@ -52,6 +58,14 @@ class YouTubeFetcher(SocialFetcher):
         if lookback_days is not None:
             since = datetime.now(timezone.utc) - timedelta(days=lookback_days)
             params["publishedAfter"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Unlike X's recent-search (hard-capped to the last 7 days by the
+        # endpoint itself), YouTube's search.list accepts an arbitrary
+        # publishedBefore/publishedAfter range - there's no API-tier wall
+        # to genuinely historical YouTube search, just this parameter.
+        # None (the default) means "no upper bound", i.e. today's existing
+        # behavior is unchanged for every caller that doesn't pass it.
+        if published_before is not None:
+            params["publishedBefore"] = published_before.strftime("%Y-%m-%dT%H:%M:%SZ")
         response = requests.get(_SEARCH_URL, params=params, timeout=_REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         items = response.json().get("items", [])
@@ -70,9 +84,20 @@ class YouTubeFetcher(SocialFetcher):
                 published_at = datetime.fromisoformat(snippet["publishedAt"].replace("Z", "+00:00")).astimezone(
                     timezone.utc
                 )
+            # Title + description, not title alone - both come free in the
+            # same part=snippet response already being paid for (100 units
+            # regardless), and the description is real additional signal
+            # for sentiment/geography scoring that was simply being
+            # discarded before. Title is kept first and on its own line
+            # since it's the more reliable, human-written signal; a video
+            # with no description just falls back to the title alone.
+            content_text = snippet.get("title", "")
+            description = snippet.get("description", "").strip()
+            if description:
+                content_text = f"{content_text}\n{description}"
             mentions.append(
                 FetchedMention(
-                    content_text=snippet.get("title", ""),
+                    content_text=content_text,
                     author=snippet.get("channelTitle"),
                     posted_at=published_at,
                     url=f"https://www.youtube.com/watch?v={video_id}",

@@ -1,6 +1,6 @@
 """One-off backfill for SocialMention rows stored before engagement_count/
 sentiment/geography existed. Deliberately separate from the normal fetch
-path (app/social/pipeline.py's _store_new_mentions): that function only
+path (app/social/pipeline.py's store_new_mentions): that function only
 ever sets these fields for a row it's inserting for the first time, by
 design (see SocialMention's and EntitySocialConfig's docstrings on why a
 re-fetched-but-already-stored post is never re-scored) - this module is
