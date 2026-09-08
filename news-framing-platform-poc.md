@@ -200,3 +200,112 @@ Apolitical articles appear under their topic without framing tags.
 - Website only, API-first backend
 - Three end-user sections per story: Pro-Establishment / Anti-Establishment / Primary Source
 - Super admin oversight view
+
+---
+
+## 13. B2B Direction — Entity Tagging & Subject Framing (Post-Launch)
+
+**Context:** Beyond the consumer site, a B2B use case emerged: PR and political-consultancy agencies want to track how a specific **subject** (a person or party) is covered across outlets over time — not just how a story is framed. This requires two new capabilities, plus a third that's explicitly parked.
+
+### 13.1 Entity Tagging (near-term, natural extension)
+
+The Phase 2 entity-trigger net (MLA/MP names, party names, ministries) already does informal entity detection — used today only as a binary trigger for the apolitical safety net. This phase promotes entity detection into a first-class, queryable data model.
+
+**New data model:**
+
+```
+Entity
+ ├── id
+ ├── name
+ ├── type                  (person / party)
+ ├── aliases[]             (name variants, e.g. "PM Modi" / "Narendra Modi")
+ └── metadata               (party affiliation if type=person, jurisdiction if relevant)
+
+ArticleEntity  (many-to-many join)
+ ├── article_id
+ ├── entity_id
+ └── prominence             (optional: is this entity central to the article, or an incidental mention?)
+```
+
+- Entity extraction runs as a new pipeline stage, likely reusing the same embedding/NER approach already in place for the trigger net, extended to store results rather than just act as a filter.
+- `prominence` matters: a subject mentioned once in passing is a different signal than a subject the article is actually about. Worth deciding a simple heuristic (e.g., mention count, position in text, headline presence) rather than skipping this distinction.
+- This enables the core B2B query: "show me every article about Subject X, across all outlets, over time period Y."
+
+### 13.2 Subject-Specific Framing Axis (near-term, needs design judgment)
+
+**The core issue:** the existing pro/anti-establishment axis measures framing *relative to the government in power* — not framing relative to a specific subject. An article can be anti-establishment while being complimentary toward a specific opposition figure who is the one criticizing the government. These are two different axes and both matter to a PR client.
+
+**Proposed addition:**
+
+```
+ArticleEntity (extended)
+ ├── article_id
+ ├── entity_id
+ ├── prominence
+ └── subject_sentiment      (favorable / unfavorable / neutral — toward THIS entity specifically,
+                               independent of the article's establishment tag)
+```
+
+- This is a second, independent classification pass — same pipeline shape as the existing classifier (system-generated, then admin-reviewed blind), but scored per-entity rather than per-article, since one article can mention multiple entities with different sentiment toward each.
+- Naming deliberately avoids "pro/anti" for this axis, to keep it visually and conceptually distinct from the establishment tags — this is closer to conventional sentiment analysis, and should read as such, not be confused with the platform's core establishment framing.
+- Review workflow question to resolve before building: does this get its own admin review queue, or get folded into the existing per-article review screen (reviewing both axes at once)? Leaning toward folding in, to avoid doubling review load — worth confirming once volume is known.
+
+### 13.3 Social Media Listening (explicitly parked, not scoped)
+
+Raised by a PR-agency contact as a desired feature. Deliberately **not** treated as a natural extension of the platform — flagged as a different product with different economics:
+
+- Different data pipeline entirely (X/Meta APIs, not RSS) — meaningful API costs at any real volume, breaking the platform's $0-infrastructure approach.
+- A mature, well-funded competitive category already (Brandwatch, Sprinklr, Talkwalker, Meltwater) — little differentiation available here versus incumbents.
+- **Preferred direction if this comes up again:** position the platform's framing data as a complement to a client's *existing* social listening tool, rather than building a competing one. Revisit only if a paying client specifically funds it.
+
+### 13.4 Other Monetization Directions Discussed (for reference)
+
+- Data licensing to press-freedom/research institutions — smaller revenue, strong credibility value for funding narrative.
+- Brand-safety signal for ad tech.
+- Political-risk signal for market/investment intelligence (larger budgets, more sophisticated sales motion — not near-term).
+- Election-cycle monitoring engagements for civil-society/election-monitoring bodies.
+- Licensing to journalism schools for media-literacy education (credibility/goodwill, not primary revenue).
+- API/data licensing to other media-tech products ("picks and shovels" model).
+- Newsroom self-benchmarking (unusual sell — pitching the outlets being evaluated).
+
+### 13.5 Legal Flag — Commercialization Raises the Stakes
+
+The JSON-LD paywall-extraction tradeoff (Section 4, addendum below) was accepted as a POC-stage risk on the basis that extracted content is **never shown to end users**. Selling B2B insights derived from that same content is a materially different position — commercial benefit from paywall-bypassed content is harder to defend than free internal-only classification. **A real legal opinion is needed before committing to the B2B direction**, not deferred further once this becomes a paid product.
+
+---
+
+### 13.6 Client Portal (B2B-facing, separate from Admin)
+
+**Structural decision:** the client portal is a **separate application surface** from the internal Admin/Super Admin dashboard — not a section within it. Admins are trusted internal reviewers; B2B clients are external paying customers. Same underlying data, different login system, different access surface, kept structurally distinct to avoid permission creep and to keep "admin" meaning one thing.
+
+**Data model:**
+
+```
+Client
+ ├── id, name, contract_start, active
+
+ClientUser                (login accounts for the client's own team)
+ ├── id, client_id, email, password_hash
+
+ClientSubject             (many-to-many: a client can track multiple entities;
+                              an entity, e.g. a party, can be tracked by multiple clients)
+ ├── client_id, entity_id, added_at, backfilled (bool)
+```
+
+Client portal queries filter strictly through: `published articles ↔ ArticleEntity ↔ Entity ↔ ClientSubject ↔ Client`, scoped to the logged-in client's own subjects only. Tenant isolation enforced at the query layer, not just the UI.
+
+**Onboarding flow:**
+1. Client tells you who/what they want tracked (a person, a party, possibly several).
+2. **Human check before going live:** a super admin confirms or creates the corresponding `Entity` (with correct aliases) rather than auto-creating one from whatever string the client typed — avoids ambiguous-name mismatches (e.g., common first names, regional figures sharing a name with someone more prominent).
+3. Once the `Entity` exists and is linked via `ClientSubject`, a **one-time backfill scan** runs against already-ingested articles for that entity, so the client sees historical coverage, not just coverage from the moment they signed up.
+4. Going forward, the entity is part of standard extraction — no special-casing needed once seeded.
+
+**Review standard:** the client portal shows **`published_tag`-based data only** — same reviewed-only standard as the B2C site. No unreviewed/system-tag-only articles are surfaced, to keep both products credible and consistent rather than having B2B trade accuracy for speed.
+
+**Operational note:** since B2B clients may care about turnaround more than B2C readers do, admins need visibility into which pending articles relate to a paying client's tracked subject, so review priority isn't dependent on a side conversation. Recommend a simple visual flag/badge in the admin queue showing linked client subject(s) on relevant articles — priority made legible in the tool itself, not held only in the founder's memory.
+
+---
+
+### Addendum to Section 4 — Paywall Content Handling (decided post-launch)
+
+For outlets that paywall content, the platform extracts full text via the JSON-LD block served to search crawlers, for **internal classification purposes only**. This content is never surfaced to end users, who only ever see the RSS teaser plus a link to the outlet's own site. This is accepted as a deliberate POC-stage tradeoff — the alternative (paying for subscriptions to every ingested outlet) isn't viable for a self-funded POC — and is to be revisited before any public launch expansion, funding due diligence, or (per Section 13.5) B2B commercialization.

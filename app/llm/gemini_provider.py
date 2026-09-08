@@ -9,9 +9,16 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
-from app.llm.base import ClassificationProvider, ClassificationResult
-from app.llm.schema import CLASSIFICATION_INSTRUCTIONS, FORCE_RELEVANT_INSTRUCTIONS, LLMClassificationOutput, build_user_prompt
-from app.models.enums import ClassificationTag
+from app.llm.base import ClassificationProvider, ClassificationResult, EntitySentimentProvider, EntitySentimentResult
+from app.llm.schema import (
+    CLASSIFICATION_INSTRUCTIONS,
+    FORCE_RELEVANT_INSTRUCTIONS,
+    LLMClassificationOutput,
+    LLMEntitySentimentOutput,
+    build_entity_sentiment_instructions,
+    build_user_prompt,
+)
+from app.models.enums import ClassificationTag, SubjectSentiment
 
 logger = logging.getLogger(__name__)
 
@@ -49,3 +56,32 @@ class GeminiClassificationProvider(ClassificationProvider):
         if result.classification == ClassificationTag.APOLITICAL:
             logger.warning("Gemini ignored FORCE_RELEVANT_INSTRUCTIONS and returned apolitical for %r", headline)
         return result
+
+
+class GeminiEntitySentimentProvider(EntitySentimentProvider):
+    """Section 13.2. Same billing posture as GeminiClassificationProvider
+    above. See app/llm/local_entity_sentiment.py's module docstring for
+    the "one call per entity, not per article" cost this multiplies by.
+    """
+
+    def __init__(self, model: str | None = None, api_key: str | None = None):
+        self.model = model or settings.gemini_model
+        self.name = f"gemini:{self.model}"
+        resolved_key = api_key or settings.gemini_api_key
+        if not resolved_key:
+            raise ValueError("GEMINI_API_KEY is not set - required to use the gemini entity-sentiment provider.")
+        self._client = genai.Client(api_key=resolved_key)
+
+    def classify_subject_sentiment(self, headline: str, body_text: str, entity_name: str) -> EntitySentimentResult:
+        response = self._client.models.generate_content(
+            model=self.model,
+            contents=f"{build_entity_sentiment_instructions(entity_name)}\n\n{build_user_prompt(headline, body_text)}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=LLMEntitySentimentOutput,
+            ),
+        )
+        parsed: LLMEntitySentimentOutput = response.parsed
+        return EntitySentimentResult(
+            sentiment=SubjectSentiment(parsed.sentiment), confidence_score=parsed.confidence_score
+        )

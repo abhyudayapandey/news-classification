@@ -10,7 +10,7 @@ for the resource tradeoffs behind each implementation.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from app.models.enums import ClassificationTag
+from app.models.enums import ClassificationTag, SubjectSentiment
 
 
 class EmbeddingProvider(ABC):
@@ -61,4 +61,34 @@ class ClassificationProvider(ABC):
         Must return pro-establishment or anti-establishment - never
         apolitical - with a resolved (non-None) jurisdiction.
         """
+        raise NotImplementedError
+
+
+@dataclass
+class EntitySentimentResult:
+    sentiment: SubjectSentiment
+    confidence_score: float
+
+
+class EntitySentimentProvider(ABC):
+    """Section 13.2's subject-specific sentiment axis - same provider-
+    swappable pattern as ClassificationProvider above (a new classification
+    target, not a new architecture), scored per-entity rather than
+    per-article since one article can mention several entities with
+    different sentiment toward each. Deliberately a separate interface
+    from ClassificationProvider, not an extra method bolted onto it: this
+    axis needs the entity's name as extra input, and keeping the two
+    interfaces apart is what makes it structurally impossible to confuse
+    "pro/anti-establishment" (relative to the government in power) with
+    "favorable/unfavorable" (relative to one specific entity) - see
+    app/models/article_entity.py's module docstring for why that
+    distinction matters.
+    """
+
+    #: Value stored in ArticleEntity.subject_sentiment_provider, same
+    #: naming convention as ClassificationProvider.name.
+    name: str
+
+    @abstractmethod
+    def classify_subject_sentiment(self, headline: str, body_text: str, entity_name: str) -> EntitySentimentResult:
         raise NotImplementedError

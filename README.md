@@ -6,14 +6,16 @@ admin review layer. See `news-framing-platform-poc.md` (the planning doc)
 for the full product design — this README covers what's actually built and
 how to run it.
 
-**Phases 1-4 are built**: project scaffolding and the full database schema
+**Phases 1-5 are built**: project scaffolding and the full database schema
 plus RSS ingestion with wire-copy dedup (Phase 1); embedding-based topic
 clustering and pro/anti/apolitical classification with jurisdiction/ruling-
 party resolution (Phase 2 — see §9); the login-gated admin/super-admin
 review UI - queueing, blinding, confirm/override, account management, and
-oversight views (Phase 3 — see §12); and the public end-user site - three
+oversight views (Phase 3 — see §12); the public end-user site - three
 framing columns, cross-outlet agreement/divergence, and date browsing
-(Phase 4 — see §13).
+(Phase 4 — see §13); and entity tagging + subject-specific sentiment -
+the data-layer groundwork for a future B2B client portal, not the portal
+itself (Phase 5 — see §14).
 
 ---
 
@@ -1113,7 +1115,198 @@ structurally never one of the options at all.
 done, one clearly marked placeholder left for methodology copy still to
 be written directly, not drafted here.
 
-## 14. Known gaps carried over from the planning doc
+## 14. Phase 5: Entity Tagging & Subject Sentiment (Section 13.1-13.2)
+
+The data-layer groundwork for the future B2B client portal (Section
+13.6) - **not the portal itself**, which stays a later, separate phase
+with no client-facing tables or UI yet. What's here: two new tables, a
+new pipeline stage, a new provider interface, and both folded into the
+existing admin review screen rather than a second queue.
+
+### 14.1 Entity + ArticleEntity data model
+
+`Entity` (id, name, type `person`/`party`, `aliases[]`, `entity_metadata`
+JSONB) and `ArticleEntity` (a real many-to-many join, composite
+`(article_id, entity_id)` primary key - an article has at most one
+prominence/sentiment record per entity, repeated mentions accumulate into
+that one row rather than creating more). Promoted out of
+`app/processing/entity_triggers.py`, which only ever detected *that* some
+political entity was present (a binary trigger for the apolitical safety
+net, Section 4.3) - never *which* one. That trigger net is completely
+unchanged and still does its own job; this is a separate, queryable
+record of specific entities.
+
+### 14.2 Prominence heuristic (Section 13.1's "worth deciding a simple
+heuristic")
+
+Three signals, each cheap and explainable, combine into a 0-8 score:
+
+- **+3** if the entity is named in the headline - the strongest single
+  signal, since headlines are written to name the article's actual
+  subject.
+- **+1 per mention, capped at 3** - repeated mentions matter, but a 10th
+  mention isn't 10x more meaningful than a 3rd.
+- **+2** if the first mention falls in the first third of the combined
+  (headline + body) text, **+1** in the middle third, **+0** in the last
+  third - an entity introduced early is more likely the actual subject
+  than one that shows up as a late aside.
+
+Score >= 5 -> `primary`, >= 2 -> `secondary`, else `mentioned`. Like
+`CLUSTERING_SIMILARITY_THRESHOLD` and the softmax temperature in
+`app/llm/similarity.py`, these thresholds are a reasonable starting point,
+not a validated one - there's no labeled data yet to tune them against.
+Matching itself is the same word-boundary regex approach as
+`entity_triggers.py` (`app/processing/entities.py`), not an NER model -
+same tradeoff, stated plainly: false negatives (a form not in an entity's
+aliases) and false positives from an ambiguous bare name (see §14.4).
+
+### 14.3 Subject sentiment - a second, independent axis
+
+`ArticleEntity.system_subject_sentiment` / `published_subject_sentiment`
+(`favorable`/`unfavorable`/`neutral`) mirror `SystemTag.classification` /
+`Article.published_tag`'s system-generated-then-admin-reviewed shape, but
+deliberately never use "pro"/"anti" wording anywhere: this measures
+sentiment toward **one specific entity**, independent of the article's
+overall establishment framing. An anti-establishment article can be
+favorable toward an opposition figure it quotes approvingly - conflating
+the two axes' naming would misrepresent what each one measures (planning
+doc Section 13.2). There is no `reviews[]`-style audit-trail table for
+this axis - `subject_sentiment_decision`/`_reviewed_by_id`/`_reviewed_at`
+are flat columns on `ArticleEntity` itself, since the review is folded
+into the same single admin action that reviews the establishment tag
+(§14.5) - a full multi-row history per entity wasn't asked for and would
+be speculative ahead of the still-single-admin-per-article model.
+
+Classification reuses the same provider-swappable pattern as
+`ClassificationProvider` (`app/llm/base.py`'s new `EntitySentimentProvider`
++ `EmbeddingSimilarityEntitySentimentClassifier`/`OpenAIEntitySentimentProvider`/
+`GeminiEntitySentimentProvider`), scored per-entity rather than per-article.
+Provider selection reuses the existing `LLM_PROVIDER` setting rather than
+a new knob - flipping it switches both axes together; there's no
+supported way to run one axis local and the other paid today, a
+reasonable POC-scale simplification, not an oversight.
+
+**Cost, flagged plainly**: this runs one embedding/API call *per entity
+found in the article*, not once per article. A plain-text article with no
+political entities costs nothing extra; one mentioning several adds up
+fast - free-but-not-instant for the local provider (CPU time, not RAM, is
+the constraint), genuinely billed per entity for OpenAI/Gemini.
+
+### 14.4 Seed data (`app/data/entity_seed.py`)
+
+Reuses and extends `entity_triggers.py`'s ~25-item party trigger list -
+correctly **splitting** two distinctions that list silently conflated
+(CPI vs. CPI(M), separate parties since a 1964 split), and **adding** six
+parties that were real gaps in it entirely (JD(S), Shiromani Akali Dal,
+Biju Janata Dal, AIMIM, J&K National Conference, PDP). TVK (added to the
+trigger net after the May 2026 Tamil Nadu election) is carried over.
+**Still a flagged gap**: northeastern and other smaller regional parties
+remain essentially unrepresented.
+
+Person entities didn't exist before this phase at all (the trigger net
+only ever matched generic titles like "chief minister", never named
+individuals) - seeded with ~30 national figures and state chief
+ministers, each carrying a `confidence` note in `entity_metadata`, same
+honesty convention as `jurisdiction_seed.py`. **Three states' sitting
+chief ministers are deliberately not seeded as named individuals**: West
+Bengal, Tamil Nadu, and Kerala all changed ruling parties in the May 2026
+elections (postdating my training cutoff) - the *party* is seeded with
+confidence, the specific person that party installed as CM is not, since
+guessing would be exactly the kind of fabrication the platform's own
+design principles (Section 2) warn against. The former CMs (Banerjee,
+Stalin, Vijayan) are still seeded as real, current, relevant figures -
+just not asserted to hold that specific office today.
+
+**A deliberate precision/recall tradeoff, flagged rather than silently
+accepted**: bare "Modi" is included as an alias despite colliding in
+principle with Nirav Modi/Lalit Modi, because in Indian political news it
+overwhelmingly means the PM and excluding it would cost real recall on
+the single most-tracked figure. Bare "SP" for Samajwadi Party is
+deliberately *excluded* (collides with "Superintendent of Police") -
+judgment calls, not validated ones; revisit if wrong-entity tags turn up
+in practice.
+
+### 14.5 Folded into the existing review screen, not a second queue
+
+Per direct instruction. `review.html` (and `manual_review_detail.html`,
+for consistency) render an "Entities mentioned" card inside the *same*
+`<form>` as the establishment-tag radios - one submit
+(`app/routers/admin_ui.py`'s `submit_review`) records both. Each entity
+gets its own `entity_sentiment_<id>` radio group, pre-selected to the
+system sentiment; submitting without changing it records
+`agreed_with_system`, same semantics as the establishment tag.
+`/admin/queue/bulk-confirm` (the checkbox "Publish selected" flow) does
+the same for entity sentiment as it already does for the establishment
+tag: an article confirmed without ever opening the full form agrees with
+everything system-generated, entities included.
+
+**Flagged directly, as asked, rather than silently absorbed**: for an
+article mentioning many entities (a cabinet reshuffle naming a dozen-plus
+ministers is the concrete case), this card gets long - a real tension
+with this platform's own established anti-scrolling design bar (the
+queue tabs rework earlier in this document exists for exactly that
+reason). Mitigated partially by sorting the most-central entities first
+(`_sorted_entity_mentions`) and by noting inline when a review has many
+entities that the system's suggestion is already pre-selected for each,
+but this is not a fix - a genuinely long form is still a genuinely long
+form. Worth deciding, once real volume is visible: a prominence
+threshold that only surfaces `primary`/`secondary` entities for review
+(silently auto-confirming `mentioned`-level incidental ones), pagination,
+or something else - not built now since it wasn't asked for and doing it
+before seeing real multi-entity articles would be guessing.
+
+### 14.6 Backfill - re-running extraction against history
+
+Section 13.6's groundwork requirement: a future "a new entity was added,
+sweep the archive for it" backfill must be straightforward, not only
+wired into live ingestion. `app/processing/entities.py`'s
+`extract_entities_for_article` is the single entry point both the live
+pipeline (`app/processing/pipeline.py`, one article as it's classified)
+and `backfill_entities` (many already-ingested articles) call - one code
+path, two callers, so they can't drift apart.
+
+`backfill_entities(rescan_all=False)` (the default) targets articles
+never scanned at all (`Article.entities_extracted_at IS NULL`) - covers
+every article ingested before this feature existed, in one pass.
+`rescan_all=True` re-scans every classified article regardless of prior
+scan state, for "a new entity was just seeded, check the whole archive."
+Matching always re-runs (cheap, pure regex); a sentiment classification
+(a real model/API call) is only spent on a genuinely new `(article,
+entity)` pair - re-scoring one already scored would silently re-spend
+money on a paid provider for no new information. Reachable via
+`python -m app.cli backfill-entities [--rescan-all]` and
+`POST /entities/backfill` (capped per call like `/process/run`, same
+"call again while `remaining` > 0" pattern).
+
+### 14.7 Verifying this phase
+
+```bash
+python -m app.cli seed-entities        # or POST /admin-data/seed-entities
+python -m app.cli process              # now also extracts entities + sentiment
+python -m app.cli show-entities        # list seeded entities + mention counts
+python -m app.cli backfill-entities    # or POST /entities/backfill
+```
+
+`GET /entities` and `GET /entities/{id}/mentions` are unauthenticated
+debug endpoints, same category as `/articles` and `/clusters` - not the
+admin API, just a way to confirm extraction output over HTTP, including
+on Render's free tier where there's no shell for the CLI equivalents.
+`GET /entities/{id}/mentions` is also the concrete, already-working
+answer to Section 13.1's core B2B query ("show me every article about
+Subject X, over time") - well ahead of any client-facing surface for it.
+
+Verified locally (mocked `EmbeddingProvider`/`ClassificationProvider`/
+`EntitySentimentProvider`, same "no real network access" reasoning as
+every other phase - see §10): the prominence heuristic's score thresholds
+directly; a full `process_articles()` run extracting entities and scoring
+sentiment correctly per entity in one article; the review screen showing
+both entities with pre-selected sentiment and recording an override on
+one entity alongside an agreement on another *in the same submit*;
+bulk-confirm agreeing with system sentiment for an article never opened;
+and backfill both finding a newly-seeded entity in an already-ingested
+article and staying idempotent (no duplicate rows) on a second run.
+
+## 15. Known gaps carried over from the planning doc
 
 Per Section 11 of the planning doc: 48-hour SLA escalation, multi-admin
 tie-breaking, the secondary "tone" axis, and a published methodology
