@@ -3,6 +3,8 @@ code should get a provider from - never import a concrete provider class
 directly outside this module and app/cli.py's compare-providers utility.
 """
 
+from functools import lru_cache
+
 from app.config import settings
 from app.llm.base import ClassificationProvider, EmbeddingProvider, EntitySentimentProvider
 from app.llm.local_classification import EmbeddingSimilarityClassifier
@@ -10,9 +12,33 @@ from app.llm.local_embedding import LocalEmbeddingProvider
 from app.llm.local_entity_sentiment import EmbeddingSimilarityEntitySentimentClassifier
 
 
+@lru_cache(maxsize=1)
+def _local_embedding_provider() -> LocalEmbeddingProvider:
+    """Every call site (app/processing/pipeline.py, entities.py) constructs
+    a fresh provider per call when none is injected - fine for the paid
+    providers (a cheap HTTP client), but not for the local one: its first
+    `.embed()` call loads a real ONNX model into memory
+    (app/llm/local_embedding.py's docstring on why fastembed over
+    sentence-transformers/PyTorch exists at all - Render's free 512MB tier
+    is already tight). Reconstructing that provider per request means
+    reloading the model every time, and the memory from the previous
+    load isn't always returned to the OS promptly (native allocator
+    behavior), so repeated calls can accumulate rather than settle at one
+    steady footprint - a real contributor to the OOM restarts seen in
+    production. Caching this one provider for the process's lifetime means
+    the model loads at most once, ever, no matter how many requests call
+    for it. Safe to cache: LocalEmbeddingProvider is stateless per-call
+    (embed() takes texts as a parameter, stores nothing request-specific
+    on self), and every test injects its own fake provider directly rather
+    than going through this factory, so nothing depends on getting a fresh
+    instance.
+    """
+    return LocalEmbeddingProvider()
+
+
 def get_embedding_provider() -> EmbeddingProvider:
     if settings.embedding_provider == "local":
-        return LocalEmbeddingProvider()
+        return _local_embedding_provider()
     raise ValueError(
         f"Unknown EMBEDDING_PROVIDER={settings.embedding_provider!r}. "
         "Only 'local' is implemented - OpenAI/Gemini embedding providers "
