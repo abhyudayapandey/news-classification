@@ -846,3 +846,28 @@ def reactivate_client_user(
     user.is_active = True
     db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Reactivated login '{user.username}'.", status_code=303)
+
+
+@router.post("/clients/{client_id}/users/{user_id}/reset-password")
+def reset_client_user_password(
+    client_id: int,
+    user_id: int,
+    password: str = Form(...),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """A super admin setting a new password directly - there's no forgot-
+    password/email flow anywhere in this project (Phase 7's README section
+    already flags this as out of scope), so this is the only way a client's
+    login ever gets a new password, same as how Admin passwords are reset
+    today (edit_admin's optional password field).
+    """
+    user = db.get(ClientUser, user_id)
+    if user is None or user.client_id != client_id:
+        return RedirectResponse(f"/admin/clients/{client_id}", status_code=303)
+    try:
+        user.password_hash = hash_password(password)
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/clients/{client_id}?error={exc}", status_code=303)
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Password reset for '{user.username}'.", status_code=303)
