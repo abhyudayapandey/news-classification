@@ -1,8 +1,8 @@
 # News Framing Platform — POC Planning Document
 
 **Scope:** India-only proof of concept
-**Status:** Pre-build planning
-**Last updated:** August 28, 2026
+**Status:** Phases 1-7 built; social listening (Phase 6) and the B2B client portal (Phase 8) are live, not just planned - see Sections 14-16.
+**Last updated:** September 8, 2026
 
 ---
 
@@ -250,13 +250,15 @@ ArticleEntity (extended)
 - Naming deliberately avoids "pro/anti" for this axis, to keep it visually and conceptually distinct from the establishment tags — this is closer to conventional sentiment analysis, and should read as such, not be confused with the platform's core establishment framing.
 - Review workflow question to resolve before building: does this get its own admin review queue, or get folded into the existing per-article review screen (reviewing both axes at once)? Leaning toward folding in, to avoid doubling review load — worth confirming once volume is known.
 
-### 13.3 Social Media Listening (explicitly parked, not scoped)
+### 13.3 Social Media Listening (originally parked — reversed in Phase 6, see Section 14)
 
-Raised by a PR-agency contact as a desired feature. Deliberately **not** treated as a natural extension of the platform — flagged as a different product with different economics:
+Raised by a PR-agency contact as a desired feature. Originally flagged **not** to be treated as a natural extension of the platform — a different product with different economics:
 
 - Different data pipeline entirely (X/Meta APIs, not RSS) — meaningful API costs at any real volume, breaking the platform's $0-infrastructure approach.
 - A mature, well-funded competitive category already (Brandwatch, Sprinklr, Talkwalker, Meltwater) — little differentiation available here versus incumbents.
-- **Preferred direction if this comes up again:** position the platform's framing data as a complement to a client's *existing* social listening tool, rather than building a competing one. Revisit only if a paying client specifically funds it.
+- Original preferred direction: position the platform's framing data as a complement to a client's *existing* social listening tool, rather than building a competing one, and revisit only if a paying client specifically funds it.
+
+**This was revisited and built in Phase 6**, once the B2B direction (Section 13.6) made "coverage across news AND social" a single paying client's actual ask rather than a hypothetical. The cost concern above wasn't waived, it was solved structurally — see Section 14 for the two-layer shared-fetch/per-client-permission design that keeps X's real per-read billing from becoming an uncapped liability.
 
 ### 13.4 Other Monetization Directions Discussed (for reference)
 
@@ -303,6 +305,86 @@ Client portal queries filter strictly through: `published articles ↔ ArticleEn
 **Review standard:** the client portal shows **`published_tag`-based data only** — same reviewed-only standard as the B2C site. No unreviewed/system-tag-only articles are surfaced, to keep both products credible and consistent rather than having B2B trade accuracy for speed.
 
 **Operational note:** since B2B clients may care about turnaround more than B2C readers do, admins need visibility into which pending articles relate to a paying client's tracked subject, so review priority isn't dependent on a side conversation. Recommend a simple visual flag/badge in the admin queue showing linked client subject(s) on relevant articles — priority made legible in the tool itself, not held only in the founder's memory.
+
+---
+
+**Status: built in Phase 7/8** — the structure below (separate login surface, `Client`/`ClientUser`/`ClientSubject`, tenant isolation at the query layer) is what actually shipped. As-built specifics that extend or adjust this plan are in Section 15, notably: `ClientSubject` gained per-subject `news_access`/`youtube_access`/`x_access` visibility flags (Section 15.2) rather than one blanket "client can see this subject" switch, and the one-time historical backfill in step 3 below is now a real, separately-triggerable mechanism (Section 14.4) rather than an onboarding-flow TODO.
+
+---
+
+## 14. Social Media Listening — as built (Phase 6)
+
+Built once a paying B2B use case (Section 13.6) made this a funded ask rather than a speculative feature. The cost/differentiation concerns in Section 13.3 are addressed structurally, not waived:
+
+### 14.1 Two-layer cost-control design
+
+The central design problem: X billing is per-read and real money, but multiple clients can track the same public figure. Solved with two separate tables instead of one flag:
+
+- **`EntitySocialConfig`** (one row per `Entity`) — the *shared* side. `x_active` (derived/cached, never the real gate), `x_spend_usd` + `x_spend_period_start` (current-calendar-month spend, rolled over lazily on next touch rather than on a schedule), `x_last_fetched_at`, `youtube_last_fetched_at`, and nullable per-entity overrides of the global fetch depth/lookback defaults. The actual fetch (and its dollar cost) happens **at most once per entity**, regardless of how many clients track it.
+- **`ClientSubject`** (extended from Section 13.6) — the *per-client permission* side, now carrying `x_access` (bool) + `x_spend_ceiling_usd` (nullable, only meaningful once `x_access` is true), plus `youtube_access` and `news_access` (both visibility-only, default `False` — a newly tracked subject shows nothing on a client's dashboard until a super admin explicitly turns each on, gated on payment, not on tracking having begun).
+- The real gating check (`app/social/pipeline.py`'s `_entity_has_active_x_access`) always re-derives from live `ClientSubject` rows at fetch time — `EntitySocialConfig.x_active` is a display-only cache that can never cause an unauthorized or a missed fetch even if stale.
+- A client's `x_spend_ceiling_usd` is compared against the entity's **shared** current-period spend, not a per-client fractional slice — the fetch is genuinely shared infrastructure, so "is this client near their contracted budget" means comparing their ceiling to the real total, not dividing one bill three ways.
+
+### 14.2 `SocialMention` — the fetched-content model
+
+One row per fetched X post or YouTube video, shared across every client who can see it (visibility enforced at query time via `ClientSubject`, never by duplicating rows per client). Unique on `(entity_id, source, url)` — a re-returned post is billed again on re-read (X bills per read, not per new-to-us post) but never stored twice.
+
+Per-row fields beyond the raw content: `cost_usd` (this row's own attributed cost — 0 for YouTube, `settings.x_cost_per_post_usd` for X — a per-item audit trail alongside `EntitySocialConfig`'s running aggregate, not required to reconcile exactly with it), `sentiment` + `sentiment_confidence`, `engagement_count`, and content-derived `state`/`district`/`constituency`/`seat_type`.
+
+Two axes reused/extended from earlier phases, both computed **once, at storage time, never re-computed on re-fetch**:
+- **Subject sentiment** (favorable/unfavorable/neutral toward the entity the mention is about) — same axis and provider pattern as `ArticleEntity.system_subject_sentiment` (Section 13.2), but system-generated only for social mentions; no review/approval workflow for this content type.
+- **Geography** (`app/processing/geography.py`) — same state/district/constituency/seat-type axis as articles, guessed from `content_text` itself (never from anything assigned to the `Entity`). District/constituency are only ever recognized via an explicit self-naming phrase in the text ("X district", "Y Lok Sabha seat") — never guessed from a bare place name, since a wrong guess is worse than an honest null. Real geotags (tweet/video location) were considered and explicitly not implemented: neither X's recent-search response nor YouTube's search response reliably carries one today; flagged to prefer real geo over the text guess if either provider ever starts supplying it.
+- `engagement_count` is display/sort-ordering only (most-engaged-first), never fed into cost accounting — YouTube's is view count, X's is retweet+like+reply+quote summed. Recorded once at fetch time; not re-polled later (that would cost another billed X read for no product benefit).
+
+### 14.3 Per-source fetch characteristics and real limits
+
+- **YouTube** (`app/social/youtube.py`) — free tier, always fetched once an entity is tracked, no cost gating. 10,000-unit/day quota; `search.list` costs 100 units, `videos.list` (view counts) costs 1 unit per call. `content_text` is **title + description** (as of the Phase-6-follow-up work — originally title only; description was already free in the same API response and was simply being discarded). `order=viewCount` satisfies most-engaged-first directly from the API, no local re-sort needed.
+  - **Genuine historical fetch is supported and free**: `search.list`'s `publishedBefore`/`publishedAfter` params carry no API-tier restriction. `fetch()` now accepts `published_before`; `app/social/pipeline.py`'s `fetch_youtube_historical()` is a dedicated, separate entry point from the regular multi-entity scan for pulling a specific historical window for one entity.
+  - **Video *content* (what's actually said) is not analyzed** — only title + description. Pulling real transcripts via the YouTube Captions API (`captions.download`) requires OAuth 2.0 with the calling app owning or having edit rights on the target video, which architecturally blocks fetching captions for arbitrary third-party political videos — not merely a bigger engineering lift, a capability the platform cannot get to for content it doesn't own.
+- **X** (`app/social/x_api.py`) — real per-read billing, gated by the two-layer design in 14.1. `/2/tweets/search/recent` is **hard-capped to the last 7 days by the endpoint itself**, regardless of any `lookback_days` passed in code — this is an X platform limit, not something a code change can lift.
+  - **Genuine historical tweet/engagement fetch requires X's paid Pro or Enterprise API tier** (full-archive search), not achievable on the current free/pay-per-use access this build uses. As of September 2026: the legacy Pro tier (~$5,000/mo, included full-archive search) was deprecated for new signups on August 14, 2026; Enterprise pricing is unpublished (quote-only via `docs.x.com/enterprise-api/getting-started/pricing`), third-party-reported in the ~$42,000-$50,000+/month range; the new-developer default is pay-per-use ($0.005/read, $0.015/post, $0.20/post-with-link, capped at 2M reads/month), which does **not** unlock full-archive search regardless of spend. No cost-tier upgrade has been purchased or built against as of this writing — noted here as a known capability gap, to revisit only if a client specifically needs it.
+
+### 14.4 Backfill mechanism (`app/social/backfill.py`)
+
+Production `SocialMention` rows fetched before `sentiment`/`engagement_count`/geography existed as columns show up as "0 views" / "-" sentiment on the client portal — not a display bug, but real historical rows with those columns genuinely never populated. `backfill_social_mentions()` finds every row via the exact marker `SocialMention.sentiment IS NULL` (a genuinely-scored row is never NULL even when the answer is NEUTRAL, so this can't false-positive on real data), then: re-scores sentiment for all of them, re-guesses geography only where all three geo fields are still null, and re-fetches real YouTube view counts (free, no extra quota cost beyond the batch `videos.list` call) for YouTube rows still at the `0` default.
+
+**X engagement is deliberately excluded from backfill** — re-fetching it would mean another billed X read per row with no clean way to attribute that spend against a client's existing ceiling for a pass that isn't a real-time fetch. Both a CLI command (`backfill-social-mentions`) and an HTTP endpoint (`POST /admin-data/backfill-social-mentions`) exist, since Render's production environment has no shell access — same pattern as every other manually-triggered pipeline stage (`seed-jurisdictions`, `seed-entities`, `fetch-social`, etc.).
+
+---
+
+## 15. B2B Client Portal — as built (Phase 7/8)
+
+### 15.1 Structure
+
+Matches the Section 13.6 plan: a separate application surface (`app/routers/client_ui.py`, its own templates) from the internal Admin/Super Admin dashboard, its own login (`ClientUser`), tenant isolation enforced at the query layer (`published articles ↔ ArticleEntity ↔ Entity ↔ ClientSubject ↔ Client`).
+
+### 15.2 Per-subject access controls (admin side)
+
+For each `ClientSubject`, a super admin independently toggles three visibility flags — `news_access`, `youtube_access`, `x_access` — via `app/routers/admin_ui.py`'s client detail/list pages. All three default `False`: a newly tracked subject is invisible on the client's dashboard until explicitly turned on per-channel, gated on payment actually being received, never implied by tracking having started. `x_access` additionally requires a `x_spend_ceiling_usd` before it can be turned on (enforced at the application layer, not a DB constraint).
+
+The admin UI for these toggles was reworked mid-Phase-8 from a badge+separate-enable/disable-button pair (flagged as confusing — state and action were two different pieces of UI a person had to reconcile) to a single flip-switch control per channel: one `<form>` + styled checkbox, `onchange="this.form.submit()"`, with a `next` hidden field so toggling from the client list page returns to the list rather than always jumping to the detail page. X's off→on path stays a `<details>` disclosure requiring the ceiling input before submission; on→off carries a `confirm()` guard. The client list's spend column was also relabeled from an ambiguous bare `$x / $y` to explicit "Spend $x" / "Ceiling $y" (or "Ceiling unset") lines.
+
+### 15.3 Client-facing dashboard and subject detail
+
+- **Dashboard** (`client_dashboard.html`): tracked subjects render as a responsive card grid (1/2/3 columns by breakpoint), each card showing the subject name plus which of News/YouTube/X are currently visible to this client.
+- **Subject detail** (`client_entity_detail.html`), three tabs:
+  - **News articles** — mirrors the B2C public site's layout exactly (`public_home.html`'s `card`/`column` macros reused as `article_card`/`article_column`): three columns, **Pro-Establishment / Anti-Establishment / Apolitical**, each populated from `published_tag`. This replaced an earlier mixed single-grid-with-inline-badge layout that read inconsistently against the public site's own three-column framing — flagged directly as "why keep it like this" and fixed to match.
+  - **YouTube mentions** and **X mentions** — each a responsive card grid (not a single-column list), `content_text` rendered with `white-space: pre-line` so a combined title+description mention breaks visibly onto two lines rather than running together.
+  - All three tabs, same as the B2C site, show **only `published_tag`-based / reviewed content** — no unreviewed system-tag-only articles surfaced, keeping B2B and B2C on one accuracy standard rather than trading B2B speed for lower rigor.
+- **Admin queue awareness** (Section 13.6's operational note): `app/routers/admin_ui.py`'s `_build_client_queue_groups()` groups each client's pending subjects by Pro/Anti/Apolitical `ClassificationTag` right in the admin's own My Queue page, with nested tabs per subject (`queue.html`) — so review priority for a paying client's tracked subject is visible in the tool itself, not held only in a side conversation.
+
+### 15.4 Onboarding backfill
+
+Section 13.6's planned "one-time backfill scan once a subject is linked" is now a real, separately-triggerable mechanism rather than a TODO — see Section 14.4's `backfill_social_mentions()` (social) and the existing entity-tagging re-scan for news articles. Both are deliberately separate one-off entry points from the regular ongoing fetch, not folded into it.
+
+---
+
+## 16. Open Items Carried Forward From This Build Phase
+
+- **X historical-archive access** (Section 14.3) is a real product decision, not a code task: moving to X's Pro/Enterprise tier is a recurring cost commitment (Enterprise pricing unpublished, third-party estimates ~$42k-$50k+/month) that needs a funded client need behind it before pursuing.
+- **YouTube caption/transcript analysis** (Section 14.3) is blocked by YouTube's OAuth ownership requirement on the Captions API for any video the platform doesn't own — not on the near-term roadmap as a result, independent of engineering cost.
+- **A formal X/YouTube cost-calculation table or formula** (e.g., translating a client's contracted spend ceiling into an expected read/post volume, or modeling Pro/Enterprise-tier X cost against expected client demand) has been discussed but **not yet built** — flagged here as an explicit open item rather than left implicit, since it was raised and deferred rather than resolved.
+- **Legal review of B2B commercialization** (Section 13.5) — still not confirmed as done; the JSON-LD paywall-extraction tradeoff carries more risk once tied to a paying product, and this document does not treat that risk as resolved just because the client portal shipped.
 
 ---
 
