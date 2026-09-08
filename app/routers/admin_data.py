@@ -4,7 +4,7 @@ which has no interactive shell. Same unauthenticated-debug-endpoint caveat
 as the other routers here: not the Phase 3 admin API.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.data.jurisdiction_seed import seed_jurisdictions
 from app.db import get_db
 from app.models import Admin
 from app.models.enums import AdminRole
+from app.social.backfill import backfill_social_mentions
 
 router = APIRouter(prefix="/admin-data", tags=["admin-data"])
 
@@ -35,6 +36,30 @@ def trigger_seed_entities(db: Session = Depends(get_db)) -> dict:
         "inserted": inserted,
         "updated": updated,
         "note": "See app/data/entity_seed.py's module docstring for what's confidently seeded vs. flagged gaps.",
+    }
+
+
+@router.post("/backfill-social-mentions")
+def trigger_backfill_social_mentions(
+    limit: int | None = Query(default=None, description="Max rows to process this call"),
+    db: Session = Depends(get_db),
+) -> dict:
+    """HTTP counterpart to `python -m app.cli backfill-social-mentions` -
+    same Render-has-no-shell reasoning as this module's other endpoints.
+    Re-scores sentiment/geography (free) and re-fetches real YouTube view
+    counts (free) for SocialMention rows stored before those columns
+    existed; X engagement is deliberately not touched here (see
+    app/social/backfill.py's module docstring for why). Call repeatedly
+    with a limit until `scanned` comes back 0.
+    """
+    result = backfill_social_mentions(db, limit=limit)
+    return {
+        "scanned": result.scanned,
+        "sentiment_scored": result.sentiment_scored,
+        "geography_tagged": result.geography_tagged,
+        "youtube_engagement_updated": result.youtube_engagement_updated,
+        "errors": result.errors,
+        "note": "X engagement is not backfilled here - it would mean a fresh, separately-billed X API read.",
     }
 
 

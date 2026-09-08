@@ -57,7 +57,7 @@ class YouTubeFetcher(SocialFetcher):
         items = response.json().get("items", [])
 
         video_ids = [item["id"]["videoId"] for item in items if item.get("id", {}).get("videoId")]
-        view_counts = self._fetch_view_counts(video_ids)
+        view_counts = self.fetch_view_counts(video_ids)
 
         mentions = []
         for item in items:
@@ -81,13 +81,21 @@ class YouTubeFetcher(SocialFetcher):
             )
         return mentions
 
-    def _fetch_view_counts(self, video_ids: list[str]) -> dict[str, int]:
+    def fetch_view_counts(self, video_ids: list[str]) -> dict[str, int]:
         """search.list (above) never returns statistics - a second,
         separate videos.list call (also within the free daily quota, at a
         much cheaper 1 unit each vs. search.list's 100) is required to get
         each video's view count for engagement ordering/display. A failure
         here degrades to "engagement unknown" (0) rather than failing the
         whole fetch - the mentions themselves are still valid without it.
+
+        Public (not just used internally by fetch() above) because
+        app/social/backfill.py also calls this directly, to re-fetch real
+        view counts for SocialMention rows stored before engagement_count
+        existed - same free, no-extra-read-cost call either way, so
+        there's no reason to duplicate this logic just to keep it private.
+        Accepts up to 50 ids per call (the API's own limit) - callers with
+        more must batch.
         """
         if not video_ids:
             return {}
