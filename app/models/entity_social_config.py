@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -56,6 +56,18 @@ class EntitySocialConfig(Base):
     # cost gating needed" - tracked here only for "when did we last check"
     # operational visibility, not spend.
     youtube_last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Per-entity overrides of settings.social_fetch_max_results_per_entity /
+    # a fetcher's own default lookback - nullable, meaning "use the global
+    # default" rather than duplicating that default's value here (so a
+    # future change to the global default doesn't require touching every
+    # entity's row). Deliberately entity-level, not per-ClientSubject: the
+    # fetch itself is shared infrastructure (this table's own docstring),
+    # so "how much to fetch" has to be one shared number too, same as
+    # x_active/x_spend_usd already are - two clients tracking the same
+    # entity can't each get a different fetch depth from the same API call.
+    social_fetch_max_results: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    social_fetch_lookback_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

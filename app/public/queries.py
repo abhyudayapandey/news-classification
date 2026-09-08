@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Article
+from app.models import Article, SystemTag
 from app.models.enums import ClassificationTag
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -105,14 +105,36 @@ class ClusterComparison:
     apolitical: list[ComparisonArticle]
 
 
+def list_available_states(db: Session) -> list[str]:
+    """Distinct SystemTag.state values actually present among published
+    articles, alphabetically - the home page's state filter offers only
+    these, per direct instruction ("whatever is available"), never a
+    fixed list of all Indian states regardless of whether anything's
+    tagged with them yet.
+    """
+    stmt = (
+        select(SystemTag.state)
+        .join(Article, Article.id == SystemTag.article_id)
+        .where(Article.published_tag.is_not(None), SystemTag.state.is_not(None))
+        .distinct()
+        .order_by(SystemTag.state.asc())
+    )
+    return [row[0] for row in db.execute(stmt)]
+
+
 def _published_articles_for_tag(
-    db: Session, tag: ClassificationTag, day_bounds: tuple[datetime, datetime] | None
+    db: Session, tag: ClassificationTag, day_bounds: tuple[datetime, datetime] | None, state: str | None = None
 ) -> list[Article]:
     """day_bounds (from _day_bounds_utc), when given, restricts to articles
     whose own published_at (the outlet's original publish time, not our
     review time) falls in that IST calendar day. Order doesn't matter here -
     _cluster_cards_for_tag below picks the representative explicitly by
     published_at rather than relying on query order.
+
+    `state` (when given) restricts to articles whose content-derived
+    SystemTag.state matches - see app/processing/geography.py. This is a
+    plain "what place is this about" fact independent of the tag/
+    jurisdiction axis, so it applies the same way regardless of `tag`.
     """
     conditions = [
         Article.published_tag == tag.value,
@@ -122,6 +144,8 @@ def _published_articles_for_tag(
     if day_bounds is not None:
         start, end = day_bounds
         conditions += [Article.published_at >= start, Article.published_at < end]
+    if state is not None:
+        conditions.append(Article.system_tag.has(state=state))
 
     stmt = (
         select(Article)
@@ -132,7 +156,7 @@ def _published_articles_for_tag(
 
 
 def _outlet_breakdown_by_cluster(
-    db: Session, day_bounds: tuple[datetime, datetime] | None
+    db: Session, day_bounds: tuple[datetime, datetime] | None, state: str | None = None
 ) -> dict[int, dict[str, int]]:
     """One pass across every published article (all three tags, not just
     one) building {cluster_id: {tag: distinct_outlet_count}} - the cross-
@@ -150,6 +174,8 @@ def _outlet_breakdown_by_cluster(
     if day_bounds is not None:
         start, end = day_bounds
         conditions += [Article.published_at >= start, Article.published_at < end]
+    if state is not None:
+        conditions.append(Article.system_tag.has(state=state))
 
     stmt = select(Article.cluster_id, Article.published_tag, Article.outlet_id).where(*conditions)
     outlets_by_cluster_and_tag: dict[int, dict[str, set[int]]] = {}
@@ -163,7 +189,7 @@ def _outlet_breakdown_by_cluster(
 
 
 def _other_tag_headlines_by_cluster(
-    db: Session, day_bounds: tuple[datetime, datetime] | None
+    db: Session, day_bounds: tuple[datetime, datetime] | None, state: str | None = None
 ) -> dict[int, dict[str, list[str]]]:
     """One pass across every published article (all three tags), building
     {cluster_id: {tag: [headline, ...]}} - lets a diverging card's hover
@@ -179,6 +205,8 @@ def _other_tag_headlines_by_cluster(
     if day_bounds is not None:
         start, end = day_bounds
         conditions += [Article.published_at >= start, Article.published_at < end]
+    if state is not None:
+        conditions.append(Article.system_tag.has(state=state))
 
     stmt = select(Article.cluster_id, Article.published_tag, Article.headline).where(*conditions)
     headlines_by_cluster_and_tag: dict[int, dict[str, list[str]]] = {}
@@ -194,8 +222,9 @@ def _cluster_cards_for_tag(
     breakdown_by_cluster: dict[int, dict[str, int]],
     other_tag_headlines_by_cluster: dict[int, dict[str, list[str]]],
     day_bounds: tuple[datetime, datetime] | None,
+    state: str | None = None,
 ) -> list[ClusterCard]:
-    articles = _published_articles_for_tag(db, tag, day_bounds)
+    articles = _published_articles_for_tag(db, tag, day_bounds, state)
 
     articles_by_cluster: dict[int, list[Article]] = {}
     for article in articles:
@@ -311,25 +340,32 @@ def get_cluster_comparison(db: Session, cluster_id: int) -> ClusterComparison | 
     )
 
 
-def get_home_columns(db: Session, limit_per_column: int = 15, day: date_cls | None = None) -> HomeColumns:
+def get_home_columns(
+    db: Session, limit_per_column: int = 15, day: date_cls | None = None, state: str | None = None
+) -> HomeColumns:
     """day (an IST calendar date), when given, restricts every column to
     articles originally published that day - see _day_bounds_utc. None
     (the default) is unfiltered, latest-first regardless of date.
+
+    `state` (when given), restricts every column to articles whose
+    content-derived SystemTag.state matches (app/processing/geography.py) -
+    a good-to-have per direct instruction, independent of the date filter
+    and of which tag a column shows.
     """
     day_bounds = _day_bounds_utc(day) if day is not None else None
-    breakdown_by_cluster = _outlet_breakdown_by_cluster(db, day_bounds)
-    other_tag_headlines_by_cluster = _other_tag_headlines_by_cluster(db, day_bounds)
+    breakdown_by_cluster = _outlet_breakdown_by_cluster(db, day_bounds, state)
+    other_tag_headlines_by_cluster = _other_tag_headlines_by_cluster(db, day_bounds, state)
     return HomeColumns(
         pro_establishment=_cluster_cards_for_tag(
             db, ClassificationTag.PRO_ESTABLISHMENT, limit_per_column,
-            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds, state
         ),
         anti_establishment=_cluster_cards_for_tag(
             db, ClassificationTag.ANTI_ESTABLISHMENT, limit_per_column,
-            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds, state
         ),
         apolitical=_cluster_cards_for_tag(
             db, ClassificationTag.APOLITICAL, limit_per_column,
-            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds
+            breakdown_by_cluster, other_tag_headlines_by_cluster, day_bounds, state
         ),
     )

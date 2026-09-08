@@ -19,7 +19,7 @@ from app.models import JurisdictionRulingParty
 # Full names only, not abbreviations (e.g. no "UP", "MP", "TN") - short
 # abbreviations collide too easily with ordinary English words/acronyms in
 # news text and would produce false jurisdiction guesses.
-_INDIAN_STATES = [
+INDIAN_STATES = [
     "Andhra Pradesh",
     "Arunachal Pradesh",
     "Assam",
@@ -54,7 +54,7 @@ _INDIAN_STATES = [
 # dateline/seat of the central government, so a bare mention of it is not a
 # signal about Delhi's own state government. Only treat it as a Delhi-state
 # jurisdiction signal when paired with a state-government-specific term.
-_DELHI_STATE_MARKERS = [
+DELHI_STATE_MARKERS = [
     "delhi government",
     "delhi cabinet",
     "delhi assembly",
@@ -71,11 +71,11 @@ def guess_jurisdiction_keyword(text: str) -> str:
     """
     lowered = text.lower()
 
-    for marker in _DELHI_STATE_MARKERS:
+    for marker in DELHI_STATE_MARKERS:
         if marker in lowered:
             return "state:Delhi"
 
-    for state in _INDIAN_STATES:
+    for state in INDIAN_STATES:
         if state.lower() in lowered:
             return f"state:{state}"
 

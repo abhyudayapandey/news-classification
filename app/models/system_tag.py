@@ -6,7 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.enums import ClassificationTag
+from app.models.enums import ClassificationTag, SeatType
 
 
 class SystemTag(Base):
@@ -20,6 +20,19 @@ class SystemTag(Base):
 
     jurisdiction/ruling_party are nullable because they only apply when
     classification is pro/anti (Section 4.2); an apolitical tag has neither.
+
+    state/district/constituency/seat_type are a separate axis from
+    jurisdiction, computed for EVERY article regardless of classification
+    (app/processing/geography.py, called unconditionally in
+    app/processing/pipeline.py's _process_one - unlike jurisdiction, which
+    only exists for pro/anti articles and is folded into the
+    ClassificationProvider's own output). This is "what place is this
+    content about", a plain fact about the text, not "which government's
+    establishment does this framing concern" - the two questions are
+    independent and a story can have one, both, or neither. Content-
+    derived per direct instruction (article text - never a tag manually
+    assigned to an Entity), so these are sparse and best-effort: null
+    simply means the text didn't name a place clearly enough to guess.
     """
 
     __tablename__ = "system_tags"
@@ -31,6 +44,10 @@ class SystemTag(Base):
     # "centre" or "state:<name>" - see JurisdictionRulingParty for the lookup table.
     jurisdiction: Mapped[str | None] = mapped_column(String(128), nullable=True)
     ruling_party: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    constituency: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seat_type: Mapped[SeatType | None] = mapped_column(SAEnum(SeatType, name="seat_type"), nullable=True)
     confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
     # Which ClassificationProvider produced this tag, e.g. "local",
     # "openai:gpt-4o-mini", "gemini:gemini-1.5-flash". This table stays

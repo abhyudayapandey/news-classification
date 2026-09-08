@@ -1,13 +1,13 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.enums import SocialSource
+from app.models.enums import SeatType, SocialSource, SubjectSentiment
 
 
 class SocialMention(Base):
@@ -46,5 +46,39 @@ class SocialMention(Base):
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0"), server_default="0")
+
+    # Same axis and provider pattern as ArticleEntity.system_subject_sentiment
+    # (Section 13.2) - favorable/unfavorable/neutral toward the entity this
+    # mention is about, not the platform's separate pro/anti-establishment
+    # framing axis. Nullable: only ever set at storage time for a NEWLY
+    # fetched mention (app/social/pipeline.py's _store_new_mentions) - never
+    # backfilled automatically for rows stored before this column existed.
+    # Deliberately no review/approval workflow yet, unlike the article axis'
+    # admin-reviewed published_subject_sentiment - this is system-generated
+    # only for now, a scoped-out future phase per direct instruction.
+    sentiment: Mapped[SubjectSentiment | None] = mapped_column(
+        SAEnum(SubjectSentiment, name="subject_sentiment"), nullable=True
+    )
+    sentiment_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # A single denormalized "how engaged was this" number, recorded once at
+    # fetch time and never updated afterward (re-polling a post's current
+    # counts would cost another billed X read for no product benefit) -
+    # YouTube's is the video's view count, X's is retweet+like+reply+quote
+    # summed (see app/social/x_api.py). Used purely for display/sort
+    # ordering (most-engaged-first, per direct instruction), never for cost
+    # accounting - cost_usd above is the only column that feeds spend math.
+    engagement_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+    # Same content-derived geography axis as SystemTag's state/district/
+    # constituency/seat_type (app/processing/geography.py), guessed from
+    # `content_text` at storage time - never from anything assigned to the
+    # Entity this mention is about. Set once when a mention is newly
+    # stored (app/social/pipeline.py's _store_new_mentions), same "never
+    # re-computed on re-fetch" discipline as sentiment above.
+    state: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    constituency: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    seat_type: Mapped[SeatType | None] = mapped_column(SAEnum(SeatType, name="seat_type", create_type=False), nullable=True)
 
     entity: Mapped["Entity"] = relationship(back_populates="social_mentions")

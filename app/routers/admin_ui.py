@@ -13,13 +13,13 @@ from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.auth.security import hash_password, verify_password
 from app.auth.session import get_current_admin, get_current_admin_optional, require_super_admin
 from app.config import settings
 from app.db import get_db
-from app.models import Admin, Article, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
+from app.models import Admin, Article, ArticleEntity, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
 from app.models.enums import AdminRole, ClassificationTag, EntityProminence, ReviewDecision, SubjectSentiment
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -185,6 +185,67 @@ def _queue_item(article: Article) -> dict:
     }
 
 
+def _build_client_queue_groups(db: Session, articles: list[Article]) -> list[dict]:
+    """Section 13.6's own "Operational note": admins need visibility into
+    which pending articles relate to a paying client's tracked subject, so
+    review priority isn't dependent on a side conversation. This is a
+    priority LENS over the same one queue `my_queue` already builds, not a
+    second parallel queue - the same article still needs the same single
+    review action either way, whichever tab it was found through.
+
+    An article mentioning entities tracked by more than one client (or
+    several subjects for the same client) appears under every relevant
+    one, not just the first match - a client whose tracked subject is
+    genuinely mentioned should never be missing it just because some
+    other client also tracks a co-mentioned entity.
+    """
+    all_entity_ids = {ae.entity_id for article in articles for ae in article.entity_mentions}
+    if not all_entity_ids:
+        return []
+
+    # entity_id -> [(client_id, client_name), ...] - only active clients,
+    # same "an offboarded client's grant doesn't keep mattering" posture
+    # already applied to X-fetch gating (app/social/pipeline.py).
+    entity_to_clients: dict[int, list[tuple[int, str]]] = {}
+    rows = (
+        db.query(ClientSubject.entity_id, Client.id, Client.name)
+        .join(Client, Client.id == ClientSubject.client_id)
+        .filter(ClientSubject.entity_id.in_(all_entity_ids), Client.active.is_(True))
+        .all()
+    )
+    for entity_id, client_id, client_name in rows:
+        entity_to_clients.setdefault(entity_id, []).append((client_id, client_name))
+    if not entity_to_clients:
+        return []
+
+    # client_id -> {name, article_ids (for the count, deduped), subjects: {entity_id: {entity_name, articles}}}
+    by_client: dict[int, dict] = {}
+    for article in articles:
+        for ae in article.entity_mentions:
+            for client_id, client_name in entity_to_clients.get(ae.entity_id, []):
+                bucket = by_client.setdefault(client_id, {"name": client_name, "article_ids": set(), "subjects": {}})
+                bucket["article_ids"].add(article.id)
+                subject = bucket["subjects"].setdefault(ae.entity_id, {"entity_name": ae.entity.name, "articles": []})
+                subject["articles"].append(article)
+
+    groups = []
+    for client_id, data in sorted(by_client.items(), key=lambda kv: kv[1]["name"]):
+        subjects = [
+            # "queue_items", not "items" - a plain dict's own .items()
+            # method shadows a same-named key when accessed via Jinja's
+            # dot notation, silently returning the bound method instead
+            # of the list (caught while testing: `len(s.items)` blew up
+            # with "builtin_function_or_method has no len()").
+            {"entity_id": eid, "entity_name": s["entity_name"], "queue_items": [_queue_item(a) for a in s["articles"]]}
+            for eid, s in sorted(data["subjects"].items(), key=lambda kv: kv[1]["entity_name"])
+        ]
+        groups.append({
+            "client_id": client_id, "client_name": data["name"],
+            "count": len(data["article_ids"]), "subjects": subjects,
+        })
+    return groups
+
+
 @router.get("/queue", response_class=HTMLResponse)
 def my_queue(
     request: Request,
@@ -216,6 +277,18 @@ def my_queue(
         select(Article)
         .where(Article.assigned_admin_id == current_admin.id, ~Article.reviews.any())
         .order_by(Article.published_at.desc())
+        # Eager-load what _queue_item()/_blind_article() touch per article
+        # (system_tag.classification, outlet.name) - both default to
+        # lazy="select", so without this a queue of N articles fires ~2N
+        # extra round-trips (one per article per relationship) instead of
+        # this one extra batched query each. Invisible on an empty/small
+        # test database (never caught in local testing), real once the
+        # queue has actual accumulated volume, especially over a network
+        # connection to a remote DB.
+        .options(
+            selectinload(Article.system_tag), selectinload(Article.outlet),
+            selectinload(Article.entity_mentions).selectinload(ArticleEntity.entity),
+        )
     )
     articles = list(db.scalars(stmt))
     items_by_tag: dict[ClassificationTag, list[dict]] = {tag: [] for tag in ClassificationTag}
@@ -235,6 +308,8 @@ def my_queue(
     else:
         active_tab = "apolitical"
 
+    client_groups = _build_client_queue_groups(db, articles)
+
     return render(
         request, "queue.html", current_admin,
         pro_items=pro_items,
@@ -242,6 +317,7 @@ def my_queue(
         apolitical_items=apolitical_items,
         active_tab=active_tab,
         total=len(articles),
+        client_groups=client_groups,
     )
 
 
@@ -644,32 +720,91 @@ def list_clients(
     message: str | None = Query(default=None),
     error: str | None = Query(default=None),
 ):
+    """Nested per-subject view (each client's tracked entities as their own
+    rows, YouTube/X toggles included right here) rather than one aggregate-
+    count row per client - built once per-subject toggles existed, so a
+    super admin can see and change access without a click-through to each
+    client's own detail page for the common case.
+    """
     clients = db.query(Client).order_by(Client.created_at.asc()).all()
-    rows = [
-        {
-            "client": c,
-            "subject_count": len(c.subjects),
-            "x_grant_count": sum(1 for s in c.subjects if s.x_access),
-            "user_count": len(c.users),
-        }
-        for c in clients
-    ]
+    rows = []
+    for c in clients:
+        subject_rows = []
+        for s in sorted(c.subjects, key=lambda s: s.entity.name):
+            config = db.get(EntitySocialConfig, s.entity_id)
+            current_spend = config.x_spend_usd if config is not None else Decimal("0")
+            subject_rows.append({
+                "entity": s.entity,
+                "x_access": s.x_access,
+                "youtube_access": s.youtube_access,
+                "news_access": s.news_access,
+                "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
+                "current_spend_usd": current_spend,
+                "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
+            })
+        rows.append({"client": c, "subject_rows": subject_rows, "user_count": len(c.users)})
     return render(request, "clients_list.html", current_admin, rows=rows, message=message, error=error)
 
 
 @router.get("/clients/new", response_class=HTMLResponse)
-def new_client_form(request: Request, current_admin: Admin = Depends(require_super_admin)):
-    return render(request, "client_form.html", current_admin)
+def new_client_form(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    error: str | None = Query(default=None),
+):
+    entities = db.query(Entity).order_by(Entity.name.asc()).all()
+    return render(request, "client_form.html", current_admin, entities=entities, error=error)
 
 
 @router.post("/clients/new")
 def create_client(
     name: str = Form(...),
+    username: str = Form(default=""),
+    contact_name: str = Form(default=""),
+    password: str = Form(default=""),
+    entity_id: str = Form(default=""),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
+    """Consolidated form, per direct instruction: the common case (a new
+    client with its first login and first tracked subject) used to take
+    three separate submissions across two pages - this does all three in
+    one, while /admin/clients/{id}'s own incremental "add login"/"add
+    tracked entity" forms stay in place for adding more later. Login and
+    subject are both genuinely optional here (blank username = no login
+    created yet, blank entity = no subject tracked yet) since a client can
+    legitimately be created before either is known.
+    """
+    username = username.strip()
+    contact_name = contact_name.strip()
+
+    if username and (not contact_name or not password):
+        return RedirectResponse(
+            "/admin/clients/new?error=A login needs both a contact name and a password.", status_code=303
+        )
+    if username and db.query(ClientUser).filter(ClientUser.username == username).one_or_none() is not None:
+        return RedirectResponse("/admin/clients/new?error=Username already taken.", status_code=303)
+    if username:
+        try:
+            password_hash = hash_password(password)
+        except ValueError as exc:
+            return RedirectResponse(f"/admin/clients/new?error={exc}", status_code=303)
+
     client = Client(name=name, contract_start=date.today())
     db.add(client)
+    db.flush()
+
+    if username:
+        db.add(ClientUser(client_id=client.id, username=username, name=contact_name, password_hash=password_hash))
+
+    # Toggles all default False on the column itself - deliberately not
+    # set here, so a subject added at creation time starts exactly as
+    # invisible as one added later via /subjects/new, per the same
+    # "nothing visible until payment" instruction that set those defaults.
+    if entity_id.strip():
+        db.add(ClientSubject(client_id=client.id, entity_id=int(entity_id)))
+
     db.commit()
     return RedirectResponse(f"/admin/clients/{client.id}?message=Created {name}.", status_code=303)
 
@@ -718,9 +853,13 @@ def client_detail(
         subject_rows.append({
             "entity": s.entity,
             "x_access": s.x_access,
+            "youtube_access": s.youtube_access,
+            "news_access": s.news_access,
             "x_spend_ceiling_usd": s.x_spend_ceiling_usd,
             "current_spend_usd": current_spend,
             "status": status_for(s.x_spend_ceiling_usd, current_spend, s.x_access),
+            "social_fetch_max_results": config.social_fetch_max_results if config is not None else None,
+            "social_fetch_lookback_days": config.social_fetch_lookback_days if config is not None else None,
         })
 
     tracked_entity_ids = {s.entity_id for s in client.subjects}
@@ -743,6 +882,8 @@ def add_client_subject(
     entity_id: int = Form(...),
     grant_x: str | None = Form(default=None),
     x_ceiling: str = Form(default=""),
+    grant_youtube: str | None = Form(default=None),
+    grant_news: str | None = Form(default=None),
     current_admin: Admin = Depends(require_super_admin),
     db: Session = Depends(get_db),
 ):
@@ -760,16 +901,58 @@ def add_client_subject(
                 f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
                 status_code=303,
             )
-        grant_x_access(db, client_id, entity_id, ceiling)
+        subject = grant_x_access(db, client_id, entity_id, ceiling)
     else:
         # Track without X access - same as the CLI's add-client-subject
         # with no --x-ceiling: a real ClientSubject row exists (so the
-        # entity shows up on the client's dashboard, YouTube included),
-        # just with x_access left at its default False.
-        if db.get(ClientSubject, (client_id, entity_id)) is None:
-            db.add(ClientSubject(client_id=client_id, entity_id=entity_id))
+        # entity shows up on the client's dashboard), just with x_access
+        # left at its default False.
+        subject = db.get(ClientSubject, (client_id, entity_id))
+        if subject is None:
+            subject = ClientSubject(client_id=client_id, entity_id=entity_id)
+            db.add(subject)
             db.commit()
+
+    # All three visibility toggles default to False on the column itself
+    # (per direct instruction: nothing is visible on a client's dashboard
+    # until a super admin turns it on, once payment is actually received) -
+    # so these only need to act when the admin explicitly CHECKED the box
+    # at creation time, the opposite of this form's old youtube-only logic.
+    if grant_youtube == "1" and not subject.youtube_access:
+        subject.youtube_access = True
+        db.commit()
+    if grant_news == "1" and not subject.news_access:
+        subject.news_access = True
+        db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Tracking updated.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/grant-x")
+def grant_client_subject_x_access(
+    client_id: int,
+    entity_id: int,
+    x_ceiling: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Turning X on for an already-tracked subject - distinct from
+    add_client_subject above (which only runs once, when the subject is
+    first tracked). A toggle needs to work in both directions at any
+    time, and turning X on always needs a ceiling (grant_x_access itself
+    enforces that), so this is a real form submit, not a bare on/off
+    flip.
+    """
+    try:
+        ceiling = Decimal(x_ceiling) if x_ceiling.strip() else None
+    except InvalidOperation:
+        ceiling = None
+    if ceiling is None or ceiling <= 0:
+        return RedirectResponse(
+            f"/admin/clients/{client_id}?error=A positive monthly X ceiling is required to grant X access.",
+            status_code=303,
+        )
+    grant_x_access(db, client_id, entity_id, ceiling)
+    return RedirectResponse(f"/admin/clients/{client_id}?message=X access granted.", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/revoke")
@@ -778,6 +961,93 @@ def revoke_client_subject(
 ):
     revoke_x_access(db, client_id, entity_id)
     return RedirectResponse(f"/admin/clients/{client_id}?message=X access revoked.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/youtube/enable")
+def enable_client_subject_youtube(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.youtube_access = True
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility enabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/youtube/disable")
+def disable_client_subject_youtube(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    """Visibility-only, unlike X's revoke: YouTube keeps fetching for this
+    entity regardless (free, shared, unconditional per Section 13) - this
+    only stops it from rendering on this one client's dashboard.
+    """
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.youtube_access = False
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=YouTube visibility disabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/news/enable")
+def enable_client_subject_news(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.news_access = True
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility enabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/subjects/{entity_id}/news/disable")
+def disable_client_subject_news(
+    client_id: int, entity_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    """Same visibility-only shape as YouTube's disable - the articles
+    themselves stay published on the B2C site regardless, this only stops
+    them rendering on this one client's dashboard.
+    """
+    subject = db.get(ClientSubject, (client_id, entity_id))
+    if subject is not None:
+        subject.news_access = False
+        db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=News visibility disabled.", status_code=303)
+
+
+@router.post("/clients/{client_id}/entities/{entity_id}/social-fetch-config")
+def update_entity_social_fetch_config(
+    client_id: int,
+    entity_id: int,
+    max_results: str = Form(default=""),
+    lookback_days: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Entity-level, not client-level - see EntitySocialConfig's docstring
+    for why "how much to fetch" has to be one shared number regardless of
+    how many clients track the same entity. Reached from a client's own
+    detail page (the natural place a super admin is already looking at
+    this entity), but changing it here affects every client tracking it.
+    Blank input resets to "use the global default" (settings.
+    social_fetch_max_results_per_entity / no lookback bound), not zero.
+    """
+    config = db.get(EntitySocialConfig, entity_id)
+    if config is None:
+        config = EntitySocialConfig(entity_id=entity_id)
+        db.add(config)
+
+    def _parse_positive_int(raw: str) -> int | None:
+        try:
+            value = int(raw.strip())
+        except ValueError:
+            return None
+        return value if value > 0 else None
+
+    config.social_fetch_max_results = _parse_positive_int(max_results)
+    config.social_fetch_lookback_days = _parse_positive_int(lookback_days)
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Fetch settings updated.", status_code=303)
 
 
 @router.post("/clients/{client_id}/subjects/{entity_id}/remove")
@@ -837,3 +1107,28 @@ def reactivate_client_user(
     user.is_active = True
     db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Reactivated login '{user.username}'.", status_code=303)
+
+
+@router.post("/clients/{client_id}/users/{user_id}/reset-password")
+def reset_client_user_password(
+    client_id: int,
+    user_id: int,
+    password: str = Form(...),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """A super admin setting a new password directly - there's no forgot-
+    password/email flow anywhere in this project (Phase 7's README section
+    already flags this as out of scope), so this is the only way a client's
+    login ever gets a new password, same as how Admin passwords are reset
+    today (edit_admin's optional password field).
+    """
+    user = db.get(ClientUser, user_id)
+    if user is None or user.client_id != client_id:
+        return RedirectResponse(f"/admin/clients/{client_id}", status_code=303)
+    try:
+        user.password_hash = hash_password(password)
+    except ValueError as exc:
+        return RedirectResponse(f"/admin/clients/{client_id}?error={exc}", status_code=303)
+    db.commit()
+    return RedirectResponse(f"/admin/clients/{client_id}?message=Password reset for '{user.username}'.", status_code=303)

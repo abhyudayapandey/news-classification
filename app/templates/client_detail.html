@@ -14,7 +14,8 @@
 <div class="card">
   <h2>Tracked entities</h2>
   <p class="muted">
-    YouTube is fetched for every tracked entity regardless of X access (free tier, no gating).
+    YouTube is fetched for every tracked entity regardless of any toggle below (free, shared,
+    unconditional) - the toggle here only controls whether it's shown on this client's own dashboard.
     X is fetched for an entity only while at least one active client has X access granted for it.
   </p>
   {% if not subject_rows %}
@@ -22,13 +23,55 @@
   {% else %}
   <table>
     <thead>
-      <tr><th>Entity</th><th>X access</th><th>Ceiling / spend</th><th>Status</th><th></th></tr>
+      <tr><th>Entity</th><th>News</th><th>YouTube</th><th>X</th><th>X ceiling / spend</th><th>Status</th><th>Fetch settings</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in subject_rows %}
       <tr>
         <td>{{ r.entity.name }}</td>
-        <td>{{ "Yes" if r.x_access else "No" }}</td>
+        <td>
+          {% if r.news_access %}
+            <span class="badge badge-ok">ON</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/news/disable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
+            </form>
+          {% else %}
+            <span class="badge badge-apolitical">OFF</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/news/enable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
+            </form>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.youtube_access %}
+            <span class="badge badge-ok">ON</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/youtube/disable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn off</button>
+            </form>
+          {% else %}
+            <span class="badge badge-apolitical">OFF</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/youtube/enable">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</button>
+            </form>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.x_access %}
+            <span class="badge badge-ok">ON</span>
+            <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/revoke">
+              <button class="btn" type="submit" style="padding:0.15rem 0.5rem; font-size:0.78rem;" onclick="return confirm('Revoke X access to {{ r.entity.name }} for {{ client.name }}?');">Turn off</button>
+            </form>
+          {% else %}
+            <span class="badge badge-apolitical">OFF</span>
+            <details class="inline" style="display:inline-block;">
+              <summary class="btn" style="display:inline-block; cursor:pointer; padding:0.15rem 0.5rem; font-size:0.78rem;">Turn on</summary>
+              <form method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/grant-x" style="margin-top:0.4rem; min-width:180px;">
+                <input type="text" name="x_ceiling" placeholder="Monthly ceiling $">
+                <button class="btn btn-primary" type="submit" style="margin-top:0.4rem;">Grant</button>
+              </form>
+            </details>
+          {% endif %}
+        </td>
         <td>
           {% if r.x_access %}
             ${{ "%.4f"|format(r.current_spend_usd) }} / ${{ "%.4f"|format(r.x_spend_ceiling_usd) if r.x_spend_ceiling_usd is not none else "?" }}
@@ -41,14 +84,24 @@
           {% elif r.status.value == "approaching" %}<span class="badge badge-overdue">APPROACHING</span>
           {% elif r.status.value == "ok" %}<span class="badge badge-ok">OK</span>
           {% elif r.status.value == "no_ceiling" %}<span class="badge badge-overdue">NO CEILING</span>
-          {% else %}<span class="badge badge-apolitical">NO X ACCESS</span>{% endif %}
+          {% else %}<span class="badge badge-apolitical">-</span>{% endif %}
         </td>
         <td>
-          {% if r.x_access %}
-          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/revoke">
-            <button class="btn" type="submit" onclick="return confirm('Revoke X access to {{ r.entity.name }} for {{ client.name }}?');">Revoke X access</button>
-          </form>
-          {% endif %}
+          <details class="inline" style="display:inline-block;">
+            <summary class="btn" style="display:inline-block; cursor:pointer; padding:0.15rem 0.5rem; font-size:0.78rem;">
+              {% if r.social_fetch_max_results or r.social_fetch_lookback_days %}Custom{% else %}Default{% endif %}
+            </summary>
+            <form method="post" action="/admin/clients/{{ client.id }}/entities/{{ r.entity.id }}/social-fetch-config" style="margin-top:0.4rem; min-width:200px;">
+              <label style="font-size:0.78rem;">Max results per fetch</label>
+              <input type="text" name="max_results" value="{{ r.social_fetch_max_results or '' }}" placeholder="e.g. 10 (default)">
+              <label style="font-size:0.78rem;">Lookback window (days)</label>
+              <input type="text" name="lookback_days" value="{{ r.social_fetch_lookback_days or '' }}" placeholder="e.g. 7 (API default)">
+              <p class="muted" style="font-size:0.75rem;">Shared across every client tracking this entity. Blank = platform default.</p>
+              <button class="btn btn-primary" type="submit" style="margin-top:0.4rem;">Save</button>
+            </form>
+          </details>
+        </td>
+        <td>
           <form class="inline" method="post" action="/admin/clients/{{ client.id }}/subjects/{{ r.entity.id }}/remove">
             <button class="btn btn-danger" type="submit" onclick="return confirm('Stop tracking {{ r.entity.name }} entirely for {{ client.name }}?');">Stop tracking</button>
           </form>
@@ -68,7 +121,10 @@
       {% endfor %}
     </select>
 
+    <label><input type="checkbox" name="grant_news" value="1" style="width:auto; display:inline;"> Show news articles on their dashboard</label>
+    <label><input type="checkbox" name="grant_youtube" value="1" style="width:auto; display:inline;"> Show YouTube on their dashboard</label>
     <label><input type="checkbox" name="grant_x" value="1" style="width:auto; display:inline;"> Grant X access</label>
+    <p class="muted" style="font-size:0.8rem;">All three start off by default - turn them on once payment is received.</p>
 
     <label for="x_ceiling">Monthly X ceiling (USD, only used if X access is checked)</label>
     <input type="text" id="x_ceiling" name="x_ceiling" placeholder="e.g. 25.00">
@@ -109,6 +165,13 @@
             <button class="btn" type="submit">Reactivate</button>
           </form>
           {% endif %}
+          <details class="inline" style="display:inline-block; margin-left:0.5rem;">
+            <summary class="btn" style="display:inline-block; cursor:pointer;">Reset password</summary>
+            <form method="post" action="/admin/clients/{{ client.id }}/users/{{ u.id }}/reset-password" style="margin-top:0.5rem; min-width:220px;">
+              <input type="password" name="password" placeholder="New password" required>
+              <button class="btn btn-primary" type="submit" style="margin-top:0.5rem;">Set password</button>
+            </form>
+          </details>
         </td>
       </tr>
       {% endfor %}

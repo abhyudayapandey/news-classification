@@ -13,7 +13,7 @@ design (see EntitySocialConfig's module docstring for why collapsing the
 two layers into one would either waste money or leak access).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -34,7 +34,7 @@ class XFetcher(SocialFetcher):
         if not self.bearer_token:
             raise ValueError("X_API_BEARER_TOKEN is not set - required to use XFetcher.")
 
-    def fetch(self, entity: Entity, max_results: int) -> list[FetchedMention]:
+    def fetch(self, entity: Entity, max_results: int, lookback_days: int | None = None) -> list[FetchedMention]:
         # Same one-query-per-canonical-name tradeoff as YouTubeFetcher -
         # querying every alias would multiply real per-post-read cost, not
         # just quota, so it's an even sharper tradeoff here.
@@ -46,8 +46,16 @@ class XFetcher(SocialFetcher):
         params = {
             "query": f'"{entity.name}" -is:retweet',
             "max_results": api_max_results,
-            "tweet.fields": "created_at,author_id",
+            "tweet.fields": "created_at,author_id,public_metrics",
         }
+        if lookback_days is not None:
+            # The recent-search endpoint itself only ever covers the last
+            # 7 days regardless of what's passed here - clamped so an
+            # honest "8+ days" request doesn't silently get rejected by
+            # X's API with a 400 instead of just returning its normal
+            # 7-day window.
+            since = datetime.now(timezone.utc) - timedelta(days=min(lookback_days, 7))
+            params["start_time"] = since.strftime("%Y-%m-%dT%H:%M:%SZ")
         headers = {"Authorization": f"Bearer {self.bearer_token}"}
         response = requests.get(_SEARCH_URL, params=params, headers=headers, timeout=_REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
@@ -68,12 +76,26 @@ class XFetcher(SocialFetcher):
                 posted_at = datetime.fromisoformat(post["created_at"].replace("Z", "+00:00")).astimezone(
                     timezone.utc
                 )
+            metrics = post.get("public_metrics", {})
+            engagement = (
+                metrics.get("retweet_count", 0)
+                + metrics.get("like_count", 0)
+                + metrics.get("reply_count", 0)
+                + metrics.get("quote_count", 0)
+            )
             mentions.append(
                 FetchedMention(
                     content_text=post.get("text", ""),
                     author=post.get("author_id"),  # numeric id - resolving to a handle costs a second call/spend
                     posted_at=posted_at,
                     url=f"https://x.com/i/web/status/{post_id}",
+                    engagement_count=engagement,
                 )
             )
+        # X's recent-search has no "sort by engagement" query option (only
+        # recency/relevancy) - most-engaged-first is achieved here instead,
+        # by re-sorting the API's own full response locally. This reorders
+        # only; it never drops anything, so the billable count above stays
+        # exactly what the docstring requires.
+        mentions.sort(key=lambda m: m.engagement_count, reverse=True)
         return mentions

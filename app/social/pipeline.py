@@ -14,8 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.llm.base import EntitySentimentProvider
 from app.models import Client, ClientSubject, Entity, EntitySocialConfig, SocialMention
 from app.models.enums import SocialSource
+from app.processing.geography import guess_geography
 from app.social.base import FetchedMention, SocialFetcher
 
 logger = logging.getLogger(__name__)
@@ -66,13 +68,27 @@ def _entity_has_active_x_access(db: Session, entity_id: int) -> bool:
 
 
 def _store_new_mentions(
-    db: Session, entity_id: int, source: SocialSource, mentions: list[FetchedMention], cost_per_item: Decimal
+    db: Session,
+    entity: Entity,
+    source: SocialSource,
+    mentions: list[FetchedMention],
+    cost_per_item: Decimal,
+    sentiment_provider: EntitySentimentProvider,
 ) -> int:
     """Idempotent on (entity_id, source, url) - a post already stored from
     an earlier fetch is skipped here (storage stays deduplicated) even
     though, for X, it was still billed again by the read that just
     returned it (see SocialMention's docstring on why the per-row cost_usd
     column and the entity-level aggregate don't always reconcile).
+
+    Sentiment is scored only for genuinely NEW rows, same "never re-spend
+    on an already-scored item" discipline as app/processing/entities.py's
+    backfill - a post already stored keeps whatever sentiment it was first
+    scored with, it's never re-classified on a later re-fetch. Reuses
+    EntitySentimentProvider (Section 13.2) unchanged: a social post is
+    just text mentioning the entity, no different in shape from an
+    article's headline+body for this classifier's purposes.
+
     Returns how many rows were newly inserted.
     """
     if not mentions:
@@ -81,7 +97,7 @@ def _store_new_mentions(
     existing_urls = {
         row.url
         for row in db.query(SocialMention.url).filter(
-            SocialMention.entity_id == entity_id, SocialMention.source == source,
+            SocialMention.entity_id == entity.id, SocialMention.source == source,
             SocialMention.url.in_({m.url for m in mentions}),
         )
     }
@@ -90,11 +106,23 @@ def _store_new_mentions(
     for mention in mentions:
         if mention.url in existing_urls:
             continue
+        sentiment_result = sentiment_provider.classify_subject_sentiment(
+            headline="", body_text=mention.content_text, entity_name=entity.name
+        )
+        # Content-derived geography, same text-based heuristic as articles
+        # (app/processing/geography.py) - a tweet or video's own text is
+        # all that's realistically available here (see that module's
+        # docstring on why real geotag metadata isn't used), computed once
+        # at storage time, never re-guessed on a later re-fetch.
+        geography = guess_geography(mention.content_text)
         db.add(
             SocialMention(
-                entity_id=entity_id, source=source, content_text=mention.content_text,
+                entity_id=entity.id, source=source, content_text=mention.content_text,
                 author=mention.author, posted_at=mention.posted_at, url=mention.url,
-                cost_usd=cost_per_item,
+                cost_usd=cost_per_item, engagement_count=mention.engagement_count,
+                sentiment=sentiment_result.sentiment, sentiment_confidence=sentiment_result.confidence_score,
+                state=geography.state, district=geography.district,
+                constituency=geography.constituency, seat_type=geography.seat_type,
             )
         )
         existing_urls.add(mention.url)  # guards against a duplicate URL within the same fetch response
@@ -119,20 +147,30 @@ def fetch_social_for_entity(
     entity: Entity,
     youtube_fetcher: SocialFetcher | None,
     x_fetcher: SocialFetcher | None,
+    sentiment_provider: EntitySentimentProvider | None = None,
 ) -> EntityFetchResult:
+    if sentiment_provider is None:
+        from app.llm.factory import get_entity_sentiment_provider
+
+        sentiment_provider = get_entity_sentiment_provider()
+
     result = EntityFetchResult(entity_id=entity.id)
     config = _get_or_create_config(db, entity.id)
-    max_results = settings.social_fetch_max_results_per_entity
+    # Per-entity overrides (EntitySocialConfig's docstring) take precedence
+    # over the global defaults, but only when actually set - None means
+    # "use the global default", not "fetch zero/unbounded".
+    max_results = config.social_fetch_max_results or settings.social_fetch_max_results_per_entity
+    lookback_days = config.social_fetch_lookback_days
 
     # YouTube: always attempted, free tier, no access gating at all - the
     # only reason it's skipped is a missing API key (caught as a normal
     # fetch error below, same as any other failure).
     if youtube_fetcher is not None:
         try:
-            mentions = youtube_fetcher.fetch(entity, max_results)
+            mentions = youtube_fetcher.fetch(entity, max_results, lookback_days)
             result.youtube_posts_read = len(mentions)
             result.youtube_new_mentions = _store_new_mentions(
-                db, entity.id, SocialSource.YOUTUBE, mentions, Decimal("0")
+                db, entity, SocialSource.YOUTUBE, mentions, Decimal("0"), sentiment_provider
             )
             config.youtube_last_fetched_at = datetime.now(timezone.utc)
         except Exception as exc:  # noqa: BLE001 - one bad entity/source shouldn't stall the whole batch
@@ -151,7 +189,7 @@ def fetch_social_for_entity(
         result.x_skipped_reason = "X_API_BEARER_TOKEN not configured"
     else:
         try:
-            mentions = x_fetcher.fetch(entity, max_results)
+            mentions = x_fetcher.fetch(entity, max_results, lookback_days)
             cost_per_item = Decimal(str(settings.x_cost_per_post_usd))
             # Billed for every post X actually returned, whether or not it
             # turns out to already be stored - see this module's and
@@ -161,7 +199,9 @@ def fetch_social_for_entity(
             config.x_spend_usd = config.x_spend_usd + incurred
             config.x_last_fetched_at = datetime.now(timezone.utc)
             result.x_posts_read = len(mentions)
-            result.x_new_mentions = _store_new_mentions(db, entity.id, SocialSource.X, mentions, cost_per_item)
+            result.x_new_mentions = _store_new_mentions(
+                db, entity, SocialSource.X, mentions, cost_per_item, sentiment_provider
+            )
             result.x_cost_incurred_usd = incurred
         except Exception as exc:  # noqa: BLE001
             logger.exception("X fetch failed for entity %s", entity.id)
@@ -186,6 +226,7 @@ def fetch_social_mentions(
     limit: int | None = None,
     youtube_fetcher: SocialFetcher | None = None,
     x_fetcher: SocialFetcher | None = None,
+    sentiment_provider: EntitySentimentProvider | None = None,
 ) -> SocialFetchResult:
     """Manually-triggered stage, same pattern as /ingest/run, /process/run,
     /queue/assign - nothing in this codebase runs on its own. `limit` caps
@@ -196,7 +237,9 @@ def fetch_social_mentions(
     configured API keys; either is left None (and every entity's fetch for
     that source is skipped with a clear reason) if its key isn't set -
     fails open by omission, never crashes the whole run over one missing
-    key.
+    key. sentiment_provider is built once here (not per-entity) via the
+    same cached factory app/processing/pipeline.py uses, so a batch run
+    over many entities doesn't reload the local model repeatedly.
     """
     if youtube_fetcher is None:
         try:
@@ -212,6 +255,10 @@ def fetch_social_mentions(
             x_fetcher = XFetcher()
         except ValueError:
             x_fetcher = None
+    if sentiment_provider is None:
+        from app.llm.factory import get_entity_sentiment_provider
+
+        sentiment_provider = get_entity_sentiment_provider()
 
     stmt = select(Entity).order_by(Entity.id.asc())
     if limit is not None:
@@ -221,7 +268,7 @@ def fetch_social_mentions(
     result = SocialFetchResult()
     for entity in entities:
         try:
-            entity_result = fetch_social_for_entity(db, entity, youtube_fetcher, x_fetcher)
+            entity_result = fetch_social_for_entity(db, entity, youtube_fetcher, x_fetcher, sentiment_provider)
             db.commit()
             result.entities_scanned += 1
             result.youtube_posts_read += entity_result.youtube_posts_read

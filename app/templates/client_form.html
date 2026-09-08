@@ -2,11 +2,34 @@
 {% block title %}New Client{% endblock %}
 {% block content %}
 <p><a href="/admin/clients">&larr; Back to clients</a></p>
-<div class="card" style="max-width: 420px;">
+<div class="card" style="max-width: 480px;">
   <h1>New client</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
   <form method="post" action="/admin/clients/new">
     <label for="name">Client name</label>
     <input type="text" id="name" name="name" required autofocus>
+
+    <h3 style="margin-top:1.5rem;">Login (optional)</h3>
+    <p class="muted" style="margin-top:-0.5rem;">Leave blank to create the client without a portal login yet.</p>
+    <label for="username">Username</label>
+    <input type="text" id="username" name="username">
+    <label for="contact_name">Contact name</label>
+    <input type="text" id="contact_name" name="contact_name">
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password">
+
+    <h3 style="margin-top:1.5rem;">First tracked subject (optional)</h3>
+    <p class="muted" style="margin-top:-0.5rem;">
+      News, YouTube, and X visibility all start off - turn them on later, once payment is received.
+    </p>
+    <label for="entity_id">Entity</label>
+    <select id="entity_id" name="entity_id">
+      <option value="">- None yet -</option>
+      {% for e in entities %}
+      <option value="{{ e.id }}">{{ e.name }} ({{ e.type.value }})</option>
+      {% endfor %}
+    </select>
+
     <div style="margin-top: 1.25rem;">
       <button class="btn btn-primary" type="submit">Create client</button>
     </div>

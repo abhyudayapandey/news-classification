@@ -1,49 +1,53 @@
-{% extends "base.html" %}
+{% extends "public_base.html" %}
 {% block title %}Client Dashboard{% endblock %}
+
 {% block header %}
-<header>
-  <div><span class="brand">News Framing Platform &middot; Client Portal</span></div>
-  <div>
-    <span class="user-info">{{ current_client_user.name }} ({{ current_client_user.client.name }})</span>
-    <form class="inline" method="post" action="/client/logout" style="display:inline;">
-      <button class="btn" type="submit" style="margin-left:0.75rem;">Log out</button>
-    </form>
+<header class="border-b border-line">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-6 flex-wrap">
+    <a href="/client/dashboard" class="flex items-center gap-2.5 no-underline group">
+      <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-accent text-accent-ink font-display font-bold text-sm shrink-0 transition-transform duration-200 group-hover:-rotate-6">NF</span>
+      <span class="font-display text-xl font-bold text-ink tracking-tight">News Framing Platform</span>
+      <span class="hidden sm:inline text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-faint ml-1">Client Portal</span>
+    </a>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-ink-muted">{{ current_client_user.name }} &middot; <span class="font-semibold text-ink">{{ current_client_user.client.name }}</span></span>
+      <form method="post" action="/client/logout">
+        <button type="submit" class="text-sm font-semibold text-ink-muted border border-line rounded-full px-3.5 py-1.5 hover:text-ink hover:border-ink-faint transition-colors">Log out</button>
+      </form>
+    </div>
   </div>
 </header>
 {% endblock %}
-{% block content %}
-<h1>Your tracked subjects</h1>
-<p class="muted">
-  YouTube coverage is included for every subject below. X coverage and spend are shown only where
-  your plan includes X access for that subject.
-</p>
 
-{% if not subjects %}
-  <p class="muted">No subjects are being tracked for your account yet - contact your account manager.</p>
-{% else %}
-<div class="card" style="padding:0;">
-  <table>
-    <thead>
-      <tr><th>Subject</th><th>X access</th><th>Your X usage this month</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for s in subjects %}
-      <tr>
-        <td>{{ s.entity.name }}</td>
-        <td>{{ "Included" if s.x_access else "Not included" }}</td>
-        <td>
-          {% if s.x_access %}
-            ${{ "%.4f"|format(s.current_spend_usd) }}
-            {% if s.x_spend_ceiling_usd is not none %} / ${{ "%.4f"|format(s.x_spend_ceiling_usd) }} contracted{% endif %}
-          {% else %}
-            <span class="muted">-</span>
-          {% endif %}
-        </td>
-        <td><a class="btn" href="/client/entities/{{ s.entity.id }}">View mentions</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+  <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">Your account</p>
+  <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink text-balance leading-tight mb-2">Tracked subjects</h1>
+  <p class="text-sm text-ink-muted mb-10 max-w-prose">
+    News, YouTube, and X coverage are each shown per subject only where your plan includes them.
+  </p>
+
+  {% if not subjects %}
+  <div class="bg-surface border border-line rounded-2xl p-8 text-center">
+    <p class="text-sm text-ink-faint">No subjects are being tracked for your account yet - contact your account manager.</p>
+  </div>
+  {% else %}
+  <div class="flex flex-col gap-3">
+    {% for s in subjects %}
+    <a href="/client/entities/{{ s.entity.id }}"
+       class="group flex items-center justify-between gap-4 bg-surface border border-line rounded-2xl px-5 py-4 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:border-ink-faint">
+      <div class="flex items-center gap-3 flex-wrap">
+        <h3 class="font-display text-[16px] font-semibold text-ink">{{ s.entity.name }}</h3>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.news_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">News</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.youtube_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">YouTube</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.x_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">X</span>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 10 10" fill="none" class="shrink-0 text-ink-faint group-hover:text-accent transition-colors" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}
