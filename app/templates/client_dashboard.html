@@ -37,15 +37,21 @@
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     {% for s in subjects %}
     <a href="/client/entities/{{ s.entity.id }}"
-       class="group flex flex-col gap-3 bg-surface border border-line rounded-2xl p-5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:border-ink-faint">
+       class="group flex flex-col gap-3.5 bg-surface border border-line rounded-2xl p-5 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg hover:border-ink-faint">
       <div class="flex items-start justify-between gap-2">
-        <h3 class="font-display text-[16px] font-semibold text-ink">{{ s.entity.name }}</h3>
-        <svg width="14" height="14" viewBox="0 0 10 10" fill="none" class="shrink-0 mt-1 text-ink-faint group-hover:text-accent transition-colors" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="flex items-center gap-3">
+          <span class="flex items-center justify-center w-9 h-9 rounded-full bg-accent-soft text-accent font-display font-bold text-[13px] shrink-0">{{ s.initials }}</span>
+          <div>
+            <h3 class="font-display text-[15px] font-semibold text-ink leading-tight">{{ s.entity.name }}</h3>
+            <p class="text-[12px] text-ink-faint mt-0.5">{{ s.subtitle }}</p>
+          </div>
+        </div>
+        <svg width="13" height="13" viewBox="0 0 10 10" fill="none" class="shrink-0 mt-1.5 text-ink-faint group-hover:text-accent transition-colors" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.news_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">News</span>
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.youtube_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">YouTube</span>
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11.5px] font-medium {% if s.x_access %}bg-accent-soft text-accent{% else %}bg-surface-hover text-ink-faint{% endif %}">X</span>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="chan-badge {% if s.news_access %}chan-on{% else %}chan-off{% endif %}">NEWS</span>
+        <span class="chan-badge {% if s.youtube_access %}chan-on{% else %}chan-off{% endif %}">YOUTUBE</span>
+        <span class="chan-badge {% if s.x_access %}chan-on{% else %}chan-off{% endif %}">X</span>
       </div>
     </a>
     {% endfor %}

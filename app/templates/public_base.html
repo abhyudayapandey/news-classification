@@ -73,9 +73,21 @@
       --accent-ink: #17111F;
     }
   }
+  /* Deliberately not redefined in the dark-mode block above - a video
+     thumbnail placeholder represents an actual video frame, not a themed
+     UI surface, so it should look the same regardless of light/dark. */
+  :root { --thumb-bg: #23212E; }
   html { color-scheme: light dark; }
   body { background: var(--paper); }
   .text-balance { text-wrap: balance; }
+
+  /* Channel-access pills (client portal: dashboard cards) - solid fill for
+     "on", outline-only for "off". Deliberately higher-contrast than a
+     soft-tint-vs-tint pairing, which reads too similarly at a glance to
+     tell on from off without close inspection. */
+  .chan-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; }
+  .chan-on { background: var(--accent); color: var(--accent-ink); }
+  .chan-off { background: transparent; color: var(--ink-faint); border: 1px solid var(--line); }
 
   /* Subtle animated-underline hover for nav links - the one "alive" touch
      in the header, not a color swap alone. */
