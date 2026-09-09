@@ -16,15 +16,20 @@ computed independently of whichever ClassificationProvider ran or what tag
 it produced.
 
 Same "no seeded master list" posture as the rest of this build's geography
-work: state detection reuses jurisdiction.py's own plain-name list (no
-district/constituency gazetteer exists to match against in this build
-environment, and none was asked for). District and constituency are
-therefore only ever recognized via an explicit, self-naming phrase in the
-text - "X district", "Y Lok Sabha seat" - never guessed from a bare place
-name alone, which would have no way to be verified here and risks a wrong
-guess being worse than no guess at all. Whatever isn't explicitly named
-this way is left null, which is the correct, honest answer for "we don't
-know" - not something to fill in by guessing.
+work: state detection reuses jurisdiction.py's own plain-name list. District
+and constituency are otherwise only recognized via an explicit, self-naming
+phrase in the text - "X district", "Y Lok Sabha seat" - never guessed from
+a bare place name alone in general, since an arbitrary capitalized word has
+no way to be verified here and a wrong guess is worse than no guess.
+
+_KNOWN_BARE_DISTRICTS is the deliberate, narrow exception to that: per
+direct instruction, a small curated list of place names this platform is
+actively pitching in (Jodhpur, Udaipur), where local outlets simply write
+the city name and never spell out "district" - requiring the explicit
+phrase would silently geo-tag nothing for exactly the content this list
+exists to catch. This is still not a general gazetteer (that posture is
+unchanged for every other place name) - it's a short, explicitly vetted
+list, extended only when a specific place is worth the same treatment.
 
 Posting location (real geotags on a tweet or a video) is the other source
 direct instruction calls out - not implemented here: X's recent-search API
@@ -58,6 +63,13 @@ _CONSTITUENCY_OF_RE = re.compile(
     rf"\b(Lok Sabha|Vidhan Sabha|[Aa]ssembly)\s+(?:[Cc]onstituency|[Ss]eat)\s+of\s+({_PLACE})\b"
 )
 
+# See module docstring: a short, explicitly curated list of place names
+# recognized as a district from a bare mention alone - add to this list
+# deliberately, one vetted place at a time, never as a stand-in for a real
+# gazetteer.
+_KNOWN_BARE_DISTRICTS = ["Jodhpur", "Udaipur"]
+_BARE_DISTRICT_RE = re.compile(r"\b(" + "|".join(re.escape(p) for p in _KNOWN_BARE_DISTRICTS) + r")\b")
+
 
 @dataclass
 class GuessedGeography:
@@ -90,7 +102,10 @@ def guess_state(text: str) -> str | None:
 
 def guess_district(text: str) -> str | None:
     match = _DISTRICT_RE.search(text)
-    return match.group(1).strip() if match else None
+    if match:
+        return match.group(1).strip()
+    match = _BARE_DISTRICT_RE.search(text)
+    return match.group(1) if match else None
 
 
 def guess_constituency(text: str) -> tuple[str, SeatType] | None:
