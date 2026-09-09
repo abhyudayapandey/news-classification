@@ -54,6 +54,51 @@ def format_jurisdiction(raw: str | None) -> str | None:
     return raw.title()
 
 
+def entity_subtitle(entity) -> str:
+    """Type/party/state line shown under an entity's name on the client
+    portal (dashboard cards and a subject's detail header) - built from
+    Entity.entity_metadata's free-form fields (Section 13.1), since what's
+    worth showing differs by entity type and there's no fixed schema for
+    it (see Entity's own docstring). Deliberately tolerant of whichever
+    keys are actually present - app/data/entity_seed.py doesn't populate
+    every field for every entity.
+    """
+    from app.models.enums import EntityType
+
+    meta = entity.entity_metadata or {}
+    if entity.type == EntityType.PERSON:
+        parts = [p for p in (meta.get("role"), meta.get("party")) if p]
+        return " · ".join(parts) if parts else "Person"
+    if meta.get("scope") == "state" and meta.get("state"):
+        return f"State party · {meta['state']}"
+    if meta.get("scope") == "national":
+        return "National party"
+    return "Party"
+
+
+def entity_initials(name: str) -> str:
+    """Up to 2 letters for a dashboard card's avatar circle - first letter
+    of the first two words ("Rohan Deshmukh" -> "RD", "Shiv Sena" -> "SS"),
+    or just the first letter for a single-word name.
+    """
+    words = name.split()
+    letters = "".join(w[0] for w in words[:2])
+    return letters.upper() or "?"
+
+
+def youtube_thumbnail_url(mention_url: str) -> str | None:
+    """hqdefault.jpg thumbnail for a stored YouTube mention, keyed off the
+    same v=<id> query param the stored video URL itself carries - a fixed,
+    free URL pattern, no API call needed. None if the URL is malformed
+    (defensive only; every stored YouTube mention's url comes from
+    app/social/youtube.py's own fetch, which always includes v=).
+    """
+    if "v=" not in mention_url:
+        return None
+    video_id = mention_url.split("v=", 1)[1].split("&", 1)[0]
+    return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg" if video_id else None
+
+
 def excerpt(text: str, max_chars: int = 200) -> str:
     """Word-boundary-safe truncation for a card's teaser line. Source is
     always Article.body_text (the RSS teaser) - see app/public/queries.py

@@ -36,7 +36,8 @@ from app.auth.client_session import get_current_client_user, get_current_client_
 from app.auth.security import verify_password
 from app.db import get_db
 from app.models import Article, ArticleEntity, ClientSubject, ClientUser, Entity, SocialMention
-from app.models.enums import SocialSource
+from app.models.enums import SocialSource, SubjectSentiment
+from app.public.formatting import entity_initials, entity_subtitle, youtube_thumbnail_url
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
 
@@ -125,7 +126,14 @@ def client_dashboard(
         .all()
     )
     rows = [
-        {"entity": s.entity, "x_access": s.x_access, "youtube_access": s.youtube_access, "news_access": s.news_access}
+        {
+            "entity": s.entity,
+            "subtitle": entity_subtitle(s.entity),
+            "initials": entity_initials(s.entity.name),
+            "x_access": s.x_access,
+            "youtube_access": s.youtube_access,
+            "news_access": s.news_access,
+        }
         for s in subjects
     ]
     return render(request, "client_dashboard.html", current_client_user, subjects=rows)
@@ -162,6 +170,27 @@ def _geo_options_from(*item_lists) -> list[dict]:
 def _matches_geo(item, geo_kind: str, geo_value: str) -> bool:
     value = item.get(geo_kind) if isinstance(item, dict) else getattr(item, geo_kind)
     return value == geo_value
+
+
+def _split_by_sentiment(mentions: list[SocialMention]) -> tuple[list, list, list]:
+    """Buckets social mentions into (favorable, neutral, unfavorable) for
+    the YouTube/X tabs' sentiment columns - the same three-column pattern
+    already used for articles' pro/anti/apolitical split above, applied to
+    Section 13.2's subject-sentiment axis instead. A mention that predates
+    sentiment scoring (SocialMention.sentiment is None - see
+    app/social/backfill.py) falls into Neutral rather than disappearing
+    from every column; in practice this is rare since backfill covers
+    existing rows and every new mention is scored at storage time.
+    """
+    favorable, neutral, unfavorable = [], [], []
+    for m in mentions:
+        if m.sentiment == SubjectSentiment.FAVORABLE:
+            favorable.append(m)
+        elif m.sentiment == SubjectSentiment.UNFAVORABLE:
+            unfavorable.append(m)
+        else:
+            neutral.append(m)
+    return favorable, neutral, unfavorable
 
 
 @router.get("/entities/{entity_id}", response_class=HTMLResponse)
@@ -258,11 +287,17 @@ def client_entity_detail(
     anti_articles = [a for a in news_articles if a["published_tag"] == "anti-establishment"]
     apolitical_articles = [a for a in news_articles if a["published_tag"] == "apolitical"]
 
+    youtube_favorable, youtube_neutral, youtube_unfavorable = _split_by_sentiment(youtube_mentions)
+    x_favorable, x_neutral, x_unfavorable = _split_by_sentiment(x_mentions)
+
     return render(
         request, "client_entity_detail.html", current_client_user,
-        entity=subject.entity, subject=subject,
+        entity=subject.entity, subject=subject, subtitle=entity_subtitle(subject.entity),
         news_articles=news_articles, youtube_mentions=youtube_mentions, x_mentions=x_mentions,
         pro_articles=pro_articles, anti_articles=anti_articles, apolitical_articles=apolitical_articles,
+        youtube_favorable=youtube_favorable, youtube_neutral=youtube_neutral, youtube_unfavorable=youtube_unfavorable,
+        x_favorable=x_favorable, x_neutral=x_neutral, x_unfavorable=x_unfavorable,
+        youtube_thumbnail_url=youtube_thumbnail_url,
         social_range=social_range, social_ranges=SOCIAL_RANGES,
         geo_options=geo_options, selected_geo=selected_geo,
     )
