@@ -59,3 +59,21 @@
 - name: The Print
   rss_feed_url: https://theprint.in/feed/
   is_active: false
+
+# Jodhpur/Udaipur local coverage - added for the two constituencies being
+# pitched to directly (see app/processing/geography.py's
+# _KNOWN_BARE_DISTRICTS for the matching change that goes with this).
+# Both URLs confirmed live from a real browser (Safari's own "this is a
+# link to an RSS feed" prompt, which only fires for actual RSS/XML content)
+# - the one verification this build environment's blocked egress couldn't
+# do itself. Unconfirmed: whether this is Patrika's Hindi or English edition
+# feed (patrika.com's default is Hindi; /en/ is a separate section) - worth
+# checking article language before assuming admin reviewers can read these
+# blind the same way as the English-language outlets above.
+- name: Rajasthan Patrika (Jodhpur)
+  rss_feed_url: https://cms.patrika.com/googlefeed/blog/location/jodhpur-news
+  is_active: true
+
+- name: Rajasthan Patrika (Udaipur)
+  rss_feed_url: https://cms.patrika.com/googlefeed/blog/location/udaipur-news
+  is_active: true
