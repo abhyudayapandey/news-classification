@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.llm.base import EntitySentimentProvider
+from app.llm.base import ENTITY_SENTIMENT_BATCH_SIZE, EntitySentimentBatchItem, EntitySentimentProvider, chunked
 from app.llm.factory import get_entity_sentiment_provider
 from app.models import Article, ArticleEntity, Entity
 from app.models.enums import EntityProminence
@@ -134,10 +134,20 @@ def apply_entity_matches(
     redo (app/processing/entities.backfill_entities relies on this), but
     re-scoring sentiment on every re-scan would re-spend money on a paid
     provider for no new information.
+
+    Every genuinely new match is scored together via
+    classify_subject_sentiment_batch, chunked to ENTITY_SENTIMENT_BATCH_SIZE
+    - a cabinet-reshuffle article naming fifteen ministers costs one call
+    here, not fifteen (see that method's docstring). Unlike
+    SocialMention.sentiment, ArticleEntity.system_subject_sentiment is
+    NOT NULL, so a match the batch call didn't return an index for (a
+    partial/failed batch - not the normal case) is scored individually as
+    a fallback rather than stored with no sentiment at all.
     """
     existing_by_entity_id = {ae.entity_id: ae for ae in article.entity_mentions}
     result = ExtractionResult(mentions_found=len(matches))
 
+    new_matches = []
     for match in matches:
         existing = existing_by_entity_id.get(match.entity.id)
         if existing is not None:
@@ -146,22 +156,39 @@ def apply_entity_matches(
             existing.first_mention_offset = match.first_mention_offset
             existing.prominence = match.prominence
             continue
+        new_matches.append(match)
 
-        sentiment = sentiment_provider.classify_subject_sentiment(article.headline, article.body_text, match.entity.name)
-        result.newly_classified += 1
-        db.add(
-            ArticleEntity(
-                article_id=article.id,
-                entity_id=match.entity.id,
-                mention_count=match.mention_count,
-                in_headline=match.in_headline,
-                first_mention_offset=match.first_mention_offset,
-                prominence=match.prominence,
-                system_subject_sentiment=sentiment.sentiment,
-                subject_sentiment_confidence=sentiment.confidence_score,
-                subject_sentiment_provider=sentiment_provider.name,
+    if new_matches:
+        batch_items = [
+            EntitySentimentBatchItem(
+                index=i, headline=article.headline, body_text=article.body_text, entity_name=match.entity.name
             )
-        )
+            for i, match in enumerate(new_matches)
+        ]
+        sentiment_by_index = {}
+        for chunk in chunked(batch_items, ENTITY_SENTIMENT_BATCH_SIZE):
+            sentiment_by_index.update(sentiment_provider.classify_subject_sentiment_batch(chunk))
+
+        for i, match in enumerate(new_matches):
+            sentiment = sentiment_by_index.get(i)
+            if sentiment is None:
+                sentiment = sentiment_provider.classify_subject_sentiment(
+                    article.headline, article.body_text, match.entity.name
+                )
+            result.newly_classified += 1
+            db.add(
+                ArticleEntity(
+                    article_id=article.id,
+                    entity_id=match.entity.id,
+                    mention_count=match.mention_count,
+                    in_headline=match.in_headline,
+                    first_mention_offset=match.first_mention_offset,
+                    prominence=match.prominence,
+                    system_subject_sentiment=sentiment.sentiment,
+                    subject_sentiment_confidence=sentiment.confidence_score,
+                    subject_sentiment_provider=sentiment_provider.name,
+                )
+            )
 
     article.entities_extracted_at = datetime.now(timezone.utc)
     return result

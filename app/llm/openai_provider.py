@@ -8,12 +8,21 @@ import logging
 from openai import OpenAI
 
 from app.config import settings
-from app.llm.base import ClassificationProvider, ClassificationResult, EntitySentimentProvider, EntitySentimentResult
+from app.llm.base import (
+    ClassificationProvider,
+    ClassificationResult,
+    EntitySentimentBatchItem,
+    EntitySentimentProvider,
+    EntitySentimentResult,
+)
 from app.llm.schema import (
     CLASSIFICATION_INSTRUCTIONS,
+    ENTITY_SENTIMENT_BATCH_INSTRUCTIONS,
     FORCE_RELEVANT_INSTRUCTIONS,
     LLMClassificationOutput,
+    LLMEntitySentimentBatchOutput,
     LLMEntitySentimentOutput,
+    build_entity_sentiment_batch_user_prompt,
     build_entity_sentiment_instructions,
     build_user_prompt,
 )
@@ -90,3 +99,28 @@ class OpenAIEntitySentimentProvider(EntitySentimentProvider):
         return EntitySentimentResult(
             sentiment=SubjectSentiment(parsed.sentiment), confidence_score=parsed.confidence_score
         )
+
+    def classify_subject_sentiment_batch(
+        self, items: list[EntitySentimentBatchItem]
+    ) -> dict[int, EntitySentimentResult]:
+        """One billed call for the whole list - see
+        EntitySentimentProvider.classify_subject_sentiment_batch's
+        docstring. A model-dropped index is simply absent from the
+        result; callers already treat a missing score as "leave this one
+        for next time," no fallback call is made here.
+        """
+        if not items:
+            return {}
+        completion = self._client.chat.completions.parse(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": ENTITY_SENTIMENT_BATCH_INSTRUCTIONS},
+                {"role": "user", "content": build_entity_sentiment_batch_user_prompt(items)},
+            ],
+            response_format=LLMEntitySentimentBatchOutput,
+        )
+        parsed: LLMEntitySentimentBatchOutput = completion.choices[0].message.parsed
+        return {
+            r.index: EntitySentimentResult(sentiment=SubjectSentiment(r.sentiment), confidence_score=r.confidence_score)
+            for r in parsed.results
+        }

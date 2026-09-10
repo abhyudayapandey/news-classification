@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.llm.base import EntitySentimentProvider
+from app.llm.base import ENTITY_SENTIMENT_BATCH_SIZE, EntitySentimentBatchItem, EntitySentimentProvider, chunked
 from app.models import SocialMention
 from app.models.enums import SocialSource
 from app.processing.geography import guess_geography
@@ -120,13 +120,6 @@ def backfill_social_mentions(
     for mention in mentions:
         result.scanned += 1
         try:
-            sentiment_result = sentiment_provider.classify_subject_sentiment(
-                headline="", body_text=mention.content_text, entity_name=mention.entity.name,
-            )
-            mention.sentiment = sentiment_result.sentiment
-            mention.sentiment_confidence = sentiment_result.confidence_score
-            result.sentiment_scored += 1
-
             if mention.state is None and mention.district is None and mention.constituency is None:
                 geography = guess_geography(mention.content_text)
                 mention.state = geography.state
@@ -142,8 +135,38 @@ def backfill_social_mentions(
                     mention.engagement_count = view_counts[video_id]
                     result.youtube_engagement_updated += 1
         except Exception as exc:  # noqa: BLE001 - one bad row shouldn't stop the whole backfill
-            logger.exception("Backfill failed for social mention %s", mention.id)
+            logger.exception("Geography/engagement backfill failed for social mention %s", mention.id)
             result.errors.append(f"mention {mention.id}: {exc}")
+
+    # Sentiment is scored in batched calls across every scanned mention,
+    # chunked to ENTITY_SENTIMENT_BATCH_SIZE - a handful of calls for the
+    # whole backfill pass, not one call per row (see
+    # EntitySentimentProvider.classify_subject_sentiment_batch's
+    # docstring). A chunk that raises is logged and skipped rather than
+    # aborting the rest of the backfill; any mention a chunk didn't return
+    # a result for simply keeps sentiment=None and is picked up again by
+    # a later backfill call - the same "sentiment IS NULL means needs
+    # backfilling" marker this function already relies on, so a partial
+    # failure here needs no separate retry path of its own.
+    batch_items = [
+        EntitySentimentBatchItem(index=i, headline="", body_text=m.content_text, entity_name=m.entity.name)
+        for i, m in enumerate(mentions)
+    ]
+    for chunk in chunked(batch_items, ENTITY_SENTIMENT_BATCH_SIZE):
+        try:
+            chunk_results = sentiment_provider.classify_subject_sentiment_batch(chunk)
+        except Exception as exc:  # noqa: BLE001 - one bad chunk shouldn't stop the rest of the backfill
+            logger.exception("Sentiment backfill chunk failed")
+            result.errors.append(f"sentiment batch (items {chunk[0].index}-{chunk[-1].index}): {exc}")
+            continue
+        for item in chunk:
+            sentiment_result = chunk_results.get(item.index)
+            if sentiment_result is None:
+                continue
+            mention = mentions[item.index]
+            mention.sentiment = sentiment_result.sentiment
+            mention.sentiment_confidence = sentiment_result.confidence_score
+            result.sentiment_scored += 1
 
     db.commit()
     return result
