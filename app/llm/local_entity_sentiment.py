@@ -17,7 +17,7 @@ flagged in app/processing/entities.py's module docstring and reported back
 to the user directly, not silently absorbed.
 """
 
-from app.llm.base import EntitySentimentProvider, EntitySentimentResult
+from app.llm.base import EntitySentimentBatchItem, EntitySentimentProvider, EntitySentimentResult
 from app.llm.local_embedding import LocalEmbeddingProvider
 from app.llm.similarity import cosine_similarity, softmax_confidence
 from app.models.enums import SubjectSentiment
@@ -55,3 +55,48 @@ class EmbeddingSimilarityEntitySentimentClassifier(EntitySentimentProvider):
         confidences = softmax_confidence(similarities)
         best_index = max(range(3), key=lambda i: similarities[i])
         return EntitySentimentResult(sentiment=sentiments[best_index], confidence_score=confidences[best_index])
+
+    def classify_subject_sentiment_batch(
+        self, items: list[EntitySentimentBatchItem]
+    ) -> dict[int, EntitySentimentResult]:
+        """Same zero-shot technique as classify_subject_sentiment above,
+        batched into one embed() call for the whole list instead of one
+        call per item - four embeddings per item (its text + three
+        reference phrases) all go into a single request to the embedding
+        model, which is one model invocation either way. This doesn't
+        change what this provider is capable of getting right (see this
+        module's own docstring on the technique's limits) - it only
+        removes the redundant per-item call overhead, same as the paid
+        providers' batch overrides do for their own reason (avoiding
+        per-item billing).
+        """
+        if not items:
+            return {}
+        sentiments = [SubjectSentiment.FAVORABLE, SubjectSentiment.UNFAVORABLE, SubjectSentiment.NEUTRAL]
+        texts: list[str] = []
+        for item in items:
+            text = f"{item.headline}\n{item.body_text}"
+            texts.extend(
+                [
+                    text,
+                    f"This article portrays {item.entity_name} favorably, praising their actions, statements, or achievements.",
+                    f"This article is critical of {item.entity_name}, highlighting their failures, wrongdoing, or controversy.",
+                    f"This article mentions {item.entity_name} in a factual way, without praising or criticizing them.",
+                ]
+            )
+        vectors = self._embedding_provider.embed(texts)
+
+        results: dict[int, EntitySentimentResult] = {}
+        for i, item in enumerate(items):
+            article_vec, favorable_vec, unfavorable_vec, neutral_vec = vectors[i * 4 : i * 4 + 4]
+            similarities = [
+                cosine_similarity(article_vec, favorable_vec),
+                cosine_similarity(article_vec, unfavorable_vec),
+                cosine_similarity(article_vec, neutral_vec),
+            ]
+            confidences = softmax_confidence(similarities)
+            best_index = max(range(3), key=lambda i: similarities[i])
+            results[item.index] = EntitySentimentResult(
+                sentiment=sentiments[best_index], confidence_score=confidences[best_index]
+            )
+        return results

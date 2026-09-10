@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.llm.base import EntitySentimentProvider
+from app.llm.base import ENTITY_SENTIMENT_BATCH_SIZE, EntitySentimentBatchItem, EntitySentimentProvider, chunked
 from app.models import Client, ClientSubject, Entity, EntitySocialConfig, SocialMention
 from app.models.enums import SocialSource
 from app.processing.geography import guess_geography
@@ -89,6 +89,17 @@ def store_new_mentions(
     just text mentioning the entity, no different in shape from an
     article's headline+body for this classifier's purposes.
 
+    Every new row in this call is scored together via
+    classify_subject_sentiment_batch, chunked to ENTITY_SENTIMENT_BATCH_SIZE
+    - one (or a small few) calls for the whole fetch, not one call per
+    mention (see that method's docstring for why per-item calls don't
+    scale here). A mention whose index the batch call didn't return
+    (a partial/failed batch, not the normal case) is stored with
+    sentiment=None rather than skipped - indistinguishable from, and
+    picked up by, the same sentiment-backfill pass already built for
+    pre-existing rows (app/social/backfill.py), instead of inventing a
+    second "retry this one mention" path.
+
     Returns how many rows were newly inserted.
     """
     if not mentions:
@@ -102,32 +113,43 @@ def store_new_mentions(
         )
     }
 
-    new_count = 0
+    new_mentions = []
     for mention in mentions:
         if mention.url in existing_urls:
             continue
-        sentiment_result = sentiment_provider.classify_subject_sentiment(
-            headline="", body_text=mention.content_text, entity_name=entity.name
-        )
+        new_mentions.append(mention)
+        existing_urls.add(mention.url)  # guards against a duplicate URL within the same fetch response
+    if not new_mentions:
+        return 0
+
+    batch_items = [
+        EntitySentimentBatchItem(index=i, headline="", body_text=m.content_text, entity_name=entity.name)
+        for i, m in enumerate(new_mentions)
+    ]
+    sentiment_by_index = {}
+    for chunk in chunked(batch_items, ENTITY_SENTIMENT_BATCH_SIZE):
+        sentiment_by_index.update(sentiment_provider.classify_subject_sentiment_batch(chunk))
+
+    for i, mention in enumerate(new_mentions):
         # Content-derived geography, same text-based heuristic as articles
         # (app/processing/geography.py) - a tweet or video's own text is
         # all that's realistically available here (see that module's
         # docstring on why real geotag metadata isn't used), computed once
         # at storage time, never re-guessed on a later re-fetch.
         geography = guess_geography(mention.content_text)
+        sentiment_result = sentiment_by_index.get(i)
         db.add(
             SocialMention(
                 entity_id=entity.id, source=source, content_text=mention.content_text,
                 author=mention.author, posted_at=mention.posted_at, url=mention.url,
                 cost_usd=cost_per_item, engagement_count=mention.engagement_count,
-                sentiment=sentiment_result.sentiment, sentiment_confidence=sentiment_result.confidence_score,
+                sentiment=sentiment_result.sentiment if sentiment_result else None,
+                sentiment_confidence=sentiment_result.confidence_score if sentiment_result else None,
                 state=geography.state, district=geography.district,
                 constituency=geography.constituency, seat_type=geography.seat_type,
             )
         )
-        existing_urls.add(mention.url)  # guards against a duplicate URL within the same fetch response
-        new_count += 1
-    return new_count
+    return len(new_mentions)
 
 
 @dataclass

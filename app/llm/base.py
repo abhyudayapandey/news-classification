@@ -70,6 +70,41 @@ class EntitySentimentResult:
     confidence_score: float
 
 
+@dataclass
+class EntitySentimentBatchItem:
+    """One (text, entity_name) pair to score as part of a batch call - see
+    EntitySentimentProvider.classify_subject_sentiment_batch. `index` is
+    caller-assigned and echoed back in the result mapping so results can
+    be matched to items by identity, not by trusting a paid provider to
+    preserve list order/count across a JSON round-trip.
+    """
+
+    index: int
+    headline: str
+    body_text: str
+    entity_name: str
+
+
+def chunked(items: list, size: int) -> list[list]:
+    """Splits a list into consecutive chunks of at most `size` - the
+    shared helper every ENTITY_SENTIMENT_BATCH_SIZE-respecting call site
+    (app/social/pipeline.py, app/processing/entities.py,
+    app/social/backfill.py) uses before calling
+    classify_subject_sentiment_batch, so chunk size stays one constant to
+    tune, not three copy-pasted loops."""
+    return [items[i : i + size] for i in range(0, len(items), size)]
+
+
+# Cap on how many items go into one batched call. Not about token limits
+# (a real LLM's context window comfortably fits far more than this) - it's
+# about blast radius and output reliability: a failed call means every
+# item in it falls back to being scored individually (see each provider's
+# classify_subject_sentiment_batch override), and a very large item count
+# in one JSON response is where a model is likeliest to drop or miscount
+# an entry. Every batch call site chunks its input to this size.
+ENTITY_SENTIMENT_BATCH_SIZE = 25
+
+
 class EntitySentimentProvider(ABC):
     """Section 13.2's subject-specific sentiment axis - same provider-
     swappable pattern as ClassificationProvider above (a new classification
@@ -92,3 +127,33 @@ class EntitySentimentProvider(ABC):
     @abstractmethod
     def classify_subject_sentiment(self, headline: str, body_text: str, entity_name: str) -> EntitySentimentResult:
         raise NotImplementedError
+
+    def classify_subject_sentiment_batch(
+        self, items: list[EntitySentimentBatchItem]
+    ) -> dict[int, EntitySentimentResult]:
+        """Scores many (text, entity_name) pairs at once, keyed by each
+        item's `index` in the returned dict. Exists so a caller with N
+        social mentions or N entities-in-one-article pays for ONE call
+        (one prompt, one round trip) instead of N - see this module's own
+        callers (app/social/pipeline.py, app/processing/entities.py,
+        app/social/backfill.py) for why per-item calls don't scale here:
+        a single busy fetch cycle across several tracked entities was
+        issuing dozens of separate billed LLM calls for what is, to a
+        paid provider, one prompt's worth of work.
+
+        Default implementation: no real batching, just one
+        classify_subject_sentiment() call per item - correct but pays the
+        old per-item cost. Every provider that can actually batch (Gemini,
+        OpenAI, and the local embedding provider, each for its own reason)
+        overrides this; this default only exists so a future provider
+        that hasn't implemented batching yet still works, degraded rather
+        than broken. Callers are responsible for chunking to
+        ENTITY_SENTIMENT_BATCH_SIZE before calling this - kept a caller
+        concern rather than done here, since a caller may need to interleave
+        chunk results with other per-item work (e.g. skipping already-scored
+        rows) that this method has no visibility into.
+        """
+        return {
+            item.index: self.classify_subject_sentiment(item.headline, item.body_text, item.entity_name)
+            for item in items
+        }

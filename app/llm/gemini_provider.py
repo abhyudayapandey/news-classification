@@ -9,12 +9,21 @@ from google import genai
 from google.genai import types
 
 from app.config import settings
-from app.llm.base import ClassificationProvider, ClassificationResult, EntitySentimentProvider, EntitySentimentResult
+from app.llm.base import (
+    ClassificationProvider,
+    ClassificationResult,
+    EntitySentimentBatchItem,
+    EntitySentimentProvider,
+    EntitySentimentResult,
+)
 from app.llm.schema import (
     CLASSIFICATION_INSTRUCTIONS,
+    ENTITY_SENTIMENT_BATCH_INSTRUCTIONS,
     FORCE_RELEVANT_INSTRUCTIONS,
     LLMClassificationOutput,
+    LLMEntitySentimentBatchOutput,
     LLMEntitySentimentOutput,
+    build_entity_sentiment_batch_user_prompt,
     build_entity_sentiment_instructions,
     build_user_prompt,
 )
@@ -85,3 +94,30 @@ class GeminiEntitySentimentProvider(EntitySentimentProvider):
         return EntitySentimentResult(
             sentiment=SubjectSentiment(parsed.sentiment), confidence_score=parsed.confidence_score
         )
+
+    def classify_subject_sentiment_batch(
+        self, items: list[EntitySentimentBatchItem]
+    ) -> dict[int, EntitySentimentResult]:
+        """One billed call for the whole list, not one per item - see
+        EntitySentimentProvider.classify_subject_sentiment_batch's
+        docstring for why this exists. Any index the model fails to
+        return (a rare structured-output miss, not a design assumption)
+        is simply absent from the result dict; callers already treat a
+        missing/failed score as "leave this one for next time" via their
+        own per-item try/except, so no fallback call is made here.
+        """
+        if not items:
+            return {}
+        response = self._client.models.generate_content(
+            model=self.model,
+            contents=f"{ENTITY_SENTIMENT_BATCH_INSTRUCTIONS}\n\n{build_entity_sentiment_batch_user_prompt(items)}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=LLMEntitySentimentBatchOutput,
+            ),
+        )
+        parsed: LLMEntitySentimentBatchOutput = response.parsed
+        return {
+            r.index: EntitySentimentResult(sentiment=SubjectSentiment(r.sentiment), confidence_score=r.confidence_score)
+            for r in parsed.results
+        }
