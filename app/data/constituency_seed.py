@@ -15,16 +15,30 @@ actively being pitched in (Rajasthan, Uttar Pradesh, Punjab,
 Uttarakhand) - boundaries unchanged since the 2008 delimitation, so this
 is the lower-risk half of this file.
 
-Vidhan Sabha (MLA) seats are DELIBERATELY NOT seeded here yet, even
-though they matter more for a state-election pitch than Lok Sabha does -
-that's exactly why the bar is higher, not lower. Uttar Pradesh alone has
-403 assembly seats; free-recalling several hundred hyper-local
-constituency names per state is a fundamentally less reliable exercise
-than the ~25-80-seat Lok Sabha lists above, and a wrong or missing seat
-name is the kind of error a political client notices immediately. Source
-these from each state's official delimitation list (ECI or the state
-Chief Electoral Officer's site) before seeding MLA rows - don't extend
-this list by free recall the way the rest of it was built.
+Vidhan Sabha (MLA) seats for Rajasthan, Uttar Pradesh, and Punjab are
+DELIBERATELY NOT seeded here yet, even though they matter more for a
+state-election pitch than Lok Sabha does - that's exactly why the bar is
+higher, not lower. Uttar Pradesh alone has 403 assembly seats; free-
+recalling several hundred hyper-local constituency names per state is a
+fundamentally less reliable exercise than the ~25-80-seat Lok Sabha
+lists above, and a wrong or missing seat name is the kind of error a
+political client notices immediately. Source these from each state's
+official delimitation list (ECI or the state Chief Electoral Officer's
+site) before seeding MLA rows for these three - don't extend by free
+recall the way the rest of this file was built.
+
+Uttarakhand's 70 MLA seats ARE seeded below, as a deliberately different
+case: not free recall, but built via multiple cross-referenced WebSearch
+passes, name by name, checking each against a real "<Name> Assembly
+constituency" Wikipedia article existing and cross-checking district-wise
+sub-counts against known per-district seat totals. One genuine search-
+summarization artifact was caught and discarded this way (an
+Uttarakashi-district seat name spuriously repeated into the unrelated
+Kumaon-hills district group). The 13 district-wise sub-counts below sum
+to exactly 70, the correct total - still not a substitute for the
+official ECI list, but meaningfully more verified than the Lok Sabha
+lists above, which is why this file distinguishes the two provenances
+rather than caveating everything identically.
 """
 
 from app.models.enums import SeatType
@@ -166,5 +180,95 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Nainital-Udhamsingh Nagar", "Uttarakhand", SeatType.MP),
     ("Haridwar", "Uttarakhand", SeatType.MP),
 
-    # Vidhan Sabha (MLA) seats: not seeded yet - see module docstring.
+    # Uttarakhand - Vidhan Sabha / MLA (70) - see module docstring for
+    # this state's different (search-cross-referenced) provenance.
+    # Uttarkashi district (3)
+    ("Purola", "Uttarakhand", SeatType.MLA),
+    ("Yamunotri", "Uttarakhand", SeatType.MLA),
+    ("Gangotri", "Uttarakhand", SeatType.MLA),
+    # Chamoli district (3)
+    ("Badrinath", "Uttarakhand", SeatType.MLA),
+    ("Tharali", "Uttarakhand", SeatType.MLA),
+    ("Karnaprayag", "Uttarakhand", SeatType.MLA),
+    # Rudraprayag district (2)
+    ("Kedarnath", "Uttarakhand", SeatType.MLA),
+    ("Rudraprayag", "Uttarakhand", SeatType.MLA),
+    # Tehri Garhwal district (6)
+    ("Ghansali", "Uttarakhand", SeatType.MLA),
+    ("Devprayag", "Uttarakhand", SeatType.MLA),
+    ("Narendranagar", "Uttarakhand", SeatType.MLA),
+    ("Pratapnagar", "Uttarakhand", SeatType.MLA),
+    ("Tehri", "Uttarakhand", SeatType.MLA),
+    ("Dhanaulti", "Uttarakhand", SeatType.MLA),
+    # Dehradun district (10)
+    ("Chakrata", "Uttarakhand", SeatType.MLA),
+    ("Vikasnagar", "Uttarakhand", SeatType.MLA),
+    ("Sahaspur", "Uttarakhand", SeatType.MLA),
+    ("Dharampur", "Uttarakhand", SeatType.MLA),
+    ("Raipur", "Uttarakhand", SeatType.MLA),
+    ("Rajpur Road", "Uttarakhand", SeatType.MLA),
+    ("Dehradun Cantt", "Uttarakhand", SeatType.MLA),
+    ("Mussoorie", "Uttarakhand", SeatType.MLA),
+    ("Doiwala", "Uttarakhand", SeatType.MLA),
+    ("Rishikesh", "Uttarakhand", SeatType.MLA),
+    # Haridwar district (11)
+    ("Haridwar Rural", "Uttarakhand", SeatType.MLA),
+    ("BHEL Ranipur", "Uttarakhand", SeatType.MLA),
+    ("Jwalapur", "Uttarakhand", SeatType.MLA),
+    ("Bhagwanpur", "Uttarakhand", SeatType.MLA),
+    ("Jhabrera", "Uttarakhand", SeatType.MLA),
+    ("Piran Kaliyar", "Uttarakhand", SeatType.MLA),
+    ("Roorkee", "Uttarakhand", SeatType.MLA),
+    ("Khanpur", "Uttarakhand", SeatType.MLA),
+    ("Manglaur", "Uttarakhand", SeatType.MLA),
+    ("Laksar", "Uttarakhand", SeatType.MLA),
+    # "Haridwar" itself as an MLA seat name collides with the LS seat name
+    # above (SeatType disambiguates - see this module's own MP/MLA
+    # collision note and geography.py's handling of exactly this case).
+    ("Haridwar", "Uttarakhand", SeatType.MLA),
+    # Pauri Garhwal district (6)
+    ("Yamkeshwar", "Uttarakhand", SeatType.MLA),
+    ("Pauri", "Uttarakhand", SeatType.MLA),
+    ("Srinagar", "Uttarakhand", SeatType.MLA),
+    ("Chaubattakhal", "Uttarakhand", SeatType.MLA),
+    ("Lansdowne", "Uttarakhand", SeatType.MLA),
+    ("Kotdwar", "Uttarakhand", SeatType.MLA),
+    # Pithoragarh district (4)
+    ("Dharchula", "Uttarakhand", SeatType.MLA),
+    ("Didihat", "Uttarakhand", SeatType.MLA),
+    ("Gangolihat", "Uttarakhand", SeatType.MLA),
+    ("Pithoragarh", "Uttarakhand", SeatType.MLA),
+    # Bageshwar district (2)
+    ("Kapkot", "Uttarakhand", SeatType.MLA),
+    ("Bageshwar", "Uttarakhand", SeatType.MLA),
+    # Almora district (6)
+    ("Dwarahat", "Uttarakhand", SeatType.MLA),
+    ("Salt", "Uttarakhand", SeatType.MLA),
+    ("Ranikhet", "Uttarakhand", SeatType.MLA),
+    ("Someshwar", "Uttarakhand", SeatType.MLA),
+    ("Almora", "Uttarakhand", SeatType.MLA),
+    ("Jageshwar", "Uttarakhand", SeatType.MLA),
+    # Champawat district (2)
+    ("Lohaghat", "Uttarakhand", SeatType.MLA),
+    ("Champawat", "Uttarakhand", SeatType.MLA),
+    # Nainital district (6)
+    ("Lalkuwan", "Uttarakhand", SeatType.MLA),
+    ("Bhimtal", "Uttarakhand", SeatType.MLA),
+    ("Nainital", "Uttarakhand", SeatType.MLA),
+    ("Haldwani", "Uttarakhand", SeatType.MLA),
+    ("Kaladhungi", "Uttarakhand", SeatType.MLA),
+    ("Ramnagar", "Uttarakhand", SeatType.MLA),
+    # Udham Singh Nagar district (9)
+    ("Jaspur", "Uttarakhand", SeatType.MLA),
+    ("Kashipur", "Uttarakhand", SeatType.MLA),
+    ("Bazpur", "Uttarakhand", SeatType.MLA),
+    ("Gadarpur", "Uttarakhand", SeatType.MLA),
+    ("Rudrapur", "Uttarakhand", SeatType.MLA),
+    ("Kichha", "Uttarakhand", SeatType.MLA),
+    ("Sitarganj", "Uttarakhand", SeatType.MLA),
+    ("Nanakmatta", "Uttarakhand", SeatType.MLA),
+    ("Khatima", "Uttarakhand", SeatType.MLA),
+
+    # Rajasthan/Uttar Pradesh/Punjab Vidhan Sabha (MLA) seats: not seeded
+    # yet - see module docstring.
 ]
