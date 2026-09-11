@@ -15,39 +15,38 @@ actively being pitched in (Rajasthan, Uttar Pradesh, Punjab,
 Uttarakhand) - boundaries unchanged since the 2008 delimitation, so this
 is the lower-risk half of this file.
 
-Vidhan Sabha (MLA) seats for Uttar Pradesh are DELIBERATELY NOT seeded
-here yet, even though they matter more for a state-election pitch than
-Lok Sabha does - that's exactly why the bar is higher, not lower. Uttar
-Pradesh alone has 403 assembly seats; free-recalling several hundred
-hyper-local constituency names is a fundamentally less reliable exercise
-than the ~25-80-seat Lok Sabha lists above, and a wrong or missing seat
-name is the kind of error a political client notices immediately. Source
-these from the state's official delimitation list (ECI or the state
-Chief Electoral Officer's site) before seeding MLA rows for it - don't
-extend by free recall the way the rest of this file was built.
+Uttarakhand's 70 MLA seats, Punjab's 117 MLA seats, Rajasthan's 200 MLA
+seats, and Uttar Pradesh's 403 MLA seats ARE seeded below, all built via
+the same method: not free recall, but multiple cross-referenced WebSearch
+passes, name by name, checking each against a real "<Name> Assembly
+constituency" Wikipedia article existing and cross-checking district-wise
+sub-counts (all 75 UP districts) against known per-district seat totals.
+This caught genuine search-summarization/undercounting artifacts every
+time: for Uttarakhand, an Uttarkashi-district seat name spuriously
+repeated into the unrelated Kumaon-hills district group; for Punjab, an
+initial pass came up one seat short of the official 117 (missing
+Sujanpur, which turned out to belong to Pathankot district rather than
+the initially-assumed Gurdaspur - Pathankot was carved out of Gurdaspur
+district in 2011, after most district-level assembly-seat groupings
+people recall were fixed); for Rajasthan, cross-referencing surfaced a
+real same-name collision this schema can't fully represent - see the
+note on "Shahpura" in the Rajasthan MLA block below; for Uttar Pradesh,
+an initial pass came up two seats short of the official 403 - Najibabad
+(Bijnor district) and Kunda (Pratapgarh district) were each missing from
+an otherwise-plausible-looking district sub-list, caught only because
+the running district-wise sum didn't reconcile to 403. The district-wise
+sub-counts below sum to exactly 70 for Uttarakhand, 117 for Punjab, 200
+for Rajasthan (199 distinct rows because of the Shahpura collision), and
+403 for Uttar Pradesh - still not a substitute for the official ECI
+list, but meaningfully more verified than the Lok Sabha lists above,
+which is why this file distinguishes the two provenances rather than
+caveating everything identically.
 
-Uttarakhand's 70 MLA seats, Punjab's 117 MLA seats, and Rajasthan's 200
-MLA seats ARE seeded below, as a deliberately different case: not free
-recall, but built via multiple cross-referenced WebSearch passes, name by
-name, checking each against a real "<Name> Assembly constituency"
-Wikipedia article existing and cross-checking district-wise sub-counts
-against known per-district seat totals. This caught genuine
-search-summarization artifacts each time: for Uttarakhand, an
-Uttarkashi-district seat name spuriously repeated into the unrelated
-Kumaon-hills district group; for Punjab, an initial pass came up one seat
-short of the official 117 (missing Sujanpur, which turned out to belong
-to Pathankot district rather than the initially-assumed Gurdaspur -
-Pathankot was carved out of Gurdaspur district in 2011, after most
-district-level assembly-seat groupings people recall were fixed); for
-Rajasthan, cross-referencing surfaced a real same-name collision this
-schema can't fully represent - see the note on "Shahpura" in the
-Rajasthan MLA block below. The district-wise sub-counts below sum to
-exactly 70 for Uttarakhand, exactly 117 for Punjab, and exactly 200 for
-Rajasthan (200 official seats, 199 distinct rows here because of the
-Shahpura collision) - still not a substitute for the official ECI list,
-but meaningfully more verified than the Lok Sabha lists above, which is
-why this file distinguishes the two provenances rather than caveating
-everything identically.
+Uttar Pradesh's own MLA seats also produced several real same-state
+MP/MLA name collisions beyond the ones already seeded (e.g. Machhlishahr,
+Kannauj, Mohanlalganj, Ghosi, Dhaurahra, Misrikh, Robertsganj,
+Domariyaganj, Pratapgarh) - all handled the same way, via SeatType, no
+new code needed.
 """
 
 from app.models.enums import SeatType
@@ -668,6 +667,485 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Pratapgarh", "Rajasthan", SeatType.MLA),
     ("Dhariawad", "Rajasthan", SeatType.MLA),
 
-    # Uttar Pradesh Vidhan Sabha (MLA) seats: not seeded yet - see module
-    # docstring.
+    # Uttar Pradesh - Vidhan Sabha / MLA (403) - see module docstring for
+    # this state's search-cross-referenced provenance and the
+    # Najibabad/Kunda undercount that was caught and fixed.
+    # Agra district (9)
+    ("Etmadpur", "Uttar Pradesh", SeatType.MLA),
+    ("Agra Cantt", "Uttar Pradesh", SeatType.MLA),
+    ("Agra North", "Uttar Pradesh", SeatType.MLA),
+    ("Agra South", "Uttar Pradesh", SeatType.MLA),
+    ("Agra Rural", "Uttar Pradesh", SeatType.MLA),
+    ("Bah", "Uttar Pradesh", SeatType.MLA),
+    ("Fatehabad", "Uttar Pradesh", SeatType.MLA),
+    ("Kheragarh", "Uttar Pradesh", SeatType.MLA),
+    ("Fatehpur Sikri", "Uttar Pradesh", SeatType.MLA),
+    # Aligarh district (7)
+    ("Khair", "Uttar Pradesh", SeatType.MLA),
+    ("Barauli", "Uttar Pradesh", SeatType.MLA),
+    ("Atrauli", "Uttar Pradesh", SeatType.MLA),
+    ("Koil", "Uttar Pradesh", SeatType.MLA),
+    ("Aligarh", "Uttar Pradesh", SeatType.MLA),
+    ("Chharra", "Uttar Pradesh", SeatType.MLA),
+    ("Iglas", "Uttar Pradesh", SeatType.MLA),
+    # Prayagraj district (12)
+    ("Phaphamau", "Uttar Pradesh", SeatType.MLA),
+    ("Soraon", "Uttar Pradesh", SeatType.MLA),
+    ("Phulpur", "Uttar Pradesh", SeatType.MLA),
+    ("Pratappur", "Uttar Pradesh", SeatType.MLA),
+    ("Handia", "Uttar Pradesh", SeatType.MLA),
+    ("Meja", "Uttar Pradesh", SeatType.MLA),
+    ("Karachhana", "Uttar Pradesh", SeatType.MLA),
+    ("Allahabad West", "Uttar Pradesh", SeatType.MLA),
+    ("Allahabad North", "Uttar Pradesh", SeatType.MLA),
+    ("Allahabad South", "Uttar Pradesh", SeatType.MLA),
+    ("Bara", "Uttar Pradesh", SeatType.MLA),
+    ("Koraon", "Uttar Pradesh", SeatType.MLA),
+    # Ambedkar Nagar district (5)
+    ("Katehari", "Uttar Pradesh", SeatType.MLA),
+    ("Akbarpur", "Uttar Pradesh", SeatType.MLA),
+    ("Tanda", "Uttar Pradesh", SeatType.MLA),
+    ("Jalalpur", "Uttar Pradesh", SeatType.MLA),
+    ("Alapur", "Uttar Pradesh", SeatType.MLA),
+    # Amethi district (5)
+    ("Tiloi", "Uttar Pradesh", SeatType.MLA),
+    ("Salon", "Uttar Pradesh", SeatType.MLA),
+    ("Jagdishpur", "Uttar Pradesh", SeatType.MLA),
+    ("Gauriganj", "Uttar Pradesh", SeatType.MLA),
+    ("Amethi", "Uttar Pradesh", SeatType.MLA),
+    # Amroha district (4)
+    ("Dhanaura", "Uttar Pradesh", SeatType.MLA),
+    ("Naugawan Sadat", "Uttar Pradesh", SeatType.MLA),
+    ("Amroha", "Uttar Pradesh", SeatType.MLA),
+    ("Hasanpur", "Uttar Pradesh", SeatType.MLA),
+    # Auraiya district (3)
+    ("Auraiya", "Uttar Pradesh", SeatType.MLA),
+    ("Bidhuna", "Uttar Pradesh", SeatType.MLA),
+    ("Dibiyapur", "Uttar Pradesh", SeatType.MLA),
+    # Ayodhya district (5)
+    ("Rudauli", "Uttar Pradesh", SeatType.MLA),
+    ("Milkipur", "Uttar Pradesh", SeatType.MLA),
+    ("Bikapur", "Uttar Pradesh", SeatType.MLA),
+    ("Ayodhya", "Uttar Pradesh", SeatType.MLA),
+    ("Goshainganj", "Uttar Pradesh", SeatType.MLA),
+    # Azamgarh district (10)
+    ("Atrauliya", "Uttar Pradesh", SeatType.MLA),
+    ("Gopalpur", "Uttar Pradesh", SeatType.MLA),
+    ("Sagri", "Uttar Pradesh", SeatType.MLA),
+    ("Mubarakpur", "Uttar Pradesh", SeatType.MLA),
+    ("Azamgarh", "Uttar Pradesh", SeatType.MLA),
+    ("Nizamabad", "Uttar Pradesh", SeatType.MLA),
+    ("Phoolpur-Pawai", "Uttar Pradesh", SeatType.MLA),
+    ("Didarganj", "Uttar Pradesh", SeatType.MLA),
+    ("Lalganj", "Uttar Pradesh", SeatType.MLA),
+    ("Mehnagar", "Uttar Pradesh", SeatType.MLA),
+    # Baghpat district (3)
+    ("Chhaprauli", "Uttar Pradesh", SeatType.MLA),
+    ("Baraut", "Uttar Pradesh", SeatType.MLA),
+    ("Baghpat", "Uttar Pradesh", SeatType.MLA),
+    # Bahraich district (7)
+    ("Balha", "Uttar Pradesh", SeatType.MLA),
+    ("Nanpara", "Uttar Pradesh", SeatType.MLA),
+    ("Matera", "Uttar Pradesh", SeatType.MLA),
+    ("Mahasi", "Uttar Pradesh", SeatType.MLA),
+    ("Bahraich", "Uttar Pradesh", SeatType.MLA),
+    ("Payagpur", "Uttar Pradesh", SeatType.MLA),
+    ("Kaiserganj", "Uttar Pradesh", SeatType.MLA),
+    # Ballia district (7)
+    ("Belthara Road", "Uttar Pradesh", SeatType.MLA),
+    ("Sikanderpur", "Uttar Pradesh", SeatType.MLA),
+    ("Bansdih", "Uttar Pradesh", SeatType.MLA),
+    ("Phephana", "Uttar Pradesh", SeatType.MLA),
+    ("Ballia Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Bairia", "Uttar Pradesh", SeatType.MLA),
+    ("Rasra", "Uttar Pradesh", SeatType.MLA),
+    # Balrampur district (4)
+    ("Tulsipur", "Uttar Pradesh", SeatType.MLA),
+    ("Gainsari", "Uttar Pradesh", SeatType.MLA),
+    ("Utraula", "Uttar Pradesh", SeatType.MLA),
+    ("Balrampur", "Uttar Pradesh", SeatType.MLA),
+    # Banda district (4)
+    ("Tindwari", "Uttar Pradesh", SeatType.MLA),
+    ("Baberu", "Uttar Pradesh", SeatType.MLA),
+    ("Naraini", "Uttar Pradesh", SeatType.MLA),
+    ("Banda", "Uttar Pradesh", SeatType.MLA),
+    # Barabanki district (6)
+    ("Kursi", "Uttar Pradesh", SeatType.MLA),
+    ("Ram Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Barabanki", "Uttar Pradesh", SeatType.MLA),
+    ("Zaidpur", "Uttar Pradesh", SeatType.MLA),
+    ("Dariyabad", "Uttar Pradesh", SeatType.MLA),
+    ("Haidergarh", "Uttar Pradesh", SeatType.MLA),
+    # Bareilly district (9)
+    ("Baheri", "Uttar Pradesh", SeatType.MLA),
+    ("Meerganj", "Uttar Pradesh", SeatType.MLA),
+    ("Bhojipura", "Uttar Pradesh", SeatType.MLA),
+    ("Nawabganj", "Uttar Pradesh", SeatType.MLA),
+    ("Faridpur", "Uttar Pradesh", SeatType.MLA),
+    ("Bithari Chainpur", "Uttar Pradesh", SeatType.MLA),
+    ("Bareilly", "Uttar Pradesh", SeatType.MLA),
+    ("Bareilly Cantt", "Uttar Pradesh", SeatType.MLA),
+    ("Aonla", "Uttar Pradesh", SeatType.MLA),
+    # Basti district (5)
+    ("Harraiya", "Uttar Pradesh", SeatType.MLA),
+    ("Kaptanganj", "Uttar Pradesh", SeatType.MLA),
+    ("Rudhauli", "Uttar Pradesh", SeatType.MLA),
+    ("Basti Sadar", "Uttar Pradesh", SeatType.MLA),
+    ("Mahadewa", "Uttar Pradesh", SeatType.MLA),
+    # Bhadohi district (3)
+    ("Bhadohi", "Uttar Pradesh", SeatType.MLA),
+    ("Gyanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Aurai", "Uttar Pradesh", SeatType.MLA),
+    # Bijnor district (8)
+    ("Bijnor", "Uttar Pradesh", SeatType.MLA),
+    ("Chandpur", "Uttar Pradesh", SeatType.MLA),
+    ("Barhapur", "Uttar Pradesh", SeatType.MLA),
+    ("Nagina", "Uttar Pradesh", SeatType.MLA),
+    ("Dhampur", "Uttar Pradesh", SeatType.MLA),
+    ("Nehtaur", "Uttar Pradesh", SeatType.MLA),
+    ("Noorpur", "Uttar Pradesh", SeatType.MLA),
+    ("Najibabad", "Uttar Pradesh", SeatType.MLA),
+    # Budaun district (6)
+    ("Bisauli", "Uttar Pradesh", SeatType.MLA),
+    ("Sahaswan", "Uttar Pradesh", SeatType.MLA),
+    ("Bilsi", "Uttar Pradesh", SeatType.MLA),
+    ("Badaun", "Uttar Pradesh", SeatType.MLA),
+    ("Shekhupur", "Uttar Pradesh", SeatType.MLA),
+    ("Dataganj", "Uttar Pradesh", SeatType.MLA),
+    # Bulandshahr district (7)
+    ("Sikandrabad", "Uttar Pradesh", SeatType.MLA),
+    ("Bulandshahr", "Uttar Pradesh", SeatType.MLA),
+    ("Syana", "Uttar Pradesh", SeatType.MLA),
+    ("Anupshahr", "Uttar Pradesh", SeatType.MLA),
+    ("Debai", "Uttar Pradesh", SeatType.MLA),
+    ("Shikarpur", "Uttar Pradesh", SeatType.MLA),
+    ("Khurja", "Uttar Pradesh", SeatType.MLA),
+    # Chandauli district (4)
+    ("Mughalsarai", "Uttar Pradesh", SeatType.MLA),
+    ("Sakaldiha", "Uttar Pradesh", SeatType.MLA),
+    ("Saiyadraja", "Uttar Pradesh", SeatType.MLA),
+    ("Chakia", "Uttar Pradesh", SeatType.MLA),
+    # Chitrakoot district (2)
+    ("Chitrakoot", "Uttar Pradesh", SeatType.MLA),
+    ("Manikpur", "Uttar Pradesh", SeatType.MLA),
+    # Deoria district (7)
+    ("Rudrapur", "Uttar Pradesh", SeatType.MLA),
+    ("Deoria", "Uttar Pradesh", SeatType.MLA),
+    ("Pathardeva", "Uttar Pradesh", SeatType.MLA),
+    ("Rampur Karkhana", "Uttar Pradesh", SeatType.MLA),
+    ("Bhatpar Rani", "Uttar Pradesh", SeatType.MLA),
+    ("Salempur", "Uttar Pradesh", SeatType.MLA),
+    ("Barhaj", "Uttar Pradesh", SeatType.MLA),
+    # Etah district (4)
+    ("Aliganj", "Uttar Pradesh", SeatType.MLA),
+    ("Etah", "Uttar Pradesh", SeatType.MLA),
+    ("Marhara", "Uttar Pradesh", SeatType.MLA),
+    ("Jalesar", "Uttar Pradesh", SeatType.MLA),
+    # Etawah district (3)
+    ("Jaswantnagar", "Uttar Pradesh", SeatType.MLA),
+    ("Etawah", "Uttar Pradesh", SeatType.MLA),
+    ("Bharthana", "Uttar Pradesh", SeatType.MLA),
+    # Farrukhabad district (4)
+    ("Kaimganj", "Uttar Pradesh", SeatType.MLA),
+    ("Amritpur", "Uttar Pradesh", SeatType.MLA),
+    ("Farrukhabad", "Uttar Pradesh", SeatType.MLA),
+    ("Bhojpur", "Uttar Pradesh", SeatType.MLA),
+    # Fatehpur district (6)
+    ("Jahanabad", "Uttar Pradesh", SeatType.MLA),
+    ("Bindki", "Uttar Pradesh", SeatType.MLA),
+    ("Fatehpur", "Uttar Pradesh", SeatType.MLA),
+    ("Ayah Shah", "Uttar Pradesh", SeatType.MLA),
+    ("Husainganj", "Uttar Pradesh", SeatType.MLA),
+    ("Khaga", "Uttar Pradesh", SeatType.MLA),
+    # Firozabad district (5)
+    ("Tundla", "Uttar Pradesh", SeatType.MLA),
+    ("Jasrana", "Uttar Pradesh", SeatType.MLA),
+    ("Firozabad", "Uttar Pradesh", SeatType.MLA),
+    ("Shikohabad", "Uttar Pradesh", SeatType.MLA),
+    ("Sirsaganj", "Uttar Pradesh", SeatType.MLA),
+    # Gautam Buddha Nagar district (3)
+    ("Noida", "Uttar Pradesh", SeatType.MLA),
+    ("Dadri", "Uttar Pradesh", SeatType.MLA),
+    ("Jewar", "Uttar Pradesh", SeatType.MLA),
+    # Ghaziabad district (5)
+    ("Loni", "Uttar Pradesh", SeatType.MLA),
+    ("Muradnagar", "Uttar Pradesh", SeatType.MLA),
+    ("Sahibabad", "Uttar Pradesh", SeatType.MLA),
+    ("Ghaziabad", "Uttar Pradesh", SeatType.MLA),
+    ("Modinagar", "Uttar Pradesh", SeatType.MLA),
+    # Ghazipur district (7)
+    ("Jakhania", "Uttar Pradesh", SeatType.MLA),
+    ("Saidpur", "Uttar Pradesh", SeatType.MLA),
+    ("Ghazipur", "Uttar Pradesh", SeatType.MLA),
+    ("Jangipur", "Uttar Pradesh", SeatType.MLA),
+    ("Zahoorabad", "Uttar Pradesh", SeatType.MLA),
+    ("Mohammadabad", "Uttar Pradesh", SeatType.MLA),
+    ("Zamania", "Uttar Pradesh", SeatType.MLA),
+    # Gonda district (7)
+    ("Mehnaun", "Uttar Pradesh", SeatType.MLA),
+    ("Gonda", "Uttar Pradesh", SeatType.MLA),
+    ("Katra Bazar", "Uttar Pradesh", SeatType.MLA),
+    ("Colonelganj", "Uttar Pradesh", SeatType.MLA),
+    ("Tarabganj", "Uttar Pradesh", SeatType.MLA),
+    ("Mankapur", "Uttar Pradesh", SeatType.MLA),
+    ("Gaura", "Uttar Pradesh", SeatType.MLA),
+    # Gorakhpur district (9)
+    ("Campierganj", "Uttar Pradesh", SeatType.MLA),
+    ("Pipraich", "Uttar Pradesh", SeatType.MLA),
+    ("Gorakhpur Urban", "Uttar Pradesh", SeatType.MLA),
+    ("Gorakhpur Rural", "Uttar Pradesh", SeatType.MLA),
+    ("Sahjanwa", "Uttar Pradesh", SeatType.MLA),
+    ("Khajani", "Uttar Pradesh", SeatType.MLA),
+    ("Chauri Chaura", "Uttar Pradesh", SeatType.MLA),
+    ("Bansgaon", "Uttar Pradesh", SeatType.MLA),
+    ("Chillupar", "Uttar Pradesh", SeatType.MLA),
+    # Hamirpur district (2)
+    ("Hamirpur", "Uttar Pradesh", SeatType.MLA),
+    ("Rath", "Uttar Pradesh", SeatType.MLA),
+    # Hapur district (3)
+    ("Hapur", "Uttar Pradesh", SeatType.MLA),
+    ("Garhmukteshwar", "Uttar Pradesh", SeatType.MLA),
+    ("Dhaulana", "Uttar Pradesh", SeatType.MLA),
+    # Hardoi district (8)
+    ("Sawayajpur", "Uttar Pradesh", SeatType.MLA),
+    ("Shahabad", "Uttar Pradesh", SeatType.MLA),
+    ("Hardoi", "Uttar Pradesh", SeatType.MLA),
+    ("Gopamau", "Uttar Pradesh", SeatType.MLA),
+    ("Sandi", "Uttar Pradesh", SeatType.MLA),
+    ("Bilgram-Mallanwan", "Uttar Pradesh", SeatType.MLA),
+    ("Balamau", "Uttar Pradesh", SeatType.MLA),
+    ("Sandila", "Uttar Pradesh", SeatType.MLA),
+    # Hathras district (3)
+    ("Hathras", "Uttar Pradesh", SeatType.MLA),
+    ("Sadabad", "Uttar Pradesh", SeatType.MLA),
+    ("Sikandra Rao", "Uttar Pradesh", SeatType.MLA),
+    # Jalaun district (3)
+    ("Madhogarh", "Uttar Pradesh", SeatType.MLA),
+    ("Kalpi", "Uttar Pradesh", SeatType.MLA),
+    ("Orai", "Uttar Pradesh", SeatType.MLA),
+    # Jaunpur district (9)
+    ("Badlapur", "Uttar Pradesh", SeatType.MLA),
+    ("Jaunpur", "Uttar Pradesh", SeatType.MLA),
+    ("Kerakat", "Uttar Pradesh", SeatType.MLA),
+    ("Machhlishahr", "Uttar Pradesh", SeatType.MLA),
+    ("Malhani", "Uttar Pradesh", SeatType.MLA),
+    ("Mariyahu", "Uttar Pradesh", SeatType.MLA),
+    ("Mungra Badshahpur", "Uttar Pradesh", SeatType.MLA),
+    ("Shahganj", "Uttar Pradesh", SeatType.MLA),
+    ("Zafrabad", "Uttar Pradesh", SeatType.MLA),
+    # Jhansi district (4)
+    ("Babina", "Uttar Pradesh", SeatType.MLA),
+    ("Jhansi Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Mauranipur", "Uttar Pradesh", SeatType.MLA),
+    ("Garautha", "Uttar Pradesh", SeatType.MLA),
+    # Kannauj district (3)
+    ("Chhibramau", "Uttar Pradesh", SeatType.MLA),
+    ("Tirwa", "Uttar Pradesh", SeatType.MLA),
+    ("Kannauj", "Uttar Pradesh", SeatType.MLA),
+    # Kanpur Dehat district (4)
+    ("Rasulabad", "Uttar Pradesh", SeatType.MLA),
+    ("Akbarpur-Raniya", "Uttar Pradesh", SeatType.MLA),
+    ("Sikandra", "Uttar Pradesh", SeatType.MLA),
+    ("Bhognipur", "Uttar Pradesh", SeatType.MLA),
+    # Kanpur Nagar district (10)
+    ("Sishamau", "Uttar Pradesh", SeatType.MLA),
+    ("Arya Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Kidwai Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Govind Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Kanpur Cantonment", "Uttar Pradesh", SeatType.MLA),
+    ("Bithoor", "Uttar Pradesh", SeatType.MLA),
+    ("Kalyanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Maharajpur", "Uttar Pradesh", SeatType.MLA),
+    ("Ghatampur", "Uttar Pradesh", SeatType.MLA),
+    ("Bilhaur", "Uttar Pradesh", SeatType.MLA),
+    # Kasganj district (3)
+    ("Kasganj", "Uttar Pradesh", SeatType.MLA),
+    ("Amanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Patiyali", "Uttar Pradesh", SeatType.MLA),
+    # Kaushambi district (3)
+    ("Sirathu", "Uttar Pradesh", SeatType.MLA),
+    ("Manjhanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Chail", "Uttar Pradesh", SeatType.MLA),
+    # Lakhimpur Kheri district (8)
+    ("Palia", "Uttar Pradesh", SeatType.MLA),
+    ("Nighasan", "Uttar Pradesh", SeatType.MLA),
+    ("Gola Gokrannath", "Uttar Pradesh", SeatType.MLA),
+    ("Srinagar", "Uttar Pradesh", SeatType.MLA),
+    ("Dhaurahra", "Uttar Pradesh", SeatType.MLA),
+    ("Lakhimpur", "Uttar Pradesh", SeatType.MLA),
+    ("Kasta", "Uttar Pradesh", SeatType.MLA),
+    ("Mohammadi", "Uttar Pradesh", SeatType.MLA),
+    # Kushinagar district (7)
+    ("Khadda", "Uttar Pradesh", SeatType.MLA),
+    ("Padrauna", "Uttar Pradesh", SeatType.MLA),
+    ("Tamkuhi Raj", "Uttar Pradesh", SeatType.MLA),
+    ("Fazilnagar", "Uttar Pradesh", SeatType.MLA),
+    ("Kasia", "Uttar Pradesh", SeatType.MLA),
+    ("Hata", "Uttar Pradesh", SeatType.MLA),
+    ("Ramkola", "Uttar Pradesh", SeatType.MLA),
+    # Lalitpur district (2)
+    ("Lalitpur", "Uttar Pradesh", SeatType.MLA),
+    ("Mehroni", "Uttar Pradesh", SeatType.MLA),
+    # Lucknow district (9)
+    ("Malihabad", "Uttar Pradesh", SeatType.MLA),
+    ("Bakhshi Ka Talab", "Uttar Pradesh", SeatType.MLA),
+    ("Sarojini Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Lucknow West", "Uttar Pradesh", SeatType.MLA),
+    ("Lucknow North", "Uttar Pradesh", SeatType.MLA),
+    ("Lucknow East", "Uttar Pradesh", SeatType.MLA),
+    ("Lucknow Central", "Uttar Pradesh", SeatType.MLA),
+    ("Lucknow Cantt", "Uttar Pradesh", SeatType.MLA),
+    ("Mohanlalganj", "Uttar Pradesh", SeatType.MLA),
+    # Maharajganj district (5)
+    ("Pharenda", "Uttar Pradesh", SeatType.MLA),
+    ("Nautanwa", "Uttar Pradesh", SeatType.MLA),
+    ("Siswa", "Uttar Pradesh", SeatType.MLA),
+    ("Maharajganj", "Uttar Pradesh", SeatType.MLA),
+    ("Paniyara", "Uttar Pradesh", SeatType.MLA),
+    # Mahoba district (2)
+    ("Mahoba", "Uttar Pradesh", SeatType.MLA),
+    ("Charkhari", "Uttar Pradesh", SeatType.MLA),
+    # Mainpuri district (4)
+    ("Mainpuri", "Uttar Pradesh", SeatType.MLA),
+    ("Bhongaon", "Uttar Pradesh", SeatType.MLA),
+    ("Kishni", "Uttar Pradesh", SeatType.MLA),
+    ("Karhal", "Uttar Pradesh", SeatType.MLA),
+    # Mathura district (5)
+    ("Chhata", "Uttar Pradesh", SeatType.MLA),
+    ("Mant", "Uttar Pradesh", SeatType.MLA),
+    ("Goverdhan", "Uttar Pradesh", SeatType.MLA),
+    ("Mathura", "Uttar Pradesh", SeatType.MLA),
+    ("Baldev", "Uttar Pradesh", SeatType.MLA),
+    # Mau district (4)
+    ("Madhuban", "Uttar Pradesh", SeatType.MLA),
+    ("Ghosi", "Uttar Pradesh", SeatType.MLA),
+    ("Muhammadabad-Gohna", "Uttar Pradesh", SeatType.MLA),
+    ("Mau", "Uttar Pradesh", SeatType.MLA),
+    # Meerut district (7)
+    ("Siwalkhas", "Uttar Pradesh", SeatType.MLA),
+    ("Sardhana", "Uttar Pradesh", SeatType.MLA),
+    ("Hastinapur", "Uttar Pradesh", SeatType.MLA),
+    ("Kithore", "Uttar Pradesh", SeatType.MLA),
+    ("Meerut Cantt", "Uttar Pradesh", SeatType.MLA),
+    ("Meerut", "Uttar Pradesh", SeatType.MLA),
+    ("Meerut South", "Uttar Pradesh", SeatType.MLA),
+    # Mirzapur district (5)
+    ("Chhanbey", "Uttar Pradesh", SeatType.MLA),
+    ("Mirzapur", "Uttar Pradesh", SeatType.MLA),
+    ("Majhawan", "Uttar Pradesh", SeatType.MLA),
+    ("Chunar", "Uttar Pradesh", SeatType.MLA),
+    ("Marihan", "Uttar Pradesh", SeatType.MLA),
+    # Moradabad district (6)
+    ("Thakurdwara", "Uttar Pradesh", SeatType.MLA),
+    ("Kanth", "Uttar Pradesh", SeatType.MLA),
+    ("Moradabad Rural", "Uttar Pradesh", SeatType.MLA),
+    ("Moradabad Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Kundarki", "Uttar Pradesh", SeatType.MLA),
+    ("Bilari", "Uttar Pradesh", SeatType.MLA),
+    # Muzaffarnagar district (6)
+    ("Muzaffarnagar", "Uttar Pradesh", SeatType.MLA),
+    ("Budhana", "Uttar Pradesh", SeatType.MLA),
+    ("Charthawal", "Uttar Pradesh", SeatType.MLA),
+    ("Khatauli", "Uttar Pradesh", SeatType.MLA),
+    ("Meerapur", "Uttar Pradesh", SeatType.MLA),
+    ("Purqazi", "Uttar Pradesh", SeatType.MLA),
+    # Pilibhit district (4)
+    ("Pilibhit", "Uttar Pradesh", SeatType.MLA),
+    ("Barkhera", "Uttar Pradesh", SeatType.MLA),
+    ("Puranpur", "Uttar Pradesh", SeatType.MLA),
+    ("Bisalpur", "Uttar Pradesh", SeatType.MLA),
+    # Pratapgarh district (7)
+    ("Rampur Khas", "Uttar Pradesh", SeatType.MLA),
+    ("Babaganj", "Uttar Pradesh", SeatType.MLA),
+    ("Kunda", "Uttar Pradesh", SeatType.MLA),
+    ("Vishwanathganj", "Uttar Pradesh", SeatType.MLA),
+    ("Pratapgarh", "Uttar Pradesh", SeatType.MLA),
+    ("Patti", "Uttar Pradesh", SeatType.MLA),
+    ("Raniganj", "Uttar Pradesh", SeatType.MLA),
+    # Raebareli district (5)
+    ("Bachhrawan", "Uttar Pradesh", SeatType.MLA),
+    ("Harchandpur", "Uttar Pradesh", SeatType.MLA),
+    ("Raebareli", "Uttar Pradesh", SeatType.MLA),
+    ("Sareni", "Uttar Pradesh", SeatType.MLA),
+    ("Unchahar", "Uttar Pradesh", SeatType.MLA),
+    # Rampur district (5)
+    ("Suar", "Uttar Pradesh", SeatType.MLA),
+    ("Chamraua", "Uttar Pradesh", SeatType.MLA),
+    ("Bilaspur", "Uttar Pradesh", SeatType.MLA),
+    ("Rampur", "Uttar Pradesh", SeatType.MLA),
+    ("Milak", "Uttar Pradesh", SeatType.MLA),
+    # Saharanpur district (7)
+    ("Behat", "Uttar Pradesh", SeatType.MLA),
+    ("Nakur", "Uttar Pradesh", SeatType.MLA),
+    ("Saharanpur Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Saharanpur Dehat", "Uttar Pradesh", SeatType.MLA),
+    ("Deoband", "Uttar Pradesh", SeatType.MLA),
+    ("Rampur Maniharan", "Uttar Pradesh", SeatType.MLA),
+    ("Gangoh", "Uttar Pradesh", SeatType.MLA),
+    # Sambhal district (4)
+    ("Sambhal", "Uttar Pradesh", SeatType.MLA),
+    ("Chandausi", "Uttar Pradesh", SeatType.MLA),
+    ("Asmoli", "Uttar Pradesh", SeatType.MLA),
+    ("Gunnaur", "Uttar Pradesh", SeatType.MLA),
+    # Sant Kabir Nagar district (3)
+    ("Mehdawal", "Uttar Pradesh", SeatType.MLA),
+    ("Khalilabad", "Uttar Pradesh", SeatType.MLA),
+    ("Dhanghata", "Uttar Pradesh", SeatType.MLA),
+    # Shahjahanpur district (6)
+    ("Katra", "Uttar Pradesh", SeatType.MLA),
+    ("Jalalabad", "Uttar Pradesh", SeatType.MLA),
+    ("Tilhar", "Uttar Pradesh", SeatType.MLA),
+    ("Powayan", "Uttar Pradesh", SeatType.MLA),
+    ("Shahjahanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Dadraul", "Uttar Pradesh", SeatType.MLA),
+    # Shamli district (3)
+    ("Shamli", "Uttar Pradesh", SeatType.MLA),
+    ("Kairana", "Uttar Pradesh", SeatType.MLA),
+    ("Thana Bhawan", "Uttar Pradesh", SeatType.MLA),
+    # Shravasti district (2)
+    ("Shravasti", "Uttar Pradesh", SeatType.MLA),
+    ("Bhinga", "Uttar Pradesh", SeatType.MLA),
+    # Siddharthnagar district (5)
+    ("Shohratgarh", "Uttar Pradesh", SeatType.MLA),
+    ("Kapilvastu", "Uttar Pradesh", SeatType.MLA),
+    ("Bansi", "Uttar Pradesh", SeatType.MLA),
+    ("Itwa", "Uttar Pradesh", SeatType.MLA),
+    ("Domariyaganj", "Uttar Pradesh", SeatType.MLA),
+    # Sitapur district (9)
+    ("Maholi", "Uttar Pradesh", SeatType.MLA),
+    ("Sitapur", "Uttar Pradesh", SeatType.MLA),
+    ("Hargaon", "Uttar Pradesh", SeatType.MLA),
+    ("Laharpur", "Uttar Pradesh", SeatType.MLA),
+    ("Biswan", "Uttar Pradesh", SeatType.MLA),
+    ("Sevata", "Uttar Pradesh", SeatType.MLA),
+    ("Mahmoodabad", "Uttar Pradesh", SeatType.MLA),
+    ("Sidhauli", "Uttar Pradesh", SeatType.MLA),
+    ("Misrikh", "Uttar Pradesh", SeatType.MLA),
+    # Sonbhadra district (4)
+    ("Robertsganj", "Uttar Pradesh", SeatType.MLA),
+    ("Ghorawal", "Uttar Pradesh", SeatType.MLA),
+    ("Obra", "Uttar Pradesh", SeatType.MLA),
+    ("Duddhi", "Uttar Pradesh", SeatType.MLA),
+    # Sultanpur district (5)
+    ("Isauli", "Uttar Pradesh", SeatType.MLA),
+    ("Sultanpur", "Uttar Pradesh", SeatType.MLA),
+    ("Sadar", "Uttar Pradesh", SeatType.MLA),
+    ("Lambhua", "Uttar Pradesh", SeatType.MLA),
+    ("Kadipur", "Uttar Pradesh", SeatType.MLA),
+    # Unnao district (6)
+    ("Bangarmau", "Uttar Pradesh", SeatType.MLA),
+    ("Safipur", "Uttar Pradesh", SeatType.MLA),
+    ("Mohan", "Uttar Pradesh", SeatType.MLA),
+    ("Unnao", "Uttar Pradesh", SeatType.MLA),
+    ("Bhagwant Nagar", "Uttar Pradesh", SeatType.MLA),
+    ("Purwa", "Uttar Pradesh", SeatType.MLA),
+    # Varanasi district (8)
+    ("Pindra", "Uttar Pradesh", SeatType.MLA),
+    ("Ajagara", "Uttar Pradesh", SeatType.MLA),
+    ("Shivpur", "Uttar Pradesh", SeatType.MLA),
+    ("Rohaniya", "Uttar Pradesh", SeatType.MLA),
+    ("Varanasi North", "Uttar Pradesh", SeatType.MLA),
+    ("Varanasi South", "Uttar Pradesh", SeatType.MLA),
+    ("Varanasi Cantt", "Uttar Pradesh", SeatType.MLA),
+    ("Sevapuri", "Uttar Pradesh", SeatType.MLA),
 ]
