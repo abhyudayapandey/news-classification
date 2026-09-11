@@ -34,9 +34,19 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.auth.client_session import get_current_client_user, get_current_client_user_optional
 from app.auth.security import verify_password
+from app.client_portal.geography_map import MAP_STATES, state_slug
 from app.db import get_db
-from app.models import Article, ArticleEntity, ClientSubject, ClientUser, Entity, SocialMention
-from app.models.enums import SocialSource, SubjectSentiment
+from app.models import (
+    Article,
+    ArticleEntity,
+    ClientGeographySubscription,
+    ClientSubject,
+    ClientUser,
+    Entity,
+    SocialMention,
+    SystemTag,
+)
+from app.models.enums import SeatType, SocialSource, SubjectSentiment
 from app.public.formatting import entity_initials, entity_subtitle, youtube_thumbnail_url
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -112,6 +122,53 @@ def client_logout(request: Request):
     return RedirectResponse("/client/login", status_code=303)
 
 
+def _map_states_for_client(db: Session, client_id: int) -> list[str]:
+    """Which of MAP_STATES (app/client_portal/geography_map.py) this
+    client's dashboard map should offer - a state with at least one piece
+    of content the client can already see there (through some tracked
+    subject's own channel access) OR a geography subscription covering
+    it, restricted to states we actually have map geometry for. Same
+    "only ever offer what's actually there" rule as the entity page's own
+    geo filter (_geo_options_from below), just computed dashboard-wide
+    instead of per-entity.
+    """
+    subjects = db.query(ClientSubject).filter(ClientSubject.client_id == client_id).all()
+    states: set[str] = set()
+
+    news_ids = [s.entity_id for s in subjects if s.news_access]
+    if news_ids:
+        stmt = (
+            select(SystemTag.state)
+            .join(Article, Article.id == SystemTag.article_id)
+            .where(
+                Article.id.in_(select(ArticleEntity.article_id).where(ArticleEntity.entity_id.in_(news_ids))),
+                Article.published_tag.is_not(None),
+                SystemTag.state.is_not(None),
+            )
+            .distinct()
+        )
+        states.update(row[0] for row in db.execute(stmt))
+
+    for ids, source in ((
+        [s.entity_id for s in subjects if s.youtube_access], SocialSource.YOUTUBE,
+    ), (
+        [s.entity_id for s in subjects if s.x_access], SocialSource.X,
+    )):
+        if not ids:
+            continue
+        stmt = (
+            select(SocialMention.state)
+            .where(SocialMention.entity_id.in_(ids), SocialMention.source == source, SocialMention.state.is_not(None))
+            .distinct()
+        )
+        states.update(row[0] for row in db.execute(stmt))
+
+    geo_subs = db.query(ClientGeographySubscription).filter(ClientGeographySubscription.client_id == client_id).all()
+    states.update(g.state for g in geo_subs)
+
+    return sorted(s for s in states if s in MAP_STATES)
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 def client_dashboard(
     request: Request,
@@ -136,7 +193,11 @@ def client_dashboard(
         }
         for s in subjects
     ]
-    return render(request, "client_dashboard.html", current_client_user, subjects=rows)
+    map_states = _map_states_for_client(db, current_client_user.client_id)
+    return render(
+        request, "client_dashboard.html", current_client_user, subjects=rows,
+        map_states=map_states, map_state_slugs={s: state_slug(s) for s in map_states},
+    )
 
 
 def _geo_options_from(*item_lists) -> list[dict]:
@@ -300,4 +361,174 @@ def client_entity_detail(
         youtube_thumbnail_url=youtube_thumbnail_url,
         social_range=social_range, social_ranges=SOCIAL_RANGES,
         geo_options=geo_options, selected_geo=selected_geo,
+    )
+
+
+def _find_geography_subscription(
+    db: Session, client_id: int, state: str, kind: str, value: str, seat_type: SeatType | None
+) -> ClientGeographySubscription | None:
+    query = db.query(ClientGeographySubscription).filter(
+        ClientGeographySubscription.client_id == client_id, ClientGeographySubscription.state == state
+    )
+    if kind == "district":
+        query = query.filter(ClientGeographySubscription.district == value)
+    else:
+        query = query.filter(
+            ClientGeographySubscription.constituency == value, ClientGeographySubscription.seat_type == seat_type
+        )
+    return query.first()
+
+
+@router.get("/geography", response_class=HTMLResponse)
+def client_geography_detail(
+    request: Request,
+    state: str = Query(...),
+    kind: str = Query(..., description="'district' or 'constituency'"),
+    value: str = Query(...),
+    seat_type: str | None = Query(default=None, description="'mp' or 'mla' - required when kind='constituency'"),
+    range_param: str = Query(default=_DEFAULT_SOCIAL_RANGE, alias="range"),
+    current_client_user: ClientUser = Depends(get_current_client_user),
+    db: Session = Depends(get_db),
+):
+    """The map's click-through target (app/client_portal/geography_map.py
+    for the map widget itself). Unlike client_entity_detail above, this
+    pools content across every one of the client's subscribed subjects at
+    once - the whole point of putting a map on the dashboard rather than
+    on one subject's page - plus, for a client holding a matching
+    ClientGeographySubscription, every OTHER entity's content here too
+    (per direct instruction: geography subscriptions are the only path to
+    "everything happening here, not just my subjects").
+    """
+    client_id = current_client_user.client_id
+    if state not in MAP_STATES or kind not in ("district", "constituency"):
+        return RedirectResponse("/client/dashboard", status_code=303)
+
+    resolved_seat_type: SeatType | None = None
+    if kind == "constituency":
+        try:
+            resolved_seat_type = SeatType(seat_type)
+        except (TypeError, ValueError):
+            return RedirectResponse("/client/dashboard", status_code=303)
+
+    social_range = range_param if range_param in SOCIAL_RANGES else _DEFAULT_SOCIAL_RANGE
+    range_start, range_end = _social_range_bounds(social_range)
+
+    subjects = (
+        db.query(ClientSubject).join(Entity, Entity.id == ClientSubject.entity_id)
+        .filter(ClientSubject.client_id == client_id).all()
+    )
+    entity_by_id = {s.entity_id: s.entity for s in subjects}
+    geography_sub = _find_geography_subscription(db, client_id, state, kind, value, resolved_seat_type)
+
+    def entity_ids_for(channel: str) -> list[int] | None:
+        """None = no entity restriction (the geography subscription grants
+        this channel, so every entity's matching content is included, not
+        just this client's own subjects). Otherwise, exactly this
+        client's own subjects that have that channel switched on for
+        them - same visibility-only gating as client_entity_detail.
+        """
+        if geography_sub is not None and getattr(geography_sub, f"{channel}_access"):
+            return None
+        return [s.entity_id for s in subjects if getattr(s, f"{channel}_access")]
+
+    # ---- news ----
+    news_entity_ids = entity_ids_for("news")
+    news_articles = []
+    if news_entity_ids is None or news_entity_ids:
+        conditions = [Article.published_tag.is_not(None)]
+        if kind == "district":
+            conditions.append(Article.system_tag.has(district=value))
+        else:
+            conditions.append(Article.system_tag.has(constituency=value, seat_type=resolved_seat_type))
+        mentioning_entities = select(ArticleEntity.article_id)
+        if news_entity_ids is not None:
+            mentioning_entities = mentioning_entities.where(ArticleEntity.entity_id.in_(news_entity_ids))
+        conditions.append(Article.id.in_(mentioning_entities))
+
+        stmt = (
+            select(Article)
+            .where(*conditions)
+            .order_by(Article.published_at.desc())
+            .limit(50)
+            .options(
+                selectinload(Article.system_tag), selectinload(Article.outlet),
+                selectinload(Article.entity_mentions).selectinload(ArticleEntity.entity),
+            )
+        )
+        for a in db.scalars(stmt).unique():
+            mentioned_names = sorted({
+                ae.entity.name for ae in a.entity_mentions
+                if news_entity_ids is None or ae.entity_id in news_entity_ids
+            }) or sorted({ae.entity.name for ae in a.entity_mentions})
+            news_articles.append({
+                "headline": a.headline, "url": a.url, "outlet_name": a.outlet.name,
+                "published_at": a.published_at, "published_tag": a.published_tag,
+                "jurisdiction": format_jurisdiction(a.system_tag.jurisdiction) if a.system_tag else None,
+                "ruling_party": a.system_tag.ruling_party if a.system_tag else None,
+                "excerpt": make_excerpt(a.body_text) if a.body_text.strip() else None,
+                "subject_names": mentioned_names,
+            })
+
+    # ---- youtube / x ----
+    def _mentions_for(source: SocialSource, channel: str) -> list[SocialMention]:
+        ids = entity_ids_for(channel)
+        if ids is not None and not ids:
+            return []
+        conditions = [
+            SocialMention.source == source, SocialMention.posted_at.is_not(None), SocialMention.posted_at >= range_start,
+        ]
+        if range_end is not None:
+            conditions.append(SocialMention.posted_at < range_end)
+        if kind == "district":
+            conditions.append(SocialMention.district == value)
+        else:
+            conditions.append(SocialMention.constituency == value)
+            conditions.append(SocialMention.seat_type == resolved_seat_type)
+        if ids is not None:
+            conditions.append(SocialMention.entity_id.in_(ids))
+
+        rows = (
+            db.query(SocialMention).filter(*conditions)
+            .order_by(SocialMention.engagement_count.desc(), SocialMention.posted_at.desc())
+            .limit(50).all()
+        )
+        # subject_name is a plain transient attribute (not a mapped
+        # column) set here purely for the template's "About: <entity>"
+        # badge - this view pools multiple entities at once, unlike
+        # client_entity_detail's single-subject page, so each card needs
+        # to say which one it's about. A geography subscription can pull
+        # in entities this client never subscribed to at all (that's the
+        # whole point), so entity_by_id (built from this client's own
+        # subjects) isn't guaranteed to already have every name - fetch
+        # whatever's missing rather than leaving those cards unlabeled.
+        missing_ids = {m.entity_id for m in rows} - entity_by_id.keys()
+        if missing_ids:
+            for e in db.query(Entity).filter(Entity.id.in_(missing_ids)):
+                entity_by_id[e.id] = e
+        for m in rows:
+            entity = entity_by_id.get(m.entity_id)
+            m.subject_name = entity.name if entity else None
+        return rows
+
+    youtube_mentions = _mentions_for(SocialSource.YOUTUBE, "youtube")
+    x_mentions = _mentions_for(SocialSource.X, "x")
+
+    pro_articles = [a for a in news_articles if a["published_tag"] == "pro-establishment"]
+    anti_articles = [a for a in news_articles if a["published_tag"] == "anti-establishment"]
+    apolitical_articles = [a for a in news_articles if a["published_tag"] == "apolitical"]
+    youtube_favorable, youtube_neutral, youtube_unfavorable = _split_by_sentiment(youtube_mentions)
+    x_favorable, x_neutral, x_unfavorable = _split_by_sentiment(x_mentions)
+
+    geo_label = f"{value} district, {state}" if kind == "district" else f"{value} ({resolved_seat_type.value.upper()}), {state}"
+
+    return render(
+        request, "client_geography_detail.html", current_client_user,
+        state=state, kind=kind, value=value, seat_type=resolved_seat_type, geo_label=geo_label,
+        has_geography_subscription=geography_sub is not None,
+        pro_articles=pro_articles, anti_articles=anti_articles, apolitical_articles=apolitical_articles,
+        youtube_favorable=youtube_favorable, youtube_neutral=youtube_neutral, youtube_unfavorable=youtube_unfavorable,
+        x_favorable=x_favorable, x_neutral=x_neutral, x_unfavorable=x_unfavorable,
+        youtube_thumbnail_url=youtube_thumbnail_url,
+        social_range=social_range, social_ranges=SOCIAL_RANGES,
+        has_news=bool(news_articles), has_social=bool(youtube_mentions or x_mentions),
     )

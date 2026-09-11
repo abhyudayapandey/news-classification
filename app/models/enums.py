@@ -56,11 +56,14 @@ class SeatType(str, enum.Enum):
     """Which house a piece of content's guessed `constituency` refers to -
     Lok Sabha (MP) and Vidhan Sabha (MLA) seats are delimited independently
     of each other and of district boundaries in India, so a bare
-    constituency name is ambiguous without this. Set alongside
-    `constituency` wherever app/processing/geography.py's text heuristic
-    actually finds one named (e.g. "Baramati Lok Sabha seat") - see that
-    module's docstring for why this is content-derived, not a seeded
-    master list or anything manually assigned to an Entity.
+    constituency name is ambiguous without this - the same name can even be
+    both an MP and an MLA seat in the same state (Jodhpur is one real
+    example). Set alongside `constituency` wherever app/processing/
+    geography.py's text heuristic finds one named - either an explicit
+    phrase ("Baramati Lok Sabha seat") or a bare mention resolved against
+    app/data/constituency_seed.py's seeded name list; this is always
+    content-derived, never anything manually assigned to an Entity - see
+    that seed module's own docstring for what's actually seeded so far.
     """
 
     MP = "mp"

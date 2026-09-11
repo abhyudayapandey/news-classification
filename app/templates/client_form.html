@@ -29,6 +29,9 @@
       <option value="{{ e.id }}">{{ e.name }} ({{ e.type.value }})</option>
       {% endfor %}
     </select>
+    <p class="muted" style="margin-top:0.35rem;">
+      Not tracking anyone new yet, or the person isn't listed? <a href="/admin/entities/new" target="_blank">Create a new entity</a> first, then come back and refresh this page.
+    </p>
 
     <div style="margin-top: 1.25rem;">
       <button class="btn btn-primary" type="submit">Create client</button>

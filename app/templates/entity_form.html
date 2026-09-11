@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit entity" if entity else "New entity" }}{% endblock %}
+{% block content %}
+<p><a href="/admin/entities">&larr; Back to entities</a></p>
+<div class="card" style="max-width: 520px;">
+  <h1>{{ "Edit entity" if entity else "New entity" }}</h1>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <form method="post" action="{{ '/admin/entities/' ~ entity.id ~ '/edit' if entity else '/admin/entities/new' }}">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{{ entity.name if entity else '' }}" required autofocus>
+
+    {% if entity %}
+    <label>Type</label>
+    <p class="muted" style="margin-top:-0.25rem;">
+      {{ entity.type.value }} - not editable here; delete and recreate if this is genuinely wrong.
+    </p>
+    {% else %}
+    <label for="entity_type">Type</label>
+    <select id="entity_type" name="entity_type" required>
+      <option value="person">Person</option>
+      <option value="party">Party</option>
+    </select>
+    {% endif %}
+
+    <label for="aliases">Aliases</label>
+    <input type="text" id="aliases" name="aliases"
+           value="{{ entity.aliases|join(', ') if entity else '' }}"
+           placeholder="Comma-separated, e.g. PM Modi, Narendra Modi">
+
+    <label for="state">State</label>
+    <input type="text" id="state" name="state" value="{{ entity.entity_metadata.get('state', '') if entity else '' }}"
+           placeholder="A person's home state, or a party's state (blank = national party)">
+
+    <h3 style="margin-top:1.5rem;">If this is a person</h3>
+    <label for="party">Party affiliation</label>
+    <input type="text" id="party" name="party" value="{{ entity.entity_metadata.get('party', '') if entity else '' }}">
+    <label for="role">Role</label>
+    <input type="text" id="role" name="role" value="{{ entity.entity_metadata.get('role', '') if entity else '' }}"
+           placeholder="e.g. MLA, MP, Prime Minister, party candidate">
+    <label for="constituency">Home constituency</label>
+    <input type="text" id="constituency" name="constituency"
+           value="{{ entity.entity_metadata.get('constituency', '') if entity else '' }}"
+           placeholder="e.g. Jodhpur">
+    <p class="muted" style="margin-top:-0.25rem;">
+      Content about this person is understood as relevant to this constituency even when the
+      article/post/video never names it - separate from and independent of the geography guessed
+      from each piece of content's own text.
+    </p>
+    <label for="seat_type">Seat type</label>
+    <select id="seat_type" name="seat_type">
+      <option value="" {% if not entity or not entity.entity_metadata.get('seat_type') %}selected{% endif %}>- Unset -</option>
+      <option value="mla" {% if entity and entity.entity_metadata.get('seat_type') == 'mla' %}selected{% endif %}>MLA (Vidhan Sabha)</option>
+      <option value="mp" {% if entity and entity.entity_metadata.get('seat_type') == 'mp' %}selected{% endif %}>MP (Lok Sabha)</option>
+    </select>
+
+    <h3 style="margin-top:1.5rem;">If this is a party</h3>
+    <p class="muted" style="margin-top:-0.25rem;">Uses the State field above; leave it blank for a national party.</p>
+
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">{{ "Save" if entity else "Create entity" }}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

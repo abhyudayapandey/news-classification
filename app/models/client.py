@@ -37,3 +37,6 @@ class Client(Base):
 
     subjects: Mapped[list["ClientSubject"]] = relationship(back_populates="client", cascade="all, delete-orphan")
     users: Mapped[list["ClientUser"]] = relationship(back_populates="client", cascade="all, delete-orphan")
+    geography_subscriptions: Mapped[list["ClientGeographySubscription"]] = relationship(
+        back_populates="client", cascade="all, delete-orphan"
+    )

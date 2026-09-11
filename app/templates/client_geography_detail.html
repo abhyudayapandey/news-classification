@@ -1,0 +1,189 @@
+{% extends "public_base.html" %}
+{% block title %}{{ geo_label }}{% endblock %}
+
+{% block header %}
+<header class="border-b border-line">
+  <div class="max-w-6xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between gap-6 flex-wrap">
+    <a href="/client/dashboard" class="flex items-center gap-2.5 no-underline group">
+      <span class="flex items-center justify-center w-8 h-8 rounded-xl bg-accent text-accent-ink font-display font-bold text-sm shrink-0 transition-transform duration-200 group-hover:-rotate-6">NF</span>
+      <span class="font-display text-xl font-bold text-ink tracking-tight">News Framing Platform</span>
+      <span class="hidden sm:inline text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-faint ml-1">Client Portal</span>
+    </a>
+    <div class="flex items-center gap-4">
+      <span class="text-sm text-ink-muted">{{ current_client_user.name }} &middot; <span class="font-semibold text-ink">{{ current_client_user.client.name }}</span></span>
+      <form method="post" action="/client/logout">
+        <button type="submit" class="text-sm font-semibold text-ink-muted border border-line rounded-full px-3.5 py-1.5 hover:text-ink hover:border-ink-faint transition-colors">Log out</button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endblock %}
+
+{% block footer %}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+
+  <a href="/client/dashboard" class="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-muted hover:text-accent transition-colors mb-6">
+    <svg width="12" height="12" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M8 1L2 5L8 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Back to map
+  </a>
+
+  <div class="flex items-start justify-between gap-6 flex-wrap mb-2">
+    <div>
+      <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-2">{{ state }}</p>
+      <h1 class="font-display text-2xl sm:text-3xl font-bold text-ink text-balance leading-tight">{{ value }}</h1>
+      <p class="text-[13.5px] text-ink-faint mt-1">
+        {% if kind == "constituency" %}{{ seat_type.value.upper() }} seat{% else %}District{% endif %}
+        {% if has_geography_subscription %} &middot; showing coverage from every tracked subject here{% else %} &middot; showing coverage from your tracked subjects only{% endif %}
+      </p>
+    </div>
+  </div>
+
+  {% if not has_news and not has_social %}
+  <div class="bg-surface border border-line rounded-2xl p-8 text-center mt-8">
+    <p class="text-sm text-ink-faint">Nothing here yet for {{ value }}{% if not has_geography_subscription %} among your tracked subjects{% endif %}.</p>
+  </div>
+  {% else %}
+
+  {% if has_social %}
+  <div class="flex flex-wrap items-center gap-x-1.5 gap-y-1 my-4 text-[13px] text-ink-faint">
+    <span class="font-medium mr-1">Showing</span>
+    {% for r in social_ranges %}
+    <a href="?state={{ state }}&kind={{ kind }}&value={{ value }}{% if seat_type %}&seat_type={{ seat_type.value }}{% endif %}&range={{ r }}"
+       class="px-2 py-0.5 rounded-full transition-colors {% if social_range == r %}bg-accent-soft text-accent font-semibold{% else %}hover:text-ink{% endif %}">
+      {{ {"today": "Today", "yesterday": "Yesterday", "3d": "Last 3 days", "7d": "Last 7 days"}[r] }}
+    </a>
+    {% endfor %}
+    <span class="ml-1">&middot; most-engaged first</span>
+  </div>
+  {% endif %}
+
+  {% macro subject_badge(names) %}
+    {% for name in names %}
+    <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[11.5px] font-semibold">{{ name }}</span>
+    {% endfor %}
+  {% endmacro %}
+
+  {% macro article_card(a) %}
+  <article class="bg-surface border border-line rounded-2xl p-5">
+    <div class="flex flex-wrap items-center gap-1.5 mb-3">
+      {{ subject_badge(a.subject_names) }}
+      <span class="text-[11.5px] font-medium text-ink-faint mr-0.5">{{ a.published_at.strftime("%Y-%m-%d") }}</span>
+      {% if a.jurisdiction %}
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-hover text-ink-muted text-[11.5px] font-medium">{{ a.jurisdiction }}{% if a.ruling_party %} ({{ a.ruling_party }}){% endif %}</span>
+      {% endif %}
+    </div>
+    <h3 class="font-display text-[16px] leading-snug font-semibold text-balance">
+      <a href="{{ a.url }}" target="_blank" rel="noopener" class="text-ink hover:text-accent transition-colors">{{ a.headline }}</a>
+    </h3>
+    {% if a.excerpt %}<p class="mt-2 text-[13.5px] leading-relaxed text-ink-muted">{{ a.excerpt }}</p>{% endif %}
+    <a href="{{ a.url }}" target="_blank" rel="noopener"
+       class="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted border border-line rounded-full pl-3 pr-2.5 py-1 hover:text-ink hover:border-ink-faint transition-colors">
+      Read at {{ a.outlet_name }}
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </a>
+  </article>
+  {% endmacro %}
+
+  {% macro article_column(label, articles) %}
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="w-2 h-2 rounded-full bg-accent shrink-0" aria-hidden="true"></span>
+      <h2 class="font-display text-[13px] font-bold uppercase tracking-[0.08em] text-ink">{{ label }}</h2>
+      <span class="text-[11.5px] font-semibold text-ink-faint tabular-nums">{{ articles|length }}</span>
+    </div>
+    {% if articles %}
+    <div class="flex flex-col gap-4">
+      {% for a in articles %}{{ article_card(a) }}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-ink-faint italic">Nothing here.</p>
+    {% endif %}
+  </section>
+  {% endmacro %}
+
+  {% if has_news %}
+  <h2 class="font-display text-lg font-bold text-ink mt-10 mb-4">News</h2>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
+    {{ article_column("Pro-Establishment", pro_articles) }}
+    {{ article_column("Anti-Establishment", anti_articles) }}
+    {{ article_column("Apolitical", apolitical_articles) }}
+  </div>
+  {% endif %}
+
+  {% macro mention_card(m, engagement_label, show_thumbnail=False) %}
+  <article class="bg-surface border border-line rounded-2xl overflow-hidden">
+    {% if show_thumbnail %}
+    <div class="relative aspect-video" style="background: var(--thumb-bg);">
+      <img src="{{ youtube_thumbnail_url(m.url) }}" alt="" class="absolute inset-0 w-full h-full object-cover" loading="lazy">
+      <span class="absolute inset-0 flex items-center justify-center">
+        <span class="flex items-center justify-center w-9 h-9 rounded-full bg-white/90">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10 8.5L16 12L10 15.5V8.5Z" fill="#17151F"/></svg>
+        </span>
+      </span>
+    </div>
+    {% endif %}
+    <div class="p-5">
+      <div class="flex flex-wrap items-center gap-1.5 mb-3">
+        {% if m.subject_name %}<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-accent-soft text-accent text-[11.5px] font-semibold">{{ m.subject_name }}</span>{% endif %}
+        <span class="text-[11.5px] font-medium text-ink-faint">{{ m.posted_at.strftime("%Y-%m-%d") if m.posted_at else "-" }}</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-hover text-ink-muted text-[11.5px] font-medium">{{ "{:,}".format(m.engagement_count) }} {{ engagement_label }}</span>
+      </div>
+      {% if show_thumbnail %}
+        {% set lines = m.content_text.split("\n") %}
+        <h3 class="font-display text-[14.5px] leading-snug font-semibold text-ink">{{ lines[0] }}</h3>
+        {% if lines|length > 1 %}<p class="mt-1.5 text-[13px] text-ink-muted leading-relaxed">{{ lines[1:]|join(" ") }}</p>{% endif %}
+      {% else %}
+        <p class="text-[14px] leading-relaxed text-ink" style="white-space: pre-line;">{{ m.content_text }}</p>
+      {% endif %}
+      <div class="mt-3 flex items-center gap-3">
+        {% if m.author %}<span class="text-[12.5px] text-ink-muted">{{ m.author }}</span>{% endif %}
+        <a href="{{ m.url }}" target="_blank" rel="noopener"
+           class="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-muted border border-line rounded-full pl-3 pr-2.5 py-1 hover:text-ink hover:border-ink-faint transition-colors">
+          View
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" class="shrink-0" aria-hidden="true"><path d="M2 8L8 2M8 2H3.2M8 2V6.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+    </div>
+  </article>
+  {% endmacro %}
+
+  {% macro mention_column(label, mentions, dot_class, engagement_label, show_thumbnail) %}
+  <section>
+    <div class="flex items-center gap-2 mb-4">
+      <span class="w-2 h-2 rounded-full {{ dot_class }} shrink-0" aria-hidden="true"></span>
+      <h2 class="font-display text-[13px] font-bold uppercase tracking-[0.08em] text-ink">{{ label }}</h2>
+      <span class="text-[11.5px] font-semibold text-ink-faint tabular-nums">{{ mentions|length }}</span>
+    </div>
+    {% if mentions %}
+    <div class="flex flex-col gap-4">
+      {% for m in mentions %}{{ mention_card(m, engagement_label, show_thumbnail) }}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-ink-faint italic">Nothing here.</p>
+    {% endif %}
+  </section>
+  {% endmacro %}
+
+  {% if youtube_favorable or youtube_neutral or youtube_unfavorable %}
+  <h2 class="font-display text-lg font-bold text-ink mt-12 mb-4">YouTube</h2>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
+    {{ mention_column("Favourable", youtube_favorable, "bg-emerald-500", "views", True) }}
+    {{ mention_column("Neutral", youtube_neutral, "bg-ink-faint", "views", True) }}
+    {{ mention_column("Unfavourable", youtube_unfavorable, "bg-red-500", "views", True) }}
+  </div>
+  {% endif %}
+
+  {% if x_favorable or x_neutral or x_unfavorable %}
+  <h2 class="font-display text-lg font-bold text-ink mt-12 mb-4">X</h2>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
+    {{ mention_column("Favourable", x_favorable, "bg-emerald-500", "engagements", False) }}
+    {{ mention_column("Neutral", x_neutral, "bg-ink-faint", "engagements", False) }}
+    {{ mention_column("Unfavourable", x_unfavorable, "bg-red-500", "engagements", False) }}
+  </div>
+  {% endif %}
+
+  {% endif %}
+</div>
+{% endblock %}
