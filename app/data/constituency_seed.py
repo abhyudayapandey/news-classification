@@ -15,35 +15,39 @@ actively being pitched in (Rajasthan, Uttar Pradesh, Punjab,
 Uttarakhand) - boundaries unchanged since the 2008 delimitation, so this
 is the lower-risk half of this file.
 
-Vidhan Sabha (MLA) seats for Rajasthan and Uttar Pradesh are DELIBERATELY
-NOT seeded here yet, even though they matter more for a state-election
-pitch than Lok Sabha does - that's exactly why the bar is higher, not
-lower. Uttar Pradesh alone has 403 assembly seats; free-recalling several
-hundred hyper-local constituency names per state is a fundamentally less
-reliable exercise than the ~25-80-seat Lok Sabha lists above, and a wrong
-or missing seat name is the kind of error a political client notices
-immediately. Source these from each state's official delimitation list
-(ECI or the state Chief Electoral Officer's site) before seeding MLA rows
-for these two - don't extend by free recall the way the rest of this file
-was built.
+Vidhan Sabha (MLA) seats for Uttar Pradesh are DELIBERATELY NOT seeded
+here yet, even though they matter more for a state-election pitch than
+Lok Sabha does - that's exactly why the bar is higher, not lower. Uttar
+Pradesh alone has 403 assembly seats; free-recalling several hundred
+hyper-local constituency names is a fundamentally less reliable exercise
+than the ~25-80-seat Lok Sabha lists above, and a wrong or missing seat
+name is the kind of error a political client notices immediately. Source
+these from the state's official delimitation list (ECI or the state
+Chief Electoral Officer's site) before seeding MLA rows for it - don't
+extend by free recall the way the rest of this file was built.
 
-Uttarakhand's 70 MLA seats and Punjab's 117 MLA seats ARE seeded below,
-as a deliberately different case: not free recall, but built via multiple
-cross-referenced WebSearch passes, name by name, checking each against a
-real "<Name> Assembly constituency" Wikipedia article existing and
-cross-checking district-wise sub-counts against known per-district seat
-totals. This caught genuine search-summarization artifacts both times: for
-Uttarakhand, an Uttarkashi-district seat name spuriously repeated into the
-unrelated Kumaon-hills district group; for Punjab, an initial pass came up
-one seat short of the official 117 (missing Sujanpur, which turned out to
-belong to Pathankot district rather than the initially-assumed Gurdaspur -
+Uttarakhand's 70 MLA seats, Punjab's 117 MLA seats, and Rajasthan's 200
+MLA seats ARE seeded below, as a deliberately different case: not free
+recall, but built via multiple cross-referenced WebSearch passes, name by
+name, checking each against a real "<Name> Assembly constituency"
+Wikipedia article existing and cross-checking district-wise sub-counts
+against known per-district seat totals. This caught genuine
+search-summarization artifacts each time: for Uttarakhand, an
+Uttarkashi-district seat name spuriously repeated into the unrelated
+Kumaon-hills district group; for Punjab, an initial pass came up one seat
+short of the official 117 (missing Sujanpur, which turned out to belong
+to Pathankot district rather than the initially-assumed Gurdaspur -
 Pathankot was carved out of Gurdaspur district in 2011, after most
-district-level assembly-seat groupings people recall were fixed). The
-district-wise sub-counts below sum to exactly 70 for Uttarakhand and
-exactly 117 for Punjab - still not a substitute for the official ECI
-list, but meaningfully more verified than the Lok Sabha lists above,
-which is why this file distinguishes the two provenances rather than
-caveating everything identically.
+district-level assembly-seat groupings people recall were fixed); for
+Rajasthan, cross-referencing surfaced a real same-name collision this
+schema can't fully represent - see the note on "Shahpura" in the
+Rajasthan MLA block below. The district-wise sub-counts below sum to
+exactly 70 for Uttarakhand, exactly 117 for Punjab, and exactly 200 for
+Rajasthan (200 official seats, 199 distinct rows here because of the
+Shahpura collision) - still not a substitute for the official ECI list,
+but meaningfully more verified than the Lok Sabha lists above, which is
+why this file distinguishes the two provenances rather than caveating
+everything identically.
 """
 
 from app.models.enums import SeatType
@@ -418,6 +422,252 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Samana", "Punjab", SeatType.MLA),
     ("Shutrana", "Punjab", SeatType.MLA),
 
-    # Rajasthan/Uttar Pradesh Vidhan Sabha (MLA) seats: not seeded yet -
-    # see module docstring.
+    # Rajasthan - Vidhan Sabha / MLA (200 official seats, 199 rows here -
+    # see module docstring for this state's search-cross-referenced
+    # provenance and the real "Shahpura" name collision noted below).
+    # Sri Ganganagar district (6)
+    ("Ganganagar", "Rajasthan", SeatType.MLA),
+    ("Karanpur", "Rajasthan", SeatType.MLA),
+    ("Raisinghnagar", "Rajasthan", SeatType.MLA),
+    ("Sadulshahar", "Rajasthan", SeatType.MLA),
+    ("Anupgarh", "Rajasthan", SeatType.MLA),
+    ("Suratgarh", "Rajasthan", SeatType.MLA),
+    # Hanumangarh district (5)
+    ("Sangaria", "Rajasthan", SeatType.MLA),
+    ("Pilibanga", "Rajasthan", SeatType.MLA),
+    ("Hanumangarh", "Rajasthan", SeatType.MLA),
+    ("Bhadra", "Rajasthan", SeatType.MLA),
+    ("Nohar", "Rajasthan", SeatType.MLA),
+    # Bikaner district (7)
+    ("Khajuwala", "Rajasthan", SeatType.MLA),
+    ("Bikaner West", "Rajasthan", SeatType.MLA),
+    ("Bikaner East", "Rajasthan", SeatType.MLA),
+    ("Kolayat", "Rajasthan", SeatType.MLA),
+    ("Lunkaransar", "Rajasthan", SeatType.MLA),
+    ("Dungargarh", "Rajasthan", SeatType.MLA),
+    ("Nokha", "Rajasthan", SeatType.MLA),
+    # Churu district (6)
+    ("Sadulpur", "Rajasthan", SeatType.MLA),
+    ("Taranagar", "Rajasthan", SeatType.MLA),
+    ("Sardarshahar", "Rajasthan", SeatType.MLA),
+    ("Churu", "Rajasthan", SeatType.MLA),
+    ("Ratangarh", "Rajasthan", SeatType.MLA),
+    ("Sujangarh", "Rajasthan", SeatType.MLA),
+    # Jhunjhunu district (7)
+    ("Pilani", "Rajasthan", SeatType.MLA),
+    ("Surajgarh", "Rajasthan", SeatType.MLA),
+    ("Jhunjhunu", "Rajasthan", SeatType.MLA),
+    ("Mandawa", "Rajasthan", SeatType.MLA),
+    ("Nawalgarh", "Rajasthan", SeatType.MLA),
+    ("Khetri", "Rajasthan", SeatType.MLA),
+    ("Udaipurwati", "Rajasthan", SeatType.MLA),
+    # Sikar district (8)
+    ("Fatehpur", "Rajasthan", SeatType.MLA),
+    ("Lachhmangarh", "Rajasthan", SeatType.MLA),
+    ("Dhod", "Rajasthan", SeatType.MLA),
+    ("Sikar", "Rajasthan", SeatType.MLA),
+    ("Danta Ramgarh", "Rajasthan", SeatType.MLA),
+    ("Khandela", "Rajasthan", SeatType.MLA),
+    ("Srimadhopur", "Rajasthan", SeatType.MLA),
+    ("Neem Ka Thana", "Rajasthan", SeatType.MLA),
+    # Jaipur district (19)
+    ("Kishanpole", "Rajasthan", SeatType.MLA),
+    ("Dudu", "Rajasthan", SeatType.MLA),
+    ("Vidyadhar Nagar", "Rajasthan", SeatType.MLA),
+    ("Hawa Mahal", "Rajasthan", SeatType.MLA),
+    ("Kotputli", "Rajasthan", SeatType.MLA),
+    ("Viratnagar", "Rajasthan", SeatType.MLA),
+    # "Shahpura" is a real same-name collision between two distinct
+    # Rajasthan MLA seats (this one in Jaipur district, another in
+    # Bhilwara district) - unlike every other MP/MLA collision this file
+    # handles via seat_type, both are MLA, so this (name, state,
+    # seat_type) schema genuinely can't tell them apart. Seeded once: a
+    # bare "Shahpura" mention still correctly resolves to an MLA seat,
+    # it just can't say which one - see module docstring.
+    ("Shahpura", "Rajasthan", SeatType.MLA),
+    ("Chomu", "Rajasthan", SeatType.MLA),
+    ("Phulera", "Rajasthan", SeatType.MLA),
+    ("Jhotwara", "Rajasthan", SeatType.MLA),
+    ("Amber", "Rajasthan", SeatType.MLA),
+    ("Jamwa Ramgarh", "Rajasthan", SeatType.MLA),
+    ("Civil Lines", "Rajasthan", SeatType.MLA),
+    ("Adarsh Nagar", "Rajasthan", SeatType.MLA),
+    ("Malviya Nagar", "Rajasthan", SeatType.MLA),
+    ("Sanganer", "Rajasthan", SeatType.MLA),
+    ("Bagru", "Rajasthan", SeatType.MLA),
+    ("Bassi", "Rajasthan", SeatType.MLA),
+    ("Chaksu", "Rajasthan", SeatType.MLA),
+    # Alwar district (11)
+    ("Alwar Rural", "Rajasthan", SeatType.MLA),
+    ("Alwar Urban", "Rajasthan", SeatType.MLA),
+    ("Bansur", "Rajasthan", SeatType.MLA),
+    ("Behror", "Rajasthan", SeatType.MLA),
+    ("Kathumar", "Rajasthan", SeatType.MLA),
+    ("Kishangarh Bas", "Rajasthan", SeatType.MLA),
+    ("Mundawar", "Rajasthan", SeatType.MLA),
+    ("Rajgarh-Laxmangarh", "Rajasthan", SeatType.MLA),
+    ("Ramgarh", "Rajasthan", SeatType.MLA),
+    ("Thanagazi", "Rajasthan", SeatType.MLA),
+    ("Tijara", "Rajasthan", SeatType.MLA),
+    # Bharatpur district (7)
+    ("Deeg-Kumher", "Rajasthan", SeatType.MLA),
+    ("Bharatpur", "Rajasthan", SeatType.MLA),
+    ("Kaman", "Rajasthan", SeatType.MLA),
+    ("Nagar", "Rajasthan", SeatType.MLA),
+    ("Weir", "Rajasthan", SeatType.MLA),
+    ("Nadbai", "Rajasthan", SeatType.MLA),
+    ("Bayana", "Rajasthan", SeatType.MLA),
+    # Dholpur district (4)
+    ("Dholpur", "Rajasthan", SeatType.MLA),
+    ("Bari", "Rajasthan", SeatType.MLA),
+    ("Rajakhera", "Rajasthan", SeatType.MLA),
+    ("Baseri", "Rajasthan", SeatType.MLA),
+    # Karauli district (4)
+    ("Todabhim", "Rajasthan", SeatType.MLA),
+    ("Hindaun", "Rajasthan", SeatType.MLA),
+    ("Karauli", "Rajasthan", SeatType.MLA),
+    ("Sapotra", "Rajasthan", SeatType.MLA),
+    # Dausa district (5)
+    ("Bandikui", "Rajasthan", SeatType.MLA),
+    ("Mahuwa", "Rajasthan", SeatType.MLA),
+    ("Sikrai", "Rajasthan", SeatType.MLA),
+    ("Dausa", "Rajasthan", SeatType.MLA),
+    ("Lalsot", "Rajasthan", SeatType.MLA),
+    # Sawai Madhopur district (4)
+    ("Gangapur", "Rajasthan", SeatType.MLA),
+    ("Bamanwas", "Rajasthan", SeatType.MLA),
+    ("Sawai Madhopur", "Rajasthan", SeatType.MLA),
+    ("Khandar", "Rajasthan", SeatType.MLA),
+    # Tonk district (4)
+    ("Deoli-Uniara", "Rajasthan", SeatType.MLA),
+    ("Malpura", "Rajasthan", SeatType.MLA),
+    ("Niwai", "Rajasthan", SeatType.MLA),
+    ("Tonk", "Rajasthan", SeatType.MLA),
+    # Ajmer district (8) - includes Beawar, seeded here under Ajmer since
+    # district_seed.py uses the pre-August-2023 33-district list, before
+    # Beawar was carved out as its own district.
+    ("Kishangarh", "Rajasthan", SeatType.MLA),
+    ("Pushkar", "Rajasthan", SeatType.MLA),
+    ("Ajmer North", "Rajasthan", SeatType.MLA),
+    ("Ajmer South", "Rajasthan", SeatType.MLA),
+    ("Nasirabad", "Rajasthan", SeatType.MLA),
+    ("Masuda", "Rajasthan", SeatType.MLA),
+    ("Kekri", "Rajasthan", SeatType.MLA),
+    ("Beawar", "Rajasthan", SeatType.MLA),
+    # Nagaur district (10)
+    ("Ladnun", "Rajasthan", SeatType.MLA),
+    ("Deedwana", "Rajasthan", SeatType.MLA),
+    ("Jayal", "Rajasthan", SeatType.MLA),
+    ("Nagaur", "Rajasthan", SeatType.MLA),
+    ("Khinvsar", "Rajasthan", SeatType.MLA),
+    ("Makrana", "Rajasthan", SeatType.MLA),
+    ("Parbatsar", "Rajasthan", SeatType.MLA),
+    ("Nawan", "Rajasthan", SeatType.MLA),
+    ("Degana", "Rajasthan", SeatType.MLA),
+    ("Merta", "Rajasthan", SeatType.MLA),
+    # Pali district (6)
+    ("Sojat", "Rajasthan", SeatType.MLA),
+    ("Pali", "Rajasthan", SeatType.MLA),
+    ("Marwar Junction", "Rajasthan", SeatType.MLA),
+    ("Bali", "Rajasthan", SeatType.MLA),
+    ("Sumerpur", "Rajasthan", SeatType.MLA),
+    ("Jaitaran", "Rajasthan", SeatType.MLA),
+    # Jodhpur district (10)
+    ("Bhopalgarh", "Rajasthan", SeatType.MLA),
+    ("Bilara", "Rajasthan", SeatType.MLA),
+    ("Jodhpur", "Rajasthan", SeatType.MLA),
+    ("Lohawat", "Rajasthan", SeatType.MLA),
+    ("Luni", "Rajasthan", SeatType.MLA),
+    ("Osian", "Rajasthan", SeatType.MLA),
+    ("Phalodi", "Rajasthan", SeatType.MLA),
+    ("Sardarpura", "Rajasthan", SeatType.MLA),
+    ("Shergarh", "Rajasthan", SeatType.MLA),
+    ("Soorsagar", "Rajasthan", SeatType.MLA),
+    # Jaisalmer district (2)
+    ("Jaisalmer", "Rajasthan", SeatType.MLA),
+    ("Pokaran", "Rajasthan", SeatType.MLA),
+    # Barmer district (7)
+    ("Sheo", "Rajasthan", SeatType.MLA),
+    ("Barmer", "Rajasthan", SeatType.MLA),
+    ("Baytoo", "Rajasthan", SeatType.MLA),
+    ("Pachpadra", "Rajasthan", SeatType.MLA),
+    ("Siwana", "Rajasthan", SeatType.MLA),
+    ("Gudha Malani", "Rajasthan", SeatType.MLA),
+    ("Chohtan", "Rajasthan", SeatType.MLA),
+    # Jalore district (5)
+    ("Ahore", "Rajasthan", SeatType.MLA),
+    ("Jalore", "Rajasthan", SeatType.MLA),
+    ("Bhinmal", "Rajasthan", SeatType.MLA),
+    ("Sanchore", "Rajasthan", SeatType.MLA),
+    ("Raniwara", "Rajasthan", SeatType.MLA),
+    # Sirohi district (3)
+    ("Sirohi", "Rajasthan", SeatType.MLA),
+    ("Pindwara-Abu", "Rajasthan", SeatType.MLA),
+    ("Reodar", "Rajasthan", SeatType.MLA),
+    # Udaipur district (8)
+    ("Gogunda", "Rajasthan", SeatType.MLA),
+    ("Jhadol", "Rajasthan", SeatType.MLA),
+    ("Kherwara", "Rajasthan", SeatType.MLA),
+    ("Mavli", "Rajasthan", SeatType.MLA),
+    ("Salumber", "Rajasthan", SeatType.MLA),
+    ("Udaipur", "Rajasthan", SeatType.MLA),
+    ("Udaipur Rural", "Rajasthan", SeatType.MLA),
+    ("Vallabhnagar", "Rajasthan", SeatType.MLA),
+    # Rajsamand district (4)
+    ("Bhim", "Rajasthan", SeatType.MLA),
+    ("Kumbhalgarh", "Rajasthan", SeatType.MLA),
+    ("Rajsamand", "Rajasthan", SeatType.MLA),
+    ("Nathdwara", "Rajasthan", SeatType.MLA),
+    # Dungarpur district (4)
+    ("Aspur", "Rajasthan", SeatType.MLA),
+    ("Sagwara", "Rajasthan", SeatType.MLA),
+    ("Dungarpur", "Rajasthan", SeatType.MLA),
+    ("Chorasi", "Rajasthan", SeatType.MLA),
+    # Banswara district (5)
+    ("Bagidora", "Rajasthan", SeatType.MLA),
+    ("Garhi", "Rajasthan", SeatType.MLA),
+    ("Banswara", "Rajasthan", SeatType.MLA),
+    ("Ghatol", "Rajasthan", SeatType.MLA),
+    ("Kushalgarh", "Rajasthan", SeatType.MLA),
+    # Chittorgarh district (5)
+    ("Kapasan", "Rajasthan", SeatType.MLA),
+    ("Begun", "Rajasthan", SeatType.MLA),
+    ("Chittorgarh", "Rajasthan", SeatType.MLA),
+    ("Nimbahera", "Rajasthan", SeatType.MLA),
+    ("Bari Sadri", "Rajasthan", SeatType.MLA),
+    # Bhilwara district (7) - Shahpura excluded here, already seeded once
+    # under Jaipur district above (see the collision note there).
+    ("Bhilwara", "Rajasthan", SeatType.MLA),
+    ("Asind", "Rajasthan", SeatType.MLA),
+    ("Mandal", "Rajasthan", SeatType.MLA),
+    ("Sahara", "Rajasthan", SeatType.MLA),
+    ("Mandalgarh", "Rajasthan", SeatType.MLA),
+    ("Jahazpur", "Rajasthan", SeatType.MLA),
+    # Bundi district (3)
+    ("Bundi", "Rajasthan", SeatType.MLA),
+    ("Keshoraipatan", "Rajasthan", SeatType.MLA),
+    ("Hindoli", "Rajasthan", SeatType.MLA),
+    # Kota district (6)
+    ("Ladpura", "Rajasthan", SeatType.MLA),
+    ("Kota North", "Rajasthan", SeatType.MLA),
+    ("Kota South", "Rajasthan", SeatType.MLA),
+    ("Ramganj Mandi", "Rajasthan", SeatType.MLA),
+    ("Pipalda", "Rajasthan", SeatType.MLA),
+    ("Sangod", "Rajasthan", SeatType.MLA),
+    # Baran district (4)
+    ("Anta", "Rajasthan", SeatType.MLA),
+    ("Kishanganj", "Rajasthan", SeatType.MLA),
+    ("Baran-Atru", "Rajasthan", SeatType.MLA),
+    ("Chhabra", "Rajasthan", SeatType.MLA),
+    # Jhalawar district (4)
+    ("Dag", "Rajasthan", SeatType.MLA),
+    ("Jhalrapatan", "Rajasthan", SeatType.MLA),
+    ("Khanpur", "Rajasthan", SeatType.MLA),
+    ("Manohar Thana", "Rajasthan", SeatType.MLA),
+    # Pratapgarh district (2)
+    ("Pratapgarh", "Rajasthan", SeatType.MLA),
+    ("Dhariawad", "Rajasthan", SeatType.MLA),
+
+    # Uttar Pradesh Vidhan Sabha (MLA) seats: not seeded yet - see module
+    # docstring.
 ]
