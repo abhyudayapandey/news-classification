@@ -62,9 +62,15 @@ collisions of any state file so far - Mahuva, Mandvi, and Mangrol each
 name a real, distinct seat in two different districts (one pair each
 with Bhavnagar/Surat, Kachchh/Surat, and Junagadh/Surat), and Kalol and
 Jetpur each do too (Gandhinagar/Panchmahal and Rajkot/Chhota Udaipur
-respectively) - the same "Shahpura" situation as Rajasthan, seeded once
-each rather than as literal duplicate rows: 182 official seats, 177
-distinct rows here.
+respectively). Initially seeded once each, the same "Shahpura" treatment
+as Rajasthan below - but unlike Shahpura, Gujarat's content-classification
+pipeline (app/processing/geography.py's GUJARAT_SEAT_COLLISIONS) can
+often tell a same-named pair apart from nearby district context in the
+text being classified, so each pair is seeded as two distinct rows here:
+the bare name (e.g. "Kalol") is the default/ambiguous bucket a mention
+resolves to absent that context, and the district-qualified name (e.g.
+"Kalol (Panchmahal)") is the confidently-disambiguated other seat. 182
+official seats, 182 rows here.
 
 The district-wise sum for Gujarat also came up one seat over on the
 first pass (183, not 182) before the specific error was found: an
@@ -1338,9 +1344,11 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Jubbal-Kotkhai", "Himachal Pradesh", SeatType.MLA),
     ("Rohru", "Himachal Pradesh", SeatType.MLA),
 
-    # Gujarat - Vidhan Sabha / MLA (182 official seats, 177 rows here -
+    # Gujarat - Vidhan Sabha / MLA (182 official seats, 182 rows here -
     # see module docstring for this state's search-cross-referenced
-    # provenance and the Mahuva/Mandvi/Mangrol/Kalol/Jetpur collisions).
+    # provenance and the Mahuva/Mandvi/Mangrol/Kalol/Jetpur collisions,
+    # each seeded as a bare default name plus its district-qualified
+    # disambiguated name).
     # Ahmedabad district (21)
     ("Viramgam", "Gujarat", SeatType.MLA),
     ("Sanand", "Gujarat", SeatType.MLA),
@@ -1404,19 +1412,25 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Palitana", "Gujarat", SeatType.MLA),
     # "Mahuva" is a real same-name collision between two distinct Gujarat
     # MLA seats (this one in Bhavnagar district, another in Surat
-    # district) - same treatment as "Shahpura" in Rajasthan: seeded once,
-    # see module docstring.
+    # district). Unlike Rajasthan's "Shahpura" (which the schema truly
+    # can't distinguish - see module docstring), Gujarat's content-
+    # classification pipeline (app/processing/geography.py) resolves this
+    # one from nearby district context when the text has it, so both are
+    # seeded: the bare name here is the default/ambiguous bucket, "Mahuva
+    # (Surat)" below (Surat district's block) is the disambiguated one.
     ("Mahuva", "Gujarat", SeatType.MLA),
     ("Talaja", "Gujarat", SeatType.MLA),
     ("Gariadhar", "Gujarat", SeatType.MLA),
     # Botad district (2)
     ("Botad", "Gujarat", SeatType.MLA),
     ("Gadhada", "Gujarat", SeatType.MLA),
-    # Chhota Udaipur district (3) - "Jetpur" here is a real same-name
-    # collision with the Rajkot district seat of the same name (below),
-    # seeded once - see module docstring.
+    # Chhota Udaipur district (3) - "Jetpur (Chhota Udaipur)" here is the
+    # disambiguated half of a real same-name collision with the Rajkot
+    # district seat of the same name (below, seeded as the bare/default
+    # "Jetpur") - see the Rajkot block's collision note and module
+    # docstring.
     ("Chhota Udaipur", "Gujarat", SeatType.MLA),
-    ("Jetpur", "Gujarat", SeatType.MLA),
+    ("Jetpur (Chhota Udaipur)", "Gujarat", SeatType.MLA),
     ("Sankheda", "Gujarat", SeatType.MLA),
     # Dahod district (6)
     ("Fatepura", "Gujarat", SeatType.MLA),
@@ -1432,7 +1446,8 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Dwarka", "Gujarat", SeatType.MLA),
     # Gandhinagar district (5) - "Kalol" here is a real same-name
     # collision with the Panchmahal district seat of the same name
-    # (below), seeded once - see module docstring.
+    # (below, seeded separately as "Kalol (Panchmahal)" - see module
+    # docstring). This bare name is the default/ambiguous bucket.
     ("Dehgam", "Gujarat", SeatType.MLA),
     ("Gandhinagar South", "Gujarat", SeatType.MLA),
     ("Gandhinagar North", "Gujarat", SeatType.MLA),
@@ -1450,16 +1465,18 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Jamnagar South", "Gujarat", SeatType.MLA),
     ("Jamjodhpur", "Gujarat", SeatType.MLA),
     # Junagadh district (5) - "Mangrol" here is a real same-name
-    # collision with the Surat district seat of the same name (below),
-    # seeded once - see module docstring.
+    # collision with the Surat district seat of the same name (below,
+    # seeded separately as "Mangrol (Surat)" - see module docstring).
+    # This bare name is the default/ambiguous bucket.
     ("Junagadh", "Gujarat", SeatType.MLA),
     ("Visavadar", "Gujarat", SeatType.MLA),
     ("Mangrol", "Gujarat", SeatType.MLA),
     ("Keshod", "Gujarat", SeatType.MLA),
     ("Manavadar", "Gujarat", SeatType.MLA),
     # Kachchh district (6) - "Mandvi" here is a real same-name collision
-    # with the Surat district seat of the same name (below), seeded
-    # once - see module docstring.
+    # with the Surat district seat of the same name (below, seeded
+    # separately as "Mandvi (Surat)" - see module docstring). This bare
+    # name is the default/ambiguous bucket.
     ("Abdasa", "Gujarat", SeatType.MLA),
     ("Mandvi", "Gujarat", SeatType.MLA),
     ("Bhuj", "Gujarat", SeatType.MLA),
@@ -1497,9 +1514,11 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Navsari", "Gujarat", SeatType.MLA),
     ("Gandevi", "Gujarat", SeatType.MLA),
     ("Vansada", "Gujarat", SeatType.MLA),
-    # Panchmahal district (5) - "Kalol" excluded here, already seeded
-    # once under Gandhinagar district above (see the collision note
-    # there).
+    # Panchmahal district (5) - "Kalol (Panchmahal)" is the disambiguated
+    # half of the real same-name collision with Gandhinagar district's
+    # seat of the same name (above, seeded as the bare/default "Kalol") -
+    # see the Gandhinagar block's collision note and module docstring.
+    ("Kalol (Panchmahal)", "Gujarat", SeatType.MLA),
     ("Godhra", "Gujarat", SeatType.MLA),
     ("Halol", "Gujarat", SeatType.MLA),
     ("Shehra", "Gujarat", SeatType.MLA),
@@ -1512,8 +1531,12 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     # Porbandar district (2)
     ("Porbandar", "Gujarat", SeatType.MLA),
     ("Kutiyana", "Gujarat", SeatType.MLA),
-    # Rajkot district (8) - "Jetpur" excluded here, already seeded once
-    # under Chhota Udaipur district above (see the collision note there).
+    # Rajkot district (8) - "Jetpur" is a real same-name collision with
+    # Chhota Udaipur district's seat of the same name (above, seeded
+    # separately as "Jetpur (Chhota Udaipur)" once content-classification
+    # could tell the two apart from context - see module docstring). This
+    # bare name is the default/ambiguous bucket.
+    ("Jetpur", "Gujarat", SeatType.MLA),
     ("Rajkot East", "Gujarat", SeatType.MLA),
     ("Rajkot West", "Gujarat", SeatType.MLA),
     ("Rajkot South", "Gujarat", SeatType.MLA),
@@ -1526,9 +1549,14 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Idar", "Gujarat", SeatType.MLA),
     ("Khedbrahma", "Gujarat", SeatType.MLA),
     ("Prantij", "Gujarat", SeatType.MLA),
-    # Surat district (16) - "Mahuva", "Mandvi", and "Mangrol" excluded
-    # here, already seeded once each under Bhavnagar, Kachchh, and
-    # Junagadh districts above (see the collision notes there).
+    # Surat district (16) - "Mahuva (Surat)", "Mandvi (Surat)", and
+    # "Mangrol (Surat)" are the disambiguated halves of real same-name
+    # collisions with Bhavnagar, Kachchh, and Junagadh districts' seats of
+    # the same names (above, each seeded as its bare/default name) - see
+    # those blocks' collision notes and module docstring.
+    ("Mahuva (Surat)", "Gujarat", SeatType.MLA),
+    ("Mandvi (Surat)", "Gujarat", SeatType.MLA),
+    ("Mangrol (Surat)", "Gujarat", SeatType.MLA),
     ("Bardoli", "Gujarat", SeatType.MLA),
     ("Choryasi", "Gujarat", SeatType.MLA),
     ("Kamrej", "Gujarat", SeatType.MLA),

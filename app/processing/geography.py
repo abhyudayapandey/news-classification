@@ -93,6 +93,43 @@ _BARE_CONSTITUENCY_RE = (
     else None
 )
 
+# Gujarat has 5 real MLA seats that share a name with another seat
+# elsewhere in the state (see constituency_seed.py's module docstring).
+# The bare name above (e.g. "Kalol") is seeded once and stays the
+# default/ambiguous bucket; each also has its own explicitly-seeded
+# disambiguated name for the other district's seat ("Kalol (Panchmahal)").
+# Confirmed against the ECI's official constituency-to-district table.
+# When a bare mention's surrounding text also names the OTHER seat's
+# district specifically, tag it with the disambiguated name instead of
+# the default - staying with the default whenever that context isn't
+# there (no guess, or some unrelated district mentioned) rather than
+# guessing wrong, the same discipline used throughout this module. A
+# content item that can't be disambiguated this way still shows up
+# wherever it's queried for the default name; see client_ui.py's
+# GUJARAT_SEAT_COLLISION_BARE_NAME use for how the "other" seat's own
+# page also pulls in that same default-tagged content.
+GUJARAT_SEAT_COLLISIONS: dict[str, tuple[str, str]] = {
+    # bare seed name -> (the OTHER seat's real district, its disambiguated name)
+    "Kalol": ("Panchmahal", "Kalol (Panchmahal)"),
+    "Mandvi": ("Surat", "Mandvi (Surat)"),
+    "Jetpur": ("Chhota Udaipur", "Jetpur (Chhota Udaipur)"),
+    "Mangrol": ("Surat", "Mangrol (Surat)"),
+    "Mahuva": ("Surat", "Mahuva (Surat)"),
+}
+
+# Reverse of the mapping above (disambiguated name -> its bare/default
+# name), for query-time use: a client viewing the disambiguated "other"
+# seat's page should also see content that only ever made it into the
+# ambiguous default bucket (no district context to disambiguate it at
+# classification time), not just content confidently tagged with the
+# disambiguated name itself. The default seat's own page does the
+# opposite on purpose - it does NOT also pull in the disambiguated name's
+# content, since that content has already been confidently attributed
+# elsewhere.
+GUJARAT_SEAT_COLLISION_BARE_NAME: dict[str, str] = {
+    other_name: bare_name for bare_name, (_district, other_name) in GUJARAT_SEAT_COLLISIONS.items()
+}
+
 
 def _resolve_bare_district(text: str) -> str | None:
     if _BARE_DISTRICT_RE is None:
@@ -133,7 +170,12 @@ def _resolve_bare_constituency(text: str) -> tuple[str, SeatType | None] | None:
         # Same name can be both an MP and an MLA seat in the same state (a
         # real collision, e.g. Jodhpur) - the name itself is still resolved,
         # just not which house, when a bare mention can't tell them apart.
-        return name, next(iter(seat_types)) if len(seat_types) == 1 else None
+        resolved_seat_type = next(iter(seat_types)) if len(seat_types) == 1 else None
+        if resolved_state == "Gujarat" and name in GUJARAT_SEAT_COLLISIONS:
+            other_district, other_name = GUJARAT_SEAT_COLLISIONS[name]
+            if guess_district(text) == other_district:
+                name = other_name
+        return name, resolved_seat_type
     return None
 
 

@@ -29,7 +29,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.auth.client_session import get_current_client_user, get_current_client_user_optional
@@ -47,6 +47,7 @@ from app.models import (
     SystemTag,
 )
 from app.models.enums import SeatType, SocialSource, SubjectSentiment
+from app.processing.geography import GUJARAT_SEAT_COLLISION_BARE_NAME
 from app.public.formatting import entity_initials, entity_subtitle, youtube_thumbnail_url
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -420,6 +421,19 @@ def client_geography_detail(
     entity_by_id = {s.entity_id: s.entity for s in subjects}
     geography_sub = _find_geography_subscription(db, client_id, state, kind, value, resolved_seat_type)
 
+    # A handful of real Gujarat seats share a name with another seat
+    # elsewhere in the state (see GUJARAT_SEAT_COLLISION_BARE_NAME's own
+    # docstring); content that couldn't be disambiguated at classification
+    # time stays tagged with the shared bare name. Viewing one of these
+    # disambiguated "other" seats should still surface that ambiguous
+    # content rather than silently hiding it - so match either name here.
+    # Every other kind/value combination just matches itself.
+    constituency_values = (
+        [value, GUJARAT_SEAT_COLLISION_BARE_NAME[value]]
+        if kind == "constituency" and value in GUJARAT_SEAT_COLLISION_BARE_NAME
+        else [value]
+    )
+
     def entity_ids_for(channel: str) -> list[int] | None:
         """None = no entity restriction (the geography subscription grants
         this channel, so every entity's matching content is included, not
@@ -439,7 +453,9 @@ def client_geography_detail(
         if kind == "district":
             conditions.append(Article.system_tag.has(district=value))
         else:
-            conditions.append(Article.system_tag.has(constituency=value, seat_type=resolved_seat_type))
+            conditions.append(Article.system_tag.has(
+                and_(SystemTag.constituency.in_(constituency_values), SystemTag.seat_type == resolved_seat_type)
+            ))
         mentioning_entities = select(ArticleEntity.article_id)
         if news_entity_ids is not None:
             mentioning_entities = mentioning_entities.where(ArticleEntity.entity_id.in_(news_entity_ids))
@@ -482,7 +498,7 @@ def client_geography_detail(
         if kind == "district":
             conditions.append(SocialMention.district == value)
         else:
-            conditions.append(SocialMention.constituency == value)
+            conditions.append(SocialMention.constituency.in_(constituency_values))
             conditions.append(SocialMention.seat_type == resolved_seat_type)
         if ids is not None:
             conditions.append(SocialMention.entity_id.in_(ids))
