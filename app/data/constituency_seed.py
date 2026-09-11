@@ -15,30 +15,35 @@ actively being pitched in (Rajasthan, Uttar Pradesh, Punjab,
 Uttarakhand) - boundaries unchanged since the 2008 delimitation, so this
 is the lower-risk half of this file.
 
-Vidhan Sabha (MLA) seats for Rajasthan, Uttar Pradesh, and Punjab are
-DELIBERATELY NOT seeded here yet, even though they matter more for a
-state-election pitch than Lok Sabha does - that's exactly why the bar is
-higher, not lower. Uttar Pradesh alone has 403 assembly seats; free-
-recalling several hundred hyper-local constituency names per state is a
-fundamentally less reliable exercise than the ~25-80-seat Lok Sabha
-lists above, and a wrong or missing seat name is the kind of error a
-political client notices immediately. Source these from each state's
-official delimitation list (ECI or the state Chief Electoral Officer's
-site) before seeding MLA rows for these three - don't extend by free
-recall the way the rest of this file was built.
+Vidhan Sabha (MLA) seats for Rajasthan and Uttar Pradesh are DELIBERATELY
+NOT seeded here yet, even though they matter more for a state-election
+pitch than Lok Sabha does - that's exactly why the bar is higher, not
+lower. Uttar Pradesh alone has 403 assembly seats; free-recalling several
+hundred hyper-local constituency names per state is a fundamentally less
+reliable exercise than the ~25-80-seat Lok Sabha lists above, and a wrong
+or missing seat name is the kind of error a political client notices
+immediately. Source these from each state's official delimitation list
+(ECI or the state Chief Electoral Officer's site) before seeding MLA rows
+for these two - don't extend by free recall the way the rest of this file
+was built.
 
-Uttarakhand's 70 MLA seats ARE seeded below, as a deliberately different
-case: not free recall, but built via multiple cross-referenced WebSearch
-passes, name by name, checking each against a real "<Name> Assembly
-constituency" Wikipedia article existing and cross-checking district-wise
-sub-counts against known per-district seat totals. One genuine search-
-summarization artifact was caught and discarded this way (an
-Uttarakashi-district seat name spuriously repeated into the unrelated
-Kumaon-hills district group). The 13 district-wise sub-counts below sum
-to exactly 70, the correct total - still not a substitute for the
-official ECI list, but meaningfully more verified than the Lok Sabha
-lists above, which is why this file distinguishes the two provenances
-rather than caveating everything identically.
+Uttarakhand's 70 MLA seats and Punjab's 117 MLA seats ARE seeded below,
+as a deliberately different case: not free recall, but built via multiple
+cross-referenced WebSearch passes, name by name, checking each against a
+real "<Name> Assembly constituency" Wikipedia article existing and
+cross-checking district-wise sub-counts against known per-district seat
+totals. This caught genuine search-summarization artifacts both times: for
+Uttarakhand, an Uttarkashi-district seat name spuriously repeated into the
+unrelated Kumaon-hills district group; for Punjab, an initial pass came up
+one seat short of the official 117 (missing Sujanpur, which turned out to
+belong to Pathankot district rather than the initially-assumed Gurdaspur -
+Pathankot was carved out of Gurdaspur district in 2011, after most
+district-level assembly-seat groupings people recall were fixed). The
+district-wise sub-counts below sum to exactly 70 for Uttarakhand and
+exactly 117 for Punjab - still not a substitute for the official ECI
+list, but meaningfully more verified than the Lok Sabha lists above,
+which is why this file distinguishes the two provenances rather than
+caveating everything identically.
 """
 
 from app.models.enums import SeatType
@@ -269,6 +274,150 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Nanakmatta", "Uttarakhand", SeatType.MLA),
     ("Khatima", "Uttarakhand", SeatType.MLA),
 
-    # Rajasthan/Uttar Pradesh/Punjab Vidhan Sabha (MLA) seats: not seeded
-    # yet - see module docstring.
+    # Punjab - Vidhan Sabha / MLA (117) - see module docstring for this
+    # state's search-cross-referenced provenance, and how the 116-vs-117
+    # discrepancy (Sujanpur belongs to Pathankot, not Gurdaspur) was found.
+    # Pathankot district (3)
+    ("Sujanpur", "Punjab", SeatType.MLA),
+    ("Bhoa", "Punjab", SeatType.MLA),
+    ("Pathankot", "Punjab", SeatType.MLA),
+    # Gurdaspur district (7)
+    ("Gurdaspur", "Punjab", SeatType.MLA),
+    ("Dina Nagar", "Punjab", SeatType.MLA),
+    ("Qadian", "Punjab", SeatType.MLA),
+    ("Batala", "Punjab", SeatType.MLA),
+    ("Sri Hargobindpur", "Punjab", SeatType.MLA),
+    ("Fatehgarh Churian", "Punjab", SeatType.MLA),
+    ("Dera Baba Nanak", "Punjab", SeatType.MLA),
+    # Amritsar district (11)
+    ("Ajnala", "Punjab", SeatType.MLA),
+    ("Raja Sansi", "Punjab", SeatType.MLA),
+    ("Majitha", "Punjab", SeatType.MLA),
+    ("Jandiala", "Punjab", SeatType.MLA),
+    ("Amritsar North", "Punjab", SeatType.MLA),
+    ("Amritsar West", "Punjab", SeatType.MLA),
+    ("Amritsar Central", "Punjab", SeatType.MLA),
+    ("Amritsar East", "Punjab", SeatType.MLA),
+    ("Amritsar South", "Punjab", SeatType.MLA),
+    ("Attari", "Punjab", SeatType.MLA),
+    ("Baba Bakala", "Punjab", SeatType.MLA),
+    # Tarn Taran district (4)
+    ("Tarn Taran", "Punjab", SeatType.MLA),
+    ("Khem Karan", "Punjab", SeatType.MLA),
+    ("Patti", "Punjab", SeatType.MLA),
+    ("Khadoor Sahib", "Punjab", SeatType.MLA),
+    # Kapurthala district (4)
+    ("Phagwara", "Punjab", SeatType.MLA),
+    ("Kapurthala", "Punjab", SeatType.MLA),
+    ("Sultanpur Lodhi", "Punjab", SeatType.MLA),
+    ("Bholath", "Punjab", SeatType.MLA),
+    # Jalandhar district (9)
+    ("Phillaur", "Punjab", SeatType.MLA),
+    ("Nakodar", "Punjab", SeatType.MLA),
+    ("Shahkot", "Punjab", SeatType.MLA),
+    ("Kartarpur", "Punjab", SeatType.MLA),
+    ("Jalandhar West", "Punjab", SeatType.MLA),
+    ("Jalandhar Central", "Punjab", SeatType.MLA),
+    ("Jalandhar North", "Punjab", SeatType.MLA),
+    ("Jalandhar Cantt", "Punjab", SeatType.MLA),
+    ("Adampur", "Punjab", SeatType.MLA),
+    # Hoshiarpur district (7)
+    ("Chabbewal", "Punjab", SeatType.MLA),
+    ("Hoshiarpur", "Punjab", SeatType.MLA),
+    ("Sham Chaurasi", "Punjab", SeatType.MLA),
+    ("Dasuya", "Punjab", SeatType.MLA),
+    ("Mukerian", "Punjab", SeatType.MLA),
+    ("Garhshankar", "Punjab", SeatType.MLA),
+    ("Urmar", "Punjab", SeatType.MLA),
+    # Shaheed Bhagat Singh Nagar district (3)
+    ("Banga", "Punjab", SeatType.MLA),
+    ("Nawan Shahr", "Punjab", SeatType.MLA),
+    ("Balachaur", "Punjab", SeatType.MLA),
+    # Rupnagar district (3)
+    ("Anandpur Sahib", "Punjab", SeatType.MLA),
+    ("Rupnagar", "Punjab", SeatType.MLA),
+    ("Chamkaur Sahib", "Punjab", SeatType.MLA),
+    # SAS Nagar / Mohali district (3)
+    ("Kharar", "Punjab", SeatType.MLA),
+    ("Sahibzada Ajit Singh Nagar", "Punjab", SeatType.MLA),
+    ("Dera Bassi", "Punjab", SeatType.MLA),
+    # Fatehgarh Sahib district (3)
+    ("Bassi Pathana", "Punjab", SeatType.MLA),
+    ("Fatehgarh Sahib", "Punjab", SeatType.MLA),
+    ("Amloh", "Punjab", SeatType.MLA),
+    # Ludhiana district (14)
+    ("Khanna", "Punjab", SeatType.MLA),
+    ("Samrala", "Punjab", SeatType.MLA),
+    ("Sahnewal", "Punjab", SeatType.MLA),
+    ("Ludhiana East", "Punjab", SeatType.MLA),
+    ("Ludhiana South", "Punjab", SeatType.MLA),
+    ("Atam Nagar", "Punjab", SeatType.MLA),
+    ("Ludhiana Central", "Punjab", SeatType.MLA),
+    ("Ludhiana West", "Punjab", SeatType.MLA),
+    ("Ludhiana North", "Punjab", SeatType.MLA),
+    ("Gill", "Punjab", SeatType.MLA),
+    ("Payal", "Punjab", SeatType.MLA),
+    ("Dakha", "Punjab", SeatType.MLA),
+    ("Raikot", "Punjab", SeatType.MLA),
+    ("Jagraon", "Punjab", SeatType.MLA),
+    # Moga district (4)
+    ("Nihal Singh Wala", "Punjab", SeatType.MLA),
+    ("Bagha Purana", "Punjab", SeatType.MLA),
+    ("Moga", "Punjab", SeatType.MLA),
+    ("Dharamkot", "Punjab", SeatType.MLA),
+    # Firozpur district (4)
+    ("Firozpur City", "Punjab", SeatType.MLA),
+    ("Firozpur Rural", "Punjab", SeatType.MLA),
+    ("Guru Har Sahai", "Punjab", SeatType.MLA),
+    ("Zira", "Punjab", SeatType.MLA),
+    # Fazilka district (4)
+    ("Jalalabad", "Punjab", SeatType.MLA),
+    ("Fazilka", "Punjab", SeatType.MLA),
+    ("Abohar", "Punjab", SeatType.MLA),
+    ("Balluana", "Punjab", SeatType.MLA),
+    # Faridkot district (3)
+    ("Faridkot", "Punjab", SeatType.MLA),
+    ("Kotkapura", "Punjab", SeatType.MLA),
+    ("Jaitu", "Punjab", SeatType.MLA),
+    # Sri Muktsar Sahib district (4)
+    ("Lambi", "Punjab", SeatType.MLA),
+    ("Gidderbaha", "Punjab", SeatType.MLA),
+    ("Malout", "Punjab", SeatType.MLA),
+    ("Sri Muktsar Sahib", "Punjab", SeatType.MLA),
+    # Bathinda district (6)
+    ("Bathinda Rural", "Punjab", SeatType.MLA),
+    ("Bathinda Urban", "Punjab", SeatType.MLA),
+    ("Bhucho Mandi", "Punjab", SeatType.MLA),
+    ("Maur", "Punjab", SeatType.MLA),
+    ("Rampura Phul", "Punjab", SeatType.MLA),
+    ("Talwandi Sabo", "Punjab", SeatType.MLA),
+    # Mansa district (3)
+    ("Mansa", "Punjab", SeatType.MLA),
+    ("Sardulgarh", "Punjab", SeatType.MLA),
+    ("Budhlada", "Punjab", SeatType.MLA),
+    # Sangrur district (5)
+    ("Dhuri", "Punjab", SeatType.MLA),
+    ("Sunam", "Punjab", SeatType.MLA),
+    ("Sangrur", "Punjab", SeatType.MLA),
+    ("Lehra", "Punjab", SeatType.MLA),
+    ("Dirba", "Punjab", SeatType.MLA),
+    # Barnala district (3)
+    ("Barnala", "Punjab", SeatType.MLA),
+    ("Bhadaur", "Punjab", SeatType.MLA),
+    ("Mehal Kalan", "Punjab", SeatType.MLA),
+    # Malerkotla district (2)
+    ("Malerkotla", "Punjab", SeatType.MLA),
+    ("Amargarh", "Punjab", SeatType.MLA),
+    # Patiala district (8)
+    ("Nabha", "Punjab", SeatType.MLA),
+    ("Patiala Rural", "Punjab", SeatType.MLA),
+    ("Rajpura", "Punjab", SeatType.MLA),
+    ("Ghanaur", "Punjab", SeatType.MLA),
+    ("Sanour", "Punjab", SeatType.MLA),
+    ("Patiala Town", "Punjab", SeatType.MLA),
+    ("Samana", "Punjab", SeatType.MLA),
+    ("Shutrana", "Punjab", SeatType.MLA),
+
+    # Rajasthan/Uttar Pradesh Vidhan Sabha (MLA) seats: not seeded yet -
+    # see module docstring.
 ]
