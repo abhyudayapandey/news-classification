@@ -57,6 +57,12 @@
     --accent-hover: #5B45BD;
     --accent-soft: #F1EDFC;
     --accent-ink: #FFFFFF;
+    /* Coverage-map shape fill for a clickable (has-data) district/seat -
+       deliberately its own token rather than reusing --accent-soft, which
+       sits too close to --surface-hover to read as a distinct fill once a
+       thin stroke is the only other separator (see the dark-mode value
+       below, where this really matters). */
+    --map-fill-active: #D9CEF2;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -71,6 +77,11 @@
       --accent-hover: #B4A3FF;
       --accent-soft: #241F3D;
       --accent-ink: #17111F;
+      /* --accent-soft (#241F3D) sits almost on top of --surface-hover
+         (#221F30) in dark mode - fine for a badge tint, unusable as a map
+         fill meant to visibly stand apart from the "no data" shapes right
+         next to it. This is a clearly lighter, more saturated purple. */
+      --map-fill-active: #4C4082;
     }
   }
   /* Deliberately not redefined in the dark-mode block above - a video

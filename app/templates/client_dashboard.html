@@ -92,7 +92,7 @@
   .map-view-btn.active { background: var(--accent); color: var(--accent-ink); }
   .map-view-btn:not(.active) { color: var(--ink-muted); }
   #map-svg path { fill: var(--surface-hover); stroke: var(--surface); stroke-width: 0.6; cursor: default; transition: fill 120ms ease-out; }
-  #map-svg path.map-shape-clickable { fill: var(--accent-soft); cursor: pointer; }
+  #map-svg path.map-shape-clickable { fill: var(--map-fill-active); cursor: pointer; }
   #map-svg path.map-shape-clickable:hover { fill: var(--accent); }
 </style>
 <script>
@@ -145,6 +145,16 @@
     data.shapes.forEach(function (shape) {
       var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", shape.path);
+      // A named shape gets a hover tooltip regardless of match status, so
+      // a not-yet-clickable area still tells you what it is; a shape with
+      // no name at all (a handful of unlabeled island/exclave polygons in
+      // the source geometry - see build_maps.py) gets no tooltip since
+      // there's nothing real to show.
+      if (shape.name) {
+        var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = shape.name;
+        path.appendChild(title);
+      }
       if (shape.matched) {
         path.classList.add("map-shape-clickable");
         path.addEventListener("click", function () {
@@ -152,9 +162,6 @@
           if (kind === "constituency") { url += "&seat_type=mla"; }
           window.location.href = url;
         });
-        var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-        title.textContent = shape.name;
-        path.appendChild(title);
       }
       svg.appendChild(path);
     });
