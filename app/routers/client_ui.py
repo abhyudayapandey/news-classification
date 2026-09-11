@@ -47,7 +47,7 @@ from app.models import (
     SystemTag,
 )
 from app.models.enums import SeatType, SocialSource, SubjectSentiment
-from app.processing.geography import GUJARAT_SEAT_COLLISION_BARE_NAME
+from app.processing.geography import SEAT_COLLISION_BARE_NAME
 from app.public.formatting import entity_initials, entity_subtitle, youtube_thumbnail_url
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -421,16 +421,16 @@ def client_geography_detail(
     entity_by_id = {s.entity_id: s.entity for s in subjects}
     geography_sub = _find_geography_subscription(db, client_id, state, kind, value, resolved_seat_type)
 
-    # A handful of real Gujarat seats share a name with another seat
-    # elsewhere in the state (see GUJARAT_SEAT_COLLISION_BARE_NAME's own
-    # docstring); content that couldn't be disambiguated at classification
-    # time stays tagged with the shared bare name. Viewing one of these
-    # disambiguated "other" seats should still surface that ambiguous
-    # content rather than silently hiding it - so match either name here.
-    # Every other kind/value combination just matches itself.
+    # A handful of real seats (in Gujarat and Rajasthan) share a name with
+    # another seat elsewhere in the same state (see SEAT_COLLISION_BARE_NAME's
+    # own docstring); content that couldn't be disambiguated at
+    # classification time stays tagged with the shared bare name. Viewing
+    # one of these disambiguated "other" seats should still surface that
+    # ambiguous content rather than silently hiding it - so match either
+    # name here. Every other kind/value combination just matches itself.
     constituency_values = (
-        [value, GUJARAT_SEAT_COLLISION_BARE_NAME[value]]
-        if kind == "constituency" and value in GUJARAT_SEAT_COLLISION_BARE_NAME
+        [value, SEAT_COLLISION_BARE_NAME[value]]
+        if kind == "constituency" and value in SEAT_COLLISION_BARE_NAME
         else [value]
     )
 

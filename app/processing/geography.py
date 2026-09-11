@@ -93,12 +93,15 @@ _BARE_CONSTITUENCY_RE = (
     else None
 )
 
-# Gujarat has 5 real MLA seats that share a name with another seat
-# elsewhere in the state (see constituency_seed.py's module docstring).
-# The bare name above (e.g. "Kalol") is seeded once and stays the
-# default/ambiguous bucket; each also has its own explicitly-seeded
-# disambiguated name for the other district's seat ("Kalol (Panchmahal)").
-# Confirmed against the ECI's official constituency-to-district table.
+# Some states have real MLA seats that share a name with another seat
+# elsewhere in the same state (see constituency_seed.py's module
+# docstring for the full list and provenance - Gujarat's 5, Rajasthan's
+# Shahpura). The bare name (e.g. "Kalol", "Shahpura") is seeded once and
+# stays the default/ambiguous bucket; each also has its own explicitly-
+# seeded disambiguated name for the other district's seat ("Kalol
+# (Panchmahal)", "Shahpura (Bhilwara)"). Confirmed against the ECI's
+# official constituency-to-district table (and, for Shahpura, a direct
+# web search cross-check - see the collision note in constituency_seed.py).
 # When a bare mention's surrounding text also names the OTHER seat's
 # district specifically, tag it with the disambiguated name instead of
 # the default - staying with the default whenever that context isn't
@@ -106,15 +109,20 @@ _BARE_CONSTITUENCY_RE = (
 # guessing wrong, the same discipline used throughout this module. A
 # content item that can't be disambiguated this way still shows up
 # wherever it's queried for the default name; see client_ui.py's
-# GUJARAT_SEAT_COLLISION_BARE_NAME use for how the "other" seat's own
-# page also pulls in that same default-tagged content.
-GUJARAT_SEAT_COLLISIONS: dict[str, tuple[str, str]] = {
-    # bare seed name -> (the OTHER seat's real district, its disambiguated name)
-    "Kalol": ("Panchmahal", "Kalol (Panchmahal)"),
-    "Mandvi": ("Surat", "Mandvi (Surat)"),
-    "Jetpur": ("Chhota Udaipur", "Jetpur (Chhota Udaipur)"),
-    "Mangrol": ("Surat", "Mangrol (Surat)"),
-    "Mahuva": ("Surat", "Mahuva (Surat)"),
+# SEAT_COLLISION_BARE_NAME use for how the "other" seat's own page also
+# pulls in that same default-tagged content.
+SEAT_COLLISIONS_BY_STATE: dict[str, dict[str, tuple[str, str]]] = {
+    "Gujarat": {
+        # bare seed name -> (the OTHER seat's real district, its disambiguated name)
+        "Kalol": ("Panchmahal", "Kalol (Panchmahal)"),
+        "Mandvi": ("Surat", "Mandvi (Surat)"),
+        "Jetpur": ("Chhota Udaipur", "Jetpur (Chhota Udaipur)"),
+        "Mangrol": ("Surat", "Mangrol (Surat)"),
+        "Mahuva": ("Surat", "Mahuva (Surat)"),
+    },
+    "Rajasthan": {
+        "Shahpura": ("Bhilwara", "Shahpura (Bhilwara)"),
+    },
 }
 
 # Reverse of the mapping above (disambiguated name -> its bare/default
@@ -125,9 +133,12 @@ GUJARAT_SEAT_COLLISIONS: dict[str, tuple[str, str]] = {
 # disambiguated name itself. The default seat's own page does the
 # opposite on purpose - it does NOT also pull in the disambiguated name's
 # content, since that content has already been confidently attributed
-# elsewhere.
-GUJARAT_SEAT_COLLISION_BARE_NAME: dict[str, str] = {
-    other_name: bare_name for bare_name, (_district, other_name) in GUJARAT_SEAT_COLLISIONS.items()
+# elsewhere. Flat across states since every disambiguated name is
+# already a globally unique string.
+SEAT_COLLISION_BARE_NAME: dict[str, str] = {
+    other_name: bare_name
+    for _state, _collisions in SEAT_COLLISIONS_BY_STATE.items()
+    for bare_name, (_district, other_name) in _collisions.items()
 }
 
 
@@ -171,8 +182,9 @@ def _resolve_bare_constituency(text: str) -> tuple[str, SeatType | None] | None:
         # real collision, e.g. Jodhpur) - the name itself is still resolved,
         # just not which house, when a bare mention can't tell them apart.
         resolved_seat_type = next(iter(seat_types)) if len(seat_types) == 1 else None
-        if resolved_state == "Gujarat" and name in GUJARAT_SEAT_COLLISIONS:
-            other_district, other_name = GUJARAT_SEAT_COLLISIONS[name]
+        collision = SEAT_COLLISIONS_BY_STATE.get(resolved_state, {}).get(name)
+        if collision:
+            other_district, other_name = collision
             if guess_district(text) == other_district:
                 name = other_name
         return name, resolved_seat_type
