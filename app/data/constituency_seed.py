@@ -10,10 +10,10 @@ ECI/state CEO sites the same way it blocks every news domain used
 elsewhere in this codebase - see app/data/district_seed.py's docstring
 for the same caveat applied to districts).
 
-Lok Sabha (MP) seats below are seeded for the states this build is
-actively being pitched in (Rajasthan, Uttar Pradesh, Punjab,
-Uttarakhand) - boundaries unchanged since the 2008 delimitation, so this
-is the lower-risk half of this file.
+Lok Sabha (MP) seats below are seeded for the four states this build was
+originally pitched in (Rajasthan, Uttar Pradesh, Punjab, Uttarakhand)
+plus Goa, Himachal Pradesh, and Gujarat - boundaries unchanged since the
+2008 delimitation, so this is the lower-risk half of this file.
 
 Uttarakhand's 70 MLA seats, Punjab's 117 MLA seats, Rajasthan's 200 MLA
 seats, and Uttar Pradesh's 403 MLA seats ARE seeded below, all built via
@@ -47,6 +47,17 @@ MP/MLA name collisions beyond the ones already seeded (e.g. Machhlishahr,
 Kannauj, Mohanlalganj, Ghosi, Dhaurahra, Misrikh, Robertsganj,
 Domariyaganj, Pratapgarh) - all handled the same way, via SeatType, no
 new code needed.
+
+Goa's 40 MLA seats and Himachal Pradesh's 68 MLA seats are seeded below,
+same cross-referenced-search provenance, both reconciling cleanly to
+their official totals (Goa: 20+20 across its two Lok Sabha groupings;
+Himachal Pradesh: 17 seats in each of its four Lok Sabha groupings, all
+of which - Kangra, Hamirpur, Mandi, Shimla - are themselves also real
+same-state MP/MLA name collisions, the same pattern as elsewhere in this
+file). Gujarat's Lok Sabha seats are seeded the same way as the other
+states' Lok Sabha lists above; its 182 MLA seats are not yet seeded -
+same bar as Uttar Pradesh's Vidhan Sabha seats, pending the same
+cross-referenced-search treatment.
 """
 
 from app.models.enums import SeatType
@@ -180,6 +191,44 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Bathinda", "Punjab", SeatType.MP),
     ("Sangrur", "Punjab", SeatType.MP),
     ("Patiala", "Punjab", SeatType.MP),
+
+    # Goa - Lok Sabha (2)
+    ("North Goa", "Goa", SeatType.MP),
+    ("South Goa", "Goa", SeatType.MP),
+
+    # Himachal Pradesh - Lok Sabha (4)
+    ("Kangra", "Himachal Pradesh", SeatType.MP),
+    ("Hamirpur", "Himachal Pradesh", SeatType.MP),
+    ("Mandi", "Himachal Pradesh", SeatType.MP),
+    ("Shimla", "Himachal Pradesh", SeatType.MP),
+
+    # Gujarat - Lok Sabha (26)
+    ("Kachchh", "Gujarat", SeatType.MP),
+    ("Banaskantha", "Gujarat", SeatType.MP),
+    ("Patan", "Gujarat", SeatType.MP),
+    ("Mahesana", "Gujarat", SeatType.MP),
+    ("Sabarkantha", "Gujarat", SeatType.MP),
+    ("Gandhinagar", "Gujarat", SeatType.MP),
+    ("Ahmedabad East", "Gujarat", SeatType.MP),
+    ("Ahmedabad West", "Gujarat", SeatType.MP),
+    ("Surendranagar", "Gujarat", SeatType.MP),
+    ("Rajkot", "Gujarat", SeatType.MP),
+    ("Porbandar", "Gujarat", SeatType.MP),
+    ("Jamnagar", "Gujarat", SeatType.MP),
+    ("Junagadh", "Gujarat", SeatType.MP),
+    ("Amreli", "Gujarat", SeatType.MP),
+    ("Bhavnagar", "Gujarat", SeatType.MP),
+    ("Anand", "Gujarat", SeatType.MP),
+    ("Kheda", "Gujarat", SeatType.MP),
+    ("Panchmahal", "Gujarat", SeatType.MP),
+    ("Dahod", "Gujarat", SeatType.MP),
+    ("Vadodara", "Gujarat", SeatType.MP),
+    ("Chhota Udaipur", "Gujarat", SeatType.MP),
+    ("Bharuch", "Gujarat", SeatType.MP),
+    ("Bardoli", "Gujarat", SeatType.MP),
+    ("Surat", "Gujarat", SeatType.MP),
+    ("Navsari", "Gujarat", SeatType.MP),
+    ("Valsad", "Gujarat", SeatType.MP),
 
     # Uttarakhand - Lok Sabha (5)
     ("Tehri Garhwal", "Uttarakhand", SeatType.MP),
@@ -1148,4 +1197,130 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Varanasi South", "Uttar Pradesh", SeatType.MLA),
     ("Varanasi Cantt", "Uttar Pradesh", SeatType.MLA),
     ("Sevapuri", "Uttar Pradesh", SeatType.MLA),
+
+    # Goa - Vidhan Sabha / MLA (40) - see module docstring for this
+    # state's search-cross-referenced provenance.
+    # North Goa Lok Sabha grouping (20)
+    ("Mandrem", "Goa", SeatType.MLA),
+    ("Pernem", "Goa", SeatType.MLA),
+    ("Bicholim", "Goa", SeatType.MLA),
+    ("Tivim", "Goa", SeatType.MLA),
+    ("Mapusa", "Goa", SeatType.MLA),
+    ("Siolim", "Goa", SeatType.MLA),
+    ("Saligao", "Goa", SeatType.MLA),
+    ("Calangute", "Goa", SeatType.MLA),
+    ("Porvorim", "Goa", SeatType.MLA),
+    ("Aldona", "Goa", SeatType.MLA),
+    ("Panaji", "Goa", SeatType.MLA),
+    ("Taleigao", "Goa", SeatType.MLA),
+    ("Santa Cruz", "Goa", SeatType.MLA),
+    ("St. Andre", "Goa", SeatType.MLA),
+    ("Cumbarjua", "Goa", SeatType.MLA),
+    ("Maem", "Goa", SeatType.MLA),
+    ("Sanquelim", "Goa", SeatType.MLA),
+    ("Poriem", "Goa", SeatType.MLA),
+    ("Valpoi", "Goa", SeatType.MLA),
+    ("Priol", "Goa", SeatType.MLA),
+    # South Goa Lok Sabha grouping (20)
+    ("Ponda", "Goa", SeatType.MLA),
+    ("Siroda", "Goa", SeatType.MLA),
+    ("Marcaim", "Goa", SeatType.MLA),
+    ("Mormugao", "Goa", SeatType.MLA),
+    ("Vasco Da Gama", "Goa", SeatType.MLA),
+    ("Dabolim", "Goa", SeatType.MLA),
+    ("Cortalim", "Goa", SeatType.MLA),
+    ("Nuvem", "Goa", SeatType.MLA),
+    ("Curtorim", "Goa", SeatType.MLA),
+    ("Fatorda", "Goa", SeatType.MLA),
+    ("Margao", "Goa", SeatType.MLA),
+    ("Benaulim", "Goa", SeatType.MLA),
+    ("Navelim", "Goa", SeatType.MLA),
+    ("Cuncolim", "Goa", SeatType.MLA),
+    ("Velim", "Goa", SeatType.MLA),
+    ("Quepem", "Goa", SeatType.MLA),
+    ("Curchorem", "Goa", SeatType.MLA),
+    ("Sanvordem", "Goa", SeatType.MLA),
+    ("Sanguem", "Goa", SeatType.MLA),
+    ("Canacona", "Goa", SeatType.MLA),
+
+    # Himachal Pradesh - Vidhan Sabha / MLA (68) - see module docstring
+    # for this state's search-cross-referenced provenance; Kangra,
+    # Hamirpur, Mandi, and Shimla each collide with the Lok Sabha seat of
+    # the same name (same treatment as every other MP/MLA collision in
+    # this file).
+    # Kangra Lok Sabha grouping (17)
+    ("Churah", "Himachal Pradesh", SeatType.MLA),
+    ("Chamba", "Himachal Pradesh", SeatType.MLA),
+    ("Dalhousie", "Himachal Pradesh", SeatType.MLA),
+    ("Bhattiyat", "Himachal Pradesh", SeatType.MLA),
+    ("Nurpur", "Himachal Pradesh", SeatType.MLA),
+    ("Indora", "Himachal Pradesh", SeatType.MLA),
+    ("Fatehpur", "Himachal Pradesh", SeatType.MLA),
+    ("Jawali", "Himachal Pradesh", SeatType.MLA),
+    ("Jawalamukhi", "Himachal Pradesh", SeatType.MLA),
+    ("Jaisinghpur", "Himachal Pradesh", SeatType.MLA),
+    ("Sullah", "Himachal Pradesh", SeatType.MLA),
+    ("Nagrota", "Himachal Pradesh", SeatType.MLA),
+    ("Kangra", "Himachal Pradesh", SeatType.MLA),
+    ("Shahpur", "Himachal Pradesh", SeatType.MLA),
+    ("Dharamshala", "Himachal Pradesh", SeatType.MLA),
+    ("Palampur", "Himachal Pradesh", SeatType.MLA),
+    ("Baijnath", "Himachal Pradesh", SeatType.MLA),
+    # Hamirpur Lok Sabha grouping (17)
+    ("Dehra", "Himachal Pradesh", SeatType.MLA),
+    ("Jaswan-Pragpur", "Himachal Pradesh", SeatType.MLA),
+    ("Dharampur", "Himachal Pradesh", SeatType.MLA),
+    ("Bhoranj", "Himachal Pradesh", SeatType.MLA),
+    ("Sujanpur", "Himachal Pradesh", SeatType.MLA),
+    ("Hamirpur", "Himachal Pradesh", SeatType.MLA),
+    ("Barsar", "Himachal Pradesh", SeatType.MLA),
+    ("Nadaun", "Himachal Pradesh", SeatType.MLA),
+    ("Chintpurni", "Himachal Pradesh", SeatType.MLA),
+    ("Gagret", "Himachal Pradesh", SeatType.MLA),
+    ("Haroli", "Himachal Pradesh", SeatType.MLA),
+    ("Una", "Himachal Pradesh", SeatType.MLA),
+    ("Kutlehar", "Himachal Pradesh", SeatType.MLA),
+    ("Jhanduta", "Himachal Pradesh", SeatType.MLA),
+    ("Ghumarwin", "Himachal Pradesh", SeatType.MLA),
+    ("Bilaspur", "Himachal Pradesh", SeatType.MLA),
+    ("Sri Naina Deviji", "Himachal Pradesh", SeatType.MLA),
+    # Mandi Lok Sabha grouping (17)
+    ("Kinnaur", "Himachal Pradesh", SeatType.MLA),
+    ("Bharmour", "Himachal Pradesh", SeatType.MLA),
+    ("Lahaul and Spiti", "Himachal Pradesh", SeatType.MLA),
+    ("Manali", "Himachal Pradesh", SeatType.MLA),
+    ("Kullu", "Himachal Pradesh", SeatType.MLA),
+    ("Banjar", "Himachal Pradesh", SeatType.MLA),
+    ("Anni", "Himachal Pradesh", SeatType.MLA),
+    ("Karsog", "Himachal Pradesh", SeatType.MLA),
+    ("Sundernagar", "Himachal Pradesh", SeatType.MLA),
+    ("Nachan", "Himachal Pradesh", SeatType.MLA),
+    ("Seraj", "Himachal Pradesh", SeatType.MLA),
+    ("Darang", "Himachal Pradesh", SeatType.MLA),
+    ("Jogindernagar", "Himachal Pradesh", SeatType.MLA),
+    ("Mandi", "Himachal Pradesh", SeatType.MLA),
+    ("Balh", "Himachal Pradesh", SeatType.MLA),
+    ("Sarkaghat", "Himachal Pradesh", SeatType.MLA),
+    ("Rampur", "Himachal Pradesh", SeatType.MLA),
+    # Shimla Lok Sabha grouping (17)
+    ("Arki", "Himachal Pradesh", SeatType.MLA),
+    ("Nalagarh", "Himachal Pradesh", SeatType.MLA),
+    ("Doon", "Himachal Pradesh", SeatType.MLA),
+    ("Solan", "Himachal Pradesh", SeatType.MLA),
+    ("Kasauli", "Himachal Pradesh", SeatType.MLA),
+    ("Pachhad", "Himachal Pradesh", SeatType.MLA),
+    ("Nahan", "Himachal Pradesh", SeatType.MLA),
+    ("Sri Renukaji", "Himachal Pradesh", SeatType.MLA),
+    ("Paonta Sahib", "Himachal Pradesh", SeatType.MLA),
+    ("Shillai", "Himachal Pradesh", SeatType.MLA),
+    ("Chopal", "Himachal Pradesh", SeatType.MLA),
+    ("Theog", "Himachal Pradesh", SeatType.MLA),
+    ("Kasumpti", "Himachal Pradesh", SeatType.MLA),
+    ("Shimla", "Himachal Pradesh", SeatType.MLA),
+    ("Shimla Rural", "Himachal Pradesh", SeatType.MLA),
+    ("Jubbal-Kotkhai", "Himachal Pradesh", SeatType.MLA),
+    ("Rohru", "Himachal Pradesh", SeatType.MLA),
+
+    # Gujarat Vidhan Sabha (MLA) seats: not seeded yet - see module
+    # docstring.
 ]

@@ -20,10 +20,11 @@ every state's list here as "good faith, needs a verification pass,"
 exactly like config/outlets.yaml's feed URLs needed one - re-run
 verification whenever a state's district count is in the news.
 
-SCOPE: only the states this build is actively being pitched in
-(Rajasthan, Uttar Pradesh, Punjab, Uttarakhand) are seeded so far. Adding
-another state is a mechanical, self-contained addition to DISTRICTS below
-- see sync_districts() for how it reaches the app.
+SCOPE: the four states this build was originally pitched in (Rajasthan,
+Uttar Pradesh, Punjab, Uttarakhand) plus Goa, Himachal Pradesh, and
+Gujarat are seeded so far. Adding another state is a mechanical,
+self-contained addition to DISTRICTS below - see sync_districts() for how
+it reaches the app.
 """
 
 # (district name, state) - state values match app/processing/jurisdiction.py's
@@ -181,4 +182,57 @@ DISTRICTS: list[tuple[str, str]] = [
     ("Tehri Garhwal", "Uttarakhand"),
     ("Udham Singh Nagar", "Uttarakhand"),
     ("Uttarkashi", "Uttarakhand"),
+
+    # Goa (2)
+    ("North Goa", "Goa"),
+    ("South Goa", "Goa"),
+
+    # Himachal Pradesh (12)
+    ("Bilaspur", "Himachal Pradesh"),
+    ("Chamba", "Himachal Pradesh"),
+    ("Hamirpur", "Himachal Pradesh"),
+    ("Kangra", "Himachal Pradesh"),
+    ("Kinnaur", "Himachal Pradesh"),
+    ("Kullu", "Himachal Pradesh"),
+    ("Lahaul and Spiti", "Himachal Pradesh"),
+    ("Mandi", "Himachal Pradesh"),
+    ("Shimla", "Himachal Pradesh"),
+    ("Sirmaur", "Himachal Pradesh"),
+    ("Solan", "Himachal Pradesh"),
+    ("Una", "Himachal Pradesh"),
+
+    # Gujarat (33)
+    ("Ahmedabad", "Gujarat"),
+    ("Amreli", "Gujarat"),
+    ("Anand", "Gujarat"),
+    ("Aravalli", "Gujarat"),
+    ("Banaskantha", "Gujarat"),
+    ("Bharuch", "Gujarat"),
+    ("Bhavnagar", "Gujarat"),
+    ("Botad", "Gujarat"),
+    ("Chhota Udaipur", "Gujarat"),
+    ("Dahod", "Gujarat"),
+    ("Dang", "Gujarat"),
+    ("Devbhoomi Dwarka", "Gujarat"),
+    ("Gandhinagar", "Gujarat"),
+    ("Gir Somnath", "Gujarat"),
+    ("Jamnagar", "Gujarat"),
+    ("Junagadh", "Gujarat"),
+    ("Kachchh", "Gujarat"),
+    ("Kheda", "Gujarat"),
+    ("Mahisagar", "Gujarat"),
+    ("Mehsana", "Gujarat"),
+    ("Morbi", "Gujarat"),
+    ("Narmada", "Gujarat"),
+    ("Navsari", "Gujarat"),
+    ("Panchmahal", "Gujarat"),
+    ("Patan", "Gujarat"),
+    ("Porbandar", "Gujarat"),
+    ("Rajkot", "Gujarat"),
+    ("Sabarkantha", "Gujarat"),
+    ("Surat", "Gujarat"),
+    ("Surendranagar", "Gujarat"),
+    ("Tapi", "Gujarat"),
+    ("Vadodara", "Gujarat"),
+    ("Valsad", "Gujarat"),
 ]
