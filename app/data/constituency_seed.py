@@ -54,10 +54,27 @@ their official totals (Goa: 20+20 across its two Lok Sabha groupings;
 Himachal Pradesh: 17 seats in each of its four Lok Sabha groupings, all
 of which - Kangra, Hamirpur, Mandi, Shimla - are themselves also real
 same-state MP/MLA name collisions, the same pattern as elsewhere in this
-file). Gujarat's Lok Sabha seats are seeded the same way as the other
-states' Lok Sabha lists above; its 182 MLA seats are not yet seeded -
-same bar as Uttar Pradesh's Vidhan Sabha seats, pending the same
-cross-referenced-search treatment.
+file).
+
+Gujarat's 182 MLA seats are also seeded below, same method, across all
+33 districts. This pass surfaced the most same-state MLA-vs-MLA name
+collisions of any state file so far - Mahuva, Mandvi, and Mangrol each
+name a real, distinct seat in two different districts (one pair each
+with Bhavnagar/Surat, Kachchh/Surat, and Junagadh/Surat), and Kalol and
+Jetpur each do too (Gandhinagar/Panchmahal and Rajkot/Chhota Udaipur
+respectively) - the same "Shahpura" situation as Rajasthan, seeded once
+each rather than as literal duplicate rows: 182 official seats, 177
+distinct rows here.
+
+The district-wise sum for Gujarat also came up one seat over on the
+first pass (183, not 182) before the specific error was found: an
+initial source attributed "Santrampur" to both Dahod district and
+Mahisagar district - it turned out to belong only to Mahisagar (seat
+123, sequential with Balasinor 121 and Lunawada 122), grouped under
+Dahod's Lok Sabha constituency but not Dahod's own district, the same
+class of LS-grouping-vs-district-membership confusion this file has
+run into several times before (Salon/Amethi in Uttar Pradesh, Sujanpur/
+Pathankot in Punjab).
 """
 
 from app.models.enums import SeatType
@@ -1321,6 +1338,234 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Jubbal-Kotkhai", "Himachal Pradesh", SeatType.MLA),
     ("Rohru", "Himachal Pradesh", SeatType.MLA),
 
-    # Gujarat Vidhan Sabha (MLA) seats: not seeded yet - see module
-    # docstring.
+    # Gujarat - Vidhan Sabha / MLA (182 official seats, 177 rows here -
+    # see module docstring for this state's search-cross-referenced
+    # provenance and the Mahuva/Mandvi/Mangrol/Kalol/Jetpur collisions).
+    # Ahmedabad district (21)
+    ("Viramgam", "Gujarat", SeatType.MLA),
+    ("Sanand", "Gujarat", SeatType.MLA),
+    ("Ghatlodia", "Gujarat", SeatType.MLA),
+    ("Vejalpur", "Gujarat", SeatType.MLA),
+    ("Vatva", "Gujarat", SeatType.MLA),
+    ("Ellisbridge", "Gujarat", SeatType.MLA),
+    ("Naranpura", "Gujarat", SeatType.MLA),
+    ("Nikol", "Gujarat", SeatType.MLA),
+    ("Naroda", "Gujarat", SeatType.MLA),
+    ("Thakkarbapa Nagar", "Gujarat", SeatType.MLA),
+    ("Bapunagar", "Gujarat", SeatType.MLA),
+    ("Amraiwadi", "Gujarat", SeatType.MLA),
+    ("Dariapur", "Gujarat", SeatType.MLA),
+    ("Jamalpur-Khadia", "Gujarat", SeatType.MLA),
+    ("Maninagar", "Gujarat", SeatType.MLA),
+    ("Danilimda", "Gujarat", SeatType.MLA),
+    ("Sabarmati", "Gujarat", SeatType.MLA),
+    ("Asarwa", "Gujarat", SeatType.MLA),
+    ("Daskroi", "Gujarat", SeatType.MLA),
+    ("Dholka", "Gujarat", SeatType.MLA),
+    ("Dhandhuka", "Gujarat", SeatType.MLA),
+    # Amreli district (5)
+    ("Dhari", "Gujarat", SeatType.MLA),
+    ("Amreli", "Gujarat", SeatType.MLA),
+    ("Lathi", "Gujarat", SeatType.MLA),
+    ("Savarkundla", "Gujarat", SeatType.MLA),
+    ("Rajula", "Gujarat", SeatType.MLA),
+    # Anand district (7)
+    ("Khambhat", "Gujarat", SeatType.MLA),
+    ("Borsad", "Gujarat", SeatType.MLA),
+    ("Anklav", "Gujarat", SeatType.MLA),
+    ("Umreth", "Gujarat", SeatType.MLA),
+    ("Anand", "Gujarat", SeatType.MLA),
+    ("Petlad", "Gujarat", SeatType.MLA),
+    ("Sojitra", "Gujarat", SeatType.MLA),
+    # Aravalli district (3)
+    ("Bhiloda", "Gujarat", SeatType.MLA),
+    ("Modasa", "Gujarat", SeatType.MLA),
+    ("Bayad", "Gujarat", SeatType.MLA),
+    # Banaskantha district (9)
+    ("Vav", "Gujarat", SeatType.MLA),
+    ("Tharad", "Gujarat", SeatType.MLA),
+    ("Dhanera", "Gujarat", SeatType.MLA),
+    ("Danta", "Gujarat", SeatType.MLA),
+    ("Vadgam", "Gujarat", SeatType.MLA),
+    ("Palanpur", "Gujarat", SeatType.MLA),
+    ("Deesa", "Gujarat", SeatType.MLA),
+    ("Deodar", "Gujarat", SeatType.MLA),
+    ("Kankrej", "Gujarat", SeatType.MLA),
+    # Bharuch district (5)
+    ("Jambusar", "Gujarat", SeatType.MLA),
+    ("Vagra", "Gujarat", SeatType.MLA),
+    ("Jhagadiya", "Gujarat", SeatType.MLA),
+    ("Bharuch", "Gujarat", SeatType.MLA),
+    ("Ankleshwar", "Gujarat", SeatType.MLA),
+    # Bhavnagar district (7)
+    ("Bhavnagar East", "Gujarat", SeatType.MLA),
+    ("Bhavnagar West", "Gujarat", SeatType.MLA),
+    ("Bhavnagar Rural", "Gujarat", SeatType.MLA),
+    ("Palitana", "Gujarat", SeatType.MLA),
+    # "Mahuva" is a real same-name collision between two distinct Gujarat
+    # MLA seats (this one in Bhavnagar district, another in Surat
+    # district) - same treatment as "Shahpura" in Rajasthan: seeded once,
+    # see module docstring.
+    ("Mahuva", "Gujarat", SeatType.MLA),
+    ("Talaja", "Gujarat", SeatType.MLA),
+    ("Gariadhar", "Gujarat", SeatType.MLA),
+    # Botad district (2)
+    ("Botad", "Gujarat", SeatType.MLA),
+    ("Gadhada", "Gujarat", SeatType.MLA),
+    # Chhota Udaipur district (3) - "Jetpur" here is a real same-name
+    # collision with the Rajkot district seat of the same name (below),
+    # seeded once - see module docstring.
+    ("Chhota Udaipur", "Gujarat", SeatType.MLA),
+    ("Jetpur", "Gujarat", SeatType.MLA),
+    ("Sankheda", "Gujarat", SeatType.MLA),
+    # Dahod district (6)
+    ("Fatepura", "Gujarat", SeatType.MLA),
+    ("Jhalod", "Gujarat", SeatType.MLA),
+    ("Limkheda", "Gujarat", SeatType.MLA),
+    ("Dahod", "Gujarat", SeatType.MLA),
+    ("Garbada", "Gujarat", SeatType.MLA),
+    ("Devgadhbariya", "Gujarat", SeatType.MLA),
+    # Dang district (1)
+    ("Dang", "Gujarat", SeatType.MLA),
+    # Devbhoomi Dwarka district (2)
+    ("Khambhaliya", "Gujarat", SeatType.MLA),
+    ("Dwarka", "Gujarat", SeatType.MLA),
+    # Gandhinagar district (5) - "Kalol" here is a real same-name
+    # collision with the Panchmahal district seat of the same name
+    # (below), seeded once - see module docstring.
+    ("Dehgam", "Gujarat", SeatType.MLA),
+    ("Gandhinagar South", "Gujarat", SeatType.MLA),
+    ("Gandhinagar North", "Gujarat", SeatType.MLA),
+    ("Mansa", "Gujarat", SeatType.MLA),
+    ("Kalol", "Gujarat", SeatType.MLA),
+    # Gir Somnath district (4)
+    ("Somnath", "Gujarat", SeatType.MLA),
+    ("Talala", "Gujarat", SeatType.MLA),
+    ("Kodinar", "Gujarat", SeatType.MLA),
+    ("Una", "Gujarat", SeatType.MLA),
+    # Jamnagar district (5)
+    ("Kalavad", "Gujarat", SeatType.MLA),
+    ("Jamnagar Rural", "Gujarat", SeatType.MLA),
+    ("Jamnagar North", "Gujarat", SeatType.MLA),
+    ("Jamnagar South", "Gujarat", SeatType.MLA),
+    ("Jamjodhpur", "Gujarat", SeatType.MLA),
+    # Junagadh district (5) - "Mangrol" here is a real same-name
+    # collision with the Surat district seat of the same name (below),
+    # seeded once - see module docstring.
+    ("Junagadh", "Gujarat", SeatType.MLA),
+    ("Visavadar", "Gujarat", SeatType.MLA),
+    ("Mangrol", "Gujarat", SeatType.MLA),
+    ("Keshod", "Gujarat", SeatType.MLA),
+    ("Manavadar", "Gujarat", SeatType.MLA),
+    # Kachchh district (6) - "Mandvi" here is a real same-name collision
+    # with the Surat district seat of the same name (below), seeded
+    # once - see module docstring.
+    ("Abdasa", "Gujarat", SeatType.MLA),
+    ("Mandvi", "Gujarat", SeatType.MLA),
+    ("Bhuj", "Gujarat", SeatType.MLA),
+    ("Anjar", "Gujarat", SeatType.MLA),
+    ("Gandhidham", "Gujarat", SeatType.MLA),
+    ("Rapar", "Gujarat", SeatType.MLA),
+    # Kheda district (6)
+    ("Matar", "Gujarat", SeatType.MLA),
+    ("Nadiad", "Gujarat", SeatType.MLA),
+    ("Mahemdabad", "Gujarat", SeatType.MLA),
+    ("Mahudha", "Gujarat", SeatType.MLA),
+    ("Thasra", "Gujarat", SeatType.MLA),
+    ("Kapadvanj", "Gujarat", SeatType.MLA),
+    # Mahisagar district (3)
+    ("Balasinor", "Gujarat", SeatType.MLA),
+    ("Lunawada", "Gujarat", SeatType.MLA),
+    ("Santrampur", "Gujarat", SeatType.MLA),
+    # Mehsana district (7)
+    ("Kheralu", "Gujarat", SeatType.MLA),
+    ("Unjha", "Gujarat", SeatType.MLA),
+    ("Visnagar", "Gujarat", SeatType.MLA),
+    ("Becharaji", "Gujarat", SeatType.MLA),
+    ("Kadi", "Gujarat", SeatType.MLA),
+    ("Mehsana", "Gujarat", SeatType.MLA),
+    ("Vijapur", "Gujarat", SeatType.MLA),
+    # Morbi district (3)
+    ("Morbi", "Gujarat", SeatType.MLA),
+    ("Tankara", "Gujarat", SeatType.MLA),
+    ("Wankaner", "Gujarat", SeatType.MLA),
+    # Narmada district (2)
+    ("Nandod", "Gujarat", SeatType.MLA),
+    ("Dediapada", "Gujarat", SeatType.MLA),
+    # Navsari district (4)
+    ("Jalalpore", "Gujarat", SeatType.MLA),
+    ("Navsari", "Gujarat", SeatType.MLA),
+    ("Gandevi", "Gujarat", SeatType.MLA),
+    ("Vansada", "Gujarat", SeatType.MLA),
+    # Panchmahal district (5) - "Kalol" excluded here, already seeded
+    # once under Gandhinagar district above (see the collision note
+    # there).
+    ("Godhra", "Gujarat", SeatType.MLA),
+    ("Halol", "Gujarat", SeatType.MLA),
+    ("Shehra", "Gujarat", SeatType.MLA),
+    ("Morva Hadaf", "Gujarat", SeatType.MLA),
+    # Patan district (4)
+    ("Radhanpur", "Gujarat", SeatType.MLA),
+    ("Chanasma", "Gujarat", SeatType.MLA),
+    ("Patan", "Gujarat", SeatType.MLA),
+    ("Sidhpur", "Gujarat", SeatType.MLA),
+    # Porbandar district (2)
+    ("Porbandar", "Gujarat", SeatType.MLA),
+    ("Kutiyana", "Gujarat", SeatType.MLA),
+    # Rajkot district (8) - "Jetpur" excluded here, already seeded once
+    # under Chhota Udaipur district above (see the collision note there).
+    ("Rajkot East", "Gujarat", SeatType.MLA),
+    ("Rajkot West", "Gujarat", SeatType.MLA),
+    ("Rajkot South", "Gujarat", SeatType.MLA),
+    ("Rajkot Rural", "Gujarat", SeatType.MLA),
+    ("Jasdan", "Gujarat", SeatType.MLA),
+    ("Gondal", "Gujarat", SeatType.MLA),
+    ("Dhoraji", "Gujarat", SeatType.MLA),
+    # Sabarkantha district (4)
+    ("Himatnagar", "Gujarat", SeatType.MLA),
+    ("Idar", "Gujarat", SeatType.MLA),
+    ("Khedbrahma", "Gujarat", SeatType.MLA),
+    ("Prantij", "Gujarat", SeatType.MLA),
+    # Surat district (16) - "Mahuva", "Mandvi", and "Mangrol" excluded
+    # here, already seeded once each under Bhavnagar, Kachchh, and
+    # Junagadh districts above (see the collision notes there).
+    ("Bardoli", "Gujarat", SeatType.MLA),
+    ("Choryasi", "Gujarat", SeatType.MLA),
+    ("Kamrej", "Gujarat", SeatType.MLA),
+    ("Karanj", "Gujarat", SeatType.MLA),
+    ("Katargam", "Gujarat", SeatType.MLA),
+    ("Limbayat", "Gujarat", SeatType.MLA),
+    ("Majura", "Gujarat", SeatType.MLA),
+    ("Olpad", "Gujarat", SeatType.MLA),
+    ("Surat East", "Gujarat", SeatType.MLA),
+    ("Surat North", "Gujarat", SeatType.MLA),
+    ("Surat West", "Gujarat", SeatType.MLA),
+    ("Udhna", "Gujarat", SeatType.MLA),
+    ("Varachha Road", "Gujarat", SeatType.MLA),
+    # Surendranagar district (5)
+    ("Dasada", "Gujarat", SeatType.MLA),
+    ("Limbdi", "Gujarat", SeatType.MLA),
+    ("Wadhwan", "Gujarat", SeatType.MLA),
+    ("Chotila", "Gujarat", SeatType.MLA),
+    ("Dhrangadhra", "Gujarat", SeatType.MLA),
+    # Tapi district (2)
+    ("Vyara", "Gujarat", SeatType.MLA),
+    ("Nizar", "Gujarat", SeatType.MLA),
+    # Vadodara district (10)
+    ("Savli", "Gujarat", SeatType.MLA),
+    ("Vaghodiya", "Gujarat", SeatType.MLA),
+    ("Vadodara City", "Gujarat", SeatType.MLA),
+    ("Sayajigunj", "Gujarat", SeatType.MLA),
+    ("Akota", "Gujarat", SeatType.MLA),
+    ("Raopura", "Gujarat", SeatType.MLA),
+    ("Manjalpur", "Gujarat", SeatType.MLA),
+    ("Karjan", "Gujarat", SeatType.MLA),
+    ("Padra", "Gujarat", SeatType.MLA),
+    ("Dabhoi", "Gujarat", SeatType.MLA),
+    # Valsad district (5)
+    ("Umbergaon", "Gujarat", SeatType.MLA),
+    ("Dharampur", "Gujarat", SeatType.MLA),
+    ("Kaprada", "Gujarat", SeatType.MLA),
+    ("Pardi", "Gujarat", SeatType.MLA),
+    ("Valsad", "Gujarat", SeatType.MLA),
 ]
