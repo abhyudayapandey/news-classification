@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth.client_session import ClientNotAuthenticated
@@ -39,6 +40,14 @@ app.include_router(queue.router)
 app.include_router(admin_ui.router)
 app.include_router(client_ui.router)
 app.include_router(public.router)
+
+# District/seat boundary SVG-path data for the client portal's geography
+# map (app/routers/client_ui.py) - plain public geometry+name data, no
+# client-specific or content-sensitive information, so it's served
+# unauthenticated like any other static asset. The actual content behind
+# a clicked shape only ever loads through the authenticated
+# /client/geography route.
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 @app.exception_handler(NotAuthenticated)

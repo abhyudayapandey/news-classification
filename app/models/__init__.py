@@ -2,6 +2,7 @@ from app.models.admin import Admin
 from app.models.article import Article
 from app.models.article_entity import ArticleEntity
 from app.models.client import Client
+from app.models.client_geography_subscription import ClientGeographySubscription
 from app.models.client_subject import ClientSubject
 from app.models.client_user import ClientUser
 from app.models.entity import Entity
@@ -29,6 +30,7 @@ __all__ = [
     "AdminRole",
     "ClassificationTag",
     "Client",
+    "ClientGeographySubscription",
     "ClientSubject",
     "ClientUser",
     "Entity",

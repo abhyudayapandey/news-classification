@@ -19,8 +19,22 @@ from app.auth.security import hash_password, verify_password
 from app.auth.session import get_current_admin, get_current_admin_optional, require_super_admin
 from app.config import settings
 from app.db import get_db
-from app.models import Admin, Article, ArticleEntity, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
-from app.models.enums import AdminRole, ClassificationTag, EntityProminence, EntityType, ReviewDecision, SubjectSentiment
+from app.client_portal.geography_map import MAP_STATES
+from app.data.constituency_seed import CONSTITUENCIES
+from app.data.district_seed import DISTRICTS
+from app.models import (
+    Admin,
+    Article,
+    ArticleEntity,
+    Client,
+    ClientGeographySubscription,
+    ClientSubject,
+    ClientUser,
+    Entity,
+    EntitySocialConfig,
+    Review,
+)
+from app.models.enums import AdminRole, ClassificationTag, EntityProminence, EntityType, ReviewDecision, SeatType, SubjectSentiment
 from app.public.formatting import entity_subtitle
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
@@ -885,10 +899,31 @@ def client_detail(
         entities_query = entities_query.filter(~Entity.id.in_(tracked_entity_ids))
     available_entities = entities_query.all()
 
+    geography_rows = sorted(client.geography_subscriptions, key=lambda g: g.label)
+    # Districts grouped by state for the "add subscription" form's second
+    # dropdown (JS shows only the selected state's own districts/seats -
+    # see client_detail.html) - built from the same seed data the map
+    # itself is generated from, so a typo'd geography can never be
+    # subscribed to.
+    districts_by_state = {}
+    for name, state in DISTRICTS:
+        if state in MAP_STATES:
+            districts_by_state.setdefault(state, []).append(name)
+    seats_by_state = {}
+    for name, state, seat_type in CONSTITUENCIES:
+        if state in MAP_STATES and seat_type == SeatType.MLA:
+            seats_by_state.setdefault(state, []).append(name)
+    for state in districts_by_state:
+        districts_by_state[state].sort()
+    for state in seats_by_state:
+        seats_by_state[state] = sorted(set(seats_by_state[state]))
+
     return render(
         request, "client_detail.html", current_admin,
         client=client, subject_rows=subject_rows, available_entities=available_entities,
         client_users=sorted(client.users, key=lambda u: u.created_at),
+        geography_rows=geography_rows, map_states=MAP_STATES,
+        districts_by_state=districts_by_state, seats_by_state=seats_by_state,
         message=message, error=error,
     )
 
@@ -1114,6 +1149,151 @@ def remove_client_subject(
         db.delete(subject)
         db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Stopped tracking that entity.", status_code=303)
+
+
+def _geography_toggle_redirect(client_id: int, message: str) -> RedirectResponse:
+    return RedirectResponse(f"/admin/clients/{client_id}?message={message}", status_code=303)
+
+
+@router.post("/clients/{client_id}/geography/new")
+def add_client_geography_subscription(
+    client_id: int,
+    state: str = Form(...),
+    kind: str = Form(...),  # "district" or "constituency"
+    value: str = Form(...),
+    seat_type: str = Form(default=""),  # "mp" or "mla", only meaningful when kind == "constituency"
+    grant_news: str | None = Form(default=None),
+    grant_youtube: str | None = Form(default=None),
+    grant_x: str | None = Form(default=None),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Per direct instruction: a client can subscribe to an entire
+    district or seat, independent of any specific entity, priced as its
+    own product. Validated against the same seeded gazetteer the map
+    itself is drawn from (app/data/district_seed.py /
+    constituency_seed.py) rather than accepted as free text - a typo'd
+    district/constituency name would otherwise create a subscription that
+    can never match any content, silently.
+    """
+    client = db.get(Client, client_id)
+    if client is None:
+        return RedirectResponse("/admin/clients", status_code=303)
+
+    if state not in MAP_STATES:
+        return RedirectResponse(f"/admin/clients/{client_id}?error=Unknown state for a geography subscription.", status_code=303)
+
+    district = None
+    constituency = None
+    resolved_seat_type = None
+    if kind == "district":
+        if (value, state) not in DISTRICTS:
+            return RedirectResponse(
+                f"/admin/clients/{client_id}?error={value} is not a seeded district of {state}.", status_code=303
+            )
+        district = value
+    elif kind == "constituency":
+        try:
+            resolved_seat_type = SeatType(seat_type)
+        except ValueError:
+            return RedirectResponse(f"/admin/clients/{client_id}?error=Choose MP or MLA for a seat subscription.", status_code=303)
+        if (value, state, resolved_seat_type) not in CONSTITUENCIES:
+            return RedirectResponse(
+                f"/admin/clients/{client_id}?error={value} is not a seeded {resolved_seat_type.value.upper()} seat of {state}.",
+                status_code=303,
+            )
+        constituency = value
+    else:
+        return RedirectResponse(f"/admin/clients/{client_id}?error=Choose a district or a seat.", status_code=303)
+
+    subscription = ClientGeographySubscription(
+        client_id=client_id, state=state, district=district, constituency=constituency, seat_type=resolved_seat_type,
+        news_access=grant_news == "1", youtube_access=grant_youtube == "1", x_access=grant_x == "1",
+    )
+    db.add(subscription)
+    db.commit()
+    return _geography_toggle_redirect(client_id, "Geography subscription added.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/news/enable")
+def enable_geography_subscription_news(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.news_access = True
+        db.commit()
+    return _geography_toggle_redirect(client_id, "News visibility enabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/news/disable")
+def disable_geography_subscription_news(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.news_access = False
+        db.commit()
+    return _geography_toggle_redirect(client_id, "News visibility disabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/youtube/enable")
+def enable_geography_subscription_youtube(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.youtube_access = True
+        db.commit()
+    return _geography_toggle_redirect(client_id, "YouTube visibility enabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/youtube/disable")
+def disable_geography_subscription_youtube(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.youtube_access = False
+        db.commit()
+    return _geography_toggle_redirect(client_id, "YouTube visibility disabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/x/enable")
+def enable_geography_subscription_x(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    """No ceiling to collect, unlike ClientSubject's grant-x - see
+    ClientGeographySubscription's own docstring for why this channel is
+    visibility-only here (it never triggers new X spend of its own).
+    """
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.x_access = True
+        db.commit()
+    return _geography_toggle_redirect(client_id, "X visibility enabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/x/disable")
+def disable_geography_subscription_x(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        sub.x_access = False
+        db.commit()
+    return _geography_toggle_redirect(client_id, "X visibility disabled.")
+
+
+@router.post("/clients/{client_id}/geography/{subscription_id}/remove")
+def remove_geography_subscription(
+    client_id: int, subscription_id: int, current_admin: Admin = Depends(require_super_admin), db: Session = Depends(get_db)
+):
+    sub = db.get(ClientGeographySubscription, subscription_id)
+    if sub is not None and sub.client_id == client_id:
+        db.delete(sub)
+        db.commit()
+    return _geography_toggle_redirect(client_id, "Geography subscription removed.")
 
 
 @router.post("/clients/{client_id}/users/new")

@@ -138,6 +138,108 @@
 </div>
 
 <div class="card">
+  <h2>Geography subscriptions</h2>
+  <p class="muted">
+    Independent of tracked entities above - subscribing to a district or seat shows this client
+    every entity's coverage there, not just their own tracked subjects'. Priced as its own product.
+  </p>
+  {% if not geography_rows %}
+    <p class="muted">No geography subscriptions yet.</p>
+  {% else %}
+  <table>
+    <thead>
+      <tr><th>Geography</th><th>News</th><th>YouTube</th><th>X</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for g in geography_rows %}
+      <tr>
+        <td>{{ g.label }}</td>
+        {% for channel, on in [("news", g.news_access), ("youtube", g.youtube_access), ("x", g.x_access)] %}
+        <td>
+          <form method="post" action="/admin/clients/{{ client.id }}/geography/{{ g.id }}/{{ channel }}/{{ 'disable' if on else 'enable' }}" class="switch-row">
+            <label class="switch">
+              <input type="checkbox" {% if on %}checked{% endif %} onchange="this.form.submit()">
+              <span class="slider"></span>
+            </label>
+            <span class="switch-label">{{ "On" if on else "Off" }}</span>
+          </form>
+        </td>
+        {% endfor %}
+        <td>
+          <form class="inline" method="post" action="/admin/clients/{{ client.id }}/geography/{{ g.id }}/remove">
+            <button class="btn btn-danger" type="submit" onclick="return confirm('Remove this geography subscription for {{ client.name }}?');">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <h3 style="margin-top:1.5rem;">Add geography subscription</h3>
+  <form method="post" action="/admin/clients/{{ client.id }}/geography/new" id="geo-sub-form">
+    <label for="geo-state">State</label>
+    <select id="geo-state" name="state" required onchange="updateGeoValueOptions()">
+      <option value="" disabled selected>Choose a state</option>
+      {% for s in map_states %}
+      <option value="{{ s }}">{{ s }}</option>
+      {% endfor %}
+    </select>
+
+    <label style="margin-top:0.6rem;">
+      <input type="radio" name="kind" value="district" checked style="width:auto; display:inline;" onchange="updateGeoValueOptions()"> District
+    </label>
+    <label>
+      <input type="radio" name="kind" value="constituency" style="width:auto; display:inline;" onchange="updateGeoValueOptions()"> Seat (constituency)
+    </label>
+
+    <label for="geo-seat-type" id="geo-seat-type-label" style="display:none;">House</label>
+    <select id="geo-seat-type" name="seat_type" style="display:none;">
+      <option value="mla">Vidhan Sabha (MLA)</option>
+      <option value="mp">Lok Sabha (MP)</option>
+    </select>
+
+    <label for="geo-value">District / seat name</label>
+    <select id="geo-value" name="value" required>
+      <option value="" disabled selected>Choose a state first</option>
+    </select>
+
+    <label><input type="checkbox" name="grant_news" value="1" style="width:auto; display:inline;"> Show news articles</label>
+    <label><input type="checkbox" name="grant_youtube" value="1" style="width:auto; display:inline;"> Show YouTube</label>
+    <label><input type="checkbox" name="grant_x" value="1" style="width:auto; display:inline;"> Show X</label>
+    <p class="muted" style="font-size:0.8rem;">All three start off by default - turn them on once payment is received.</p>
+
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary" type="submit">Add subscription</button>
+    </div>
+  </form>
+  <script>
+    const geoDistrictsByState = {{ districts_by_state|tojson }};
+    const geoSeatsByState = {{ seats_by_state|tojson }};
+    function updateGeoValueOptions() {
+      const state = document.getElementById('geo-state').value;
+      const kind = document.querySelector('input[name="kind"]:checked').value;
+      const isConstituency = kind === 'constituency';
+      document.getElementById('geo-seat-type').style.display = isConstituency ? '' : 'none';
+      document.getElementById('geo-seat-type-label').style.display = isConstituency ? '' : 'none';
+      const names = (isConstituency ? geoSeatsByState[state] : geoDistrictsByState[state]) || [];
+      const select = document.getElementById('geo-value');
+      select.innerHTML = '';
+      if (!names.length) {
+        select.innerHTML = '<option value="" disabled selected>Choose a state first</option>';
+        return;
+      }
+      for (const name of names) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        select.appendChild(opt);
+      }
+    }
+  </script>
+</div>
+
+<div class="card">
   <h2>Client logins</h2>
   <p class="muted">Accounts this client can use to log into their own dashboard at /client/login.</p>
   {% if not client_users %}

@@ -57,5 +57,114 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  {% if map_states %}
+  <div class="mt-16">
+    <p class="text-[13px] font-semibold uppercase tracking-[0.1em] text-accent mb-3">Explore by geography</p>
+    <div class="flex items-center justify-between gap-4 flex-wrap mb-2">
+      <h2 class="font-display text-xl sm:text-2xl font-bold text-ink text-balance leading-tight">Coverage map</h2>
+      <div class="flex items-center gap-2 flex-wrap">
+        <div class="relative">
+          <select id="map-state" class="appearance-none bg-surface border border-line rounded-full pl-3 pr-8 py-1.5 text-[13px] font-medium text-ink focus:outline-none focus:border-accent transition-colors cursor-pointer">
+            {% for s in map_states %}
+            <option value="{{ s }}" data-slug="{{ map_state_slugs[s] }}">{{ s }}</option>
+            {% endfor %}
+          </select>
+          <svg class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="inline-flex bg-surface-hover border border-line rounded-full p-0.5">
+          <button type="button" id="map-view-district" class="map-view-btn px-3 py-1 rounded-full text-[13px] font-semibold transition-colors">District</button>
+          <button type="button" id="map-view-seat" class="map-view-btn px-3 py-1 rounded-full text-[13px] font-semibold transition-colors">Seat</button>
+        </div>
+      </div>
+    </div>
+    <p class="text-[13px] text-ink-faint mb-5">Click a {{ '' }}<span id="map-view-noun">district</span> to see coverage there, pooled across your tracked subjects.</p>
+    <div class="bg-surface border border-line rounded-2xl p-4 sm:p-6">
+      <svg id="map-svg" class="w-full h-auto" style="max-height: 640px;" viewBox="0 0 100 100"></svg>
+      <p id="map-empty" class="text-sm text-ink-faint italic text-center py-10" hidden>Map data unavailable for this state.</p>
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+{% if map_states %}
+<style>
+  .map-view-btn.active { background: var(--accent); color: var(--accent-ink); }
+  .map-view-btn:not(.active) { color: var(--ink-muted); }
+  #map-svg path { fill: var(--surface-hover); stroke: var(--surface); stroke-width: 0.6; cursor: default; transition: fill 120ms ease-out; }
+  #map-svg path.map-shape-clickable { fill: var(--accent-soft); cursor: pointer; }
+  #map-svg path.map-shape-clickable:hover { fill: var(--accent); }
+</style>
+<script>
+(function () {
+  var stateSelect = document.getElementById("map-state");
+  var districtBtn = document.getElementById("map-view-district");
+  var seatBtn = document.getElementById("map-view-seat");
+  var viewNoun = document.getElementById("map-view-noun");
+  var svg = document.getElementById("map-svg");
+  var emptyMsg = document.getElementById("map-empty");
+  var view = "districts"; // "districts" | "seats"
+  var cache = {};
+
+  function setView(next) {
+    view = next;
+    districtBtn.classList.toggle("active", view === "districts");
+    seatBtn.classList.toggle("active", view === "seats");
+    viewNoun.textContent = view === "districts" ? "district" : "seat";
+    loadAndRender();
+  }
+
+  function currentSlug() {
+    var opt = stateSelect.options[stateSelect.selectedIndex];
+    return opt ? opt.dataset.slug : null;
+  }
+
+  function loadAndRender() {
+    var slug = currentSlug();
+    var state = stateSelect.value;
+    if (!slug) return;
+    var cacheKey = slug + ":" + view;
+    if (cache[cacheKey]) {
+      render(cache[cacheKey], state);
+      return;
+    }
+    fetch("/static/maps/" + slug + "/" + view + ".json")
+      .then(function (r) { if (!r.ok) throw new Error("not found"); return r.json(); })
+      .then(function (data) { cache[cacheKey] = data; render(data, state); })
+      .catch(function () {
+        svg.innerHTML = "";
+        emptyMsg.hidden = false;
+      });
+  }
+
+  function render(data, state) {
+    emptyMsg.hidden = true;
+    svg.setAttribute("viewBox", data.viewBox);
+    svg.innerHTML = "";
+    var kind = view === "districts" ? "district" : "constituency";
+    data.shapes.forEach(function (shape) {
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", shape.path);
+      if (shape.matched) {
+        path.classList.add("map-shape-clickable");
+        path.addEventListener("click", function () {
+          var url = "/client/geography?state=" + encodeURIComponent(state) + "&kind=" + kind + "&value=" + encodeURIComponent(shape.name);
+          if (kind === "constituency") { url += "&seat_type=mla"; }
+          window.location.href = url;
+        });
+        var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+        title.textContent = shape.name;
+        path.appendChild(title);
+      }
+      svg.appendChild(path);
+    });
+  }
+
+  stateSelect.addEventListener("change", loadAndRender);
+  districtBtn.addEventListener("click", function () { setView("districts"); });
+  seatBtn.addEventListener("click", function () { setView("seats"); });
+  setView("districts");
+})();
+</script>
+{% endif %}
 {% endblock %}
