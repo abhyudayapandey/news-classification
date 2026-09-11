@@ -20,7 +20,8 @@ from app.auth.session import get_current_admin, get_current_admin_optional, requ
 from app.config import settings
 from app.db import get_db
 from app.models import Admin, Article, ArticleEntity, Client, ClientSubject, ClientUser, Entity, EntitySocialConfig, Review
-from app.models.enums import AdminRole, ClassificationTag, EntityProminence, ReviewDecision, SubjectSentiment
+from app.models.enums import AdminRole, ClassificationTag, EntityProminence, EntityType, ReviewDecision, SubjectSentiment
+from app.public.formatting import entity_subtitle
 from app.public.formatting import excerpt as make_excerpt
 from app.public.formatting import format_jurisdiction
 from app.review.assignment import reassign_admin_queue
@@ -1186,3 +1187,142 @@ def reset_client_user_password(
         return RedirectResponse(f"/admin/clients/{client_id}?error={exc}", status_code=303)
     db.commit()
     return RedirectResponse(f"/admin/clients/{client_id}?message=Password reset for '{user.username}'.", status_code=303)
+
+
+# --- Entities ---
+#
+# Section 13.6's onboarding flow describes a super admin "confirming or
+# creating the corresponding Entity" for a client's requested subject -
+# this is that missing piece. Before this, the ONLY way a new Entity ever
+# came into existence was app/data/entity_seed.py's hardcoded bulk list
+# (national politicians/parties), which meant there was no way to onboard
+# a client wanting to track someone not already in that list without
+# editing source and redeploying. A newly-tracked local candidate (the
+# actual Jodhpur/Udaipur/UP-Punjab-Uttarakhand pitch) needs exactly this.
+
+
+def _entity_metadata_from_form(
+    entity_type: EntityType, party: str, role: str, state: str, constituency: str, seat_type: str
+) -> dict:
+    """Assembles Entity.entity_metadata from the create/edit form per
+    Entity's own docstring convention. Blank fields are omitted entirely
+    (never stored as ""), so entity_subtitle() and every other reader can
+    keep using a plain truthiness check.
+    """
+    if entity_type == EntityType.PARTY:
+        return {"scope": "state", "state": state.strip()} if state.strip() else {"scope": "national"}
+
+    meta = {}
+    if party.strip():
+        meta["party"] = party.strip()
+    if role.strip():
+        meta["role"] = role.strip()
+    if state.strip():
+        meta["state"] = state.strip()
+    if constituency.strip():
+        meta["constituency"] = constituency.strip()
+        if seat_type.strip() in ("mla", "mp"):
+            meta["seat_type"] = seat_type.strip()
+    return meta
+
+
+@router.get("/entities", response_class=HTMLResponse)
+def list_entities_admin(
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    message: str | None = Query(default=None),
+    error: str | None = Query(default=None),
+):
+    entities = db.query(Entity).order_by(Entity.type, Entity.name).all()
+    rows = [{"entity": e, "subtitle": entity_subtitle(e)} for e in entities]
+    return render(request, "entities_list.html", current_admin, rows=rows, message=message, error=error)
+
+
+@router.get("/entities/new", response_class=HTMLResponse)
+def new_entity_form(
+    request: Request, current_admin: Admin = Depends(require_super_admin), error: str | None = Query(default=None)
+):
+    return render(request, "entity_form.html", current_admin, entity=None, error=error)
+
+
+@router.post("/entities/new")
+def create_entity(
+    name: str = Form(...),
+    entity_type: str = Form(...),
+    aliases: str = Form(default=""),
+    party: str = Form(default=""),
+    role: str = Form(default=""),
+    state: str = Form(default=""),
+    constituency: str = Form(default=""),
+    seat_type: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    name = name.strip()
+    if not name:
+        return RedirectResponse("/admin/entities/new?error=Name is required.", status_code=303)
+    if db.query(Entity).filter(Entity.name == name).one_or_none() is not None:
+        return RedirectResponse(
+            "/admin/entities/new?error=An entity with that exact name already exists.", status_code=303
+        )
+    try:
+        parsed_type = EntityType(entity_type)
+    except ValueError:
+        return RedirectResponse("/admin/entities/new?error=Invalid entity type.", status_code=303)
+
+    alias_list = [a.strip() for a in aliases.split(",") if a.strip()]
+    metadata = _entity_metadata_from_form(parsed_type, party, role, state, constituency, seat_type)
+    db.add(Entity(name=name, type=parsed_type, aliases=alias_list, entity_metadata=metadata))
+    db.commit()
+    return RedirectResponse(f"/admin/entities?message=Created {name}.", status_code=303)
+
+
+@router.get("/entities/{entity_id}/edit", response_class=HTMLResponse)
+def edit_entity_form(
+    entity_id: int,
+    request: Request,
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+    error: str | None = Query(default=None),
+):
+    entity = db.get(Entity, entity_id)
+    if entity is None:
+        return RedirectResponse("/admin/entities", status_code=303)
+    return render(request, "entity_form.html", current_admin, entity=entity, error=error)
+
+
+@router.post("/entities/{entity_id}/edit")
+def update_entity(
+    entity_id: int,
+    name: str = Form(...),
+    aliases: str = Form(default=""),
+    party: str = Form(default=""),
+    role: str = Form(default=""),
+    state: str = Form(default=""),
+    constituency: str = Form(default=""),
+    seat_type: str = Form(default=""),
+    current_admin: Admin = Depends(require_super_admin),
+    db: Session = Depends(get_db),
+):
+    """Type is deliberately not editable here - changing person<->party
+    after this entity already has real ArticleEntity/SocialMention rows
+    would silently invalidate what those rows were scored against. Delete
+    and recreate instead, if that's genuinely what's needed.
+    """
+    entity = db.get(Entity, entity_id)
+    if entity is None:
+        return RedirectResponse("/admin/entities", status_code=303)
+    name = name.strip()
+    if not name:
+        return RedirectResponse(f"/admin/entities/{entity_id}/edit?error=Name is required.", status_code=303)
+    if db.query(Entity).filter(Entity.name == name, Entity.id != entity_id).one_or_none() is not None:
+        return RedirectResponse(
+            f"/admin/entities/{entity_id}/edit?error=An entity with that exact name already exists.", status_code=303
+        )
+
+    entity.name = name
+    entity.aliases = [a.strip() for a in aliases.split(",") if a.strip()]
+    entity.entity_metadata = _entity_metadata_from_form(entity.type, party, role, state, constituency, seat_type)
+    db.commit()
+    return RedirectResponse(f"/admin/entities?message=Updated {name}.", status_code=303)

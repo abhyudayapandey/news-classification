@@ -68,6 +68,10 @@ def entity_subtitle(entity) -> str:
     meta = entity.entity_metadata or {}
     if entity.type == EntityType.PERSON:
         parts = [p for p in (meta.get("role"), meta.get("party")) if p]
+        constituency = meta.get("constituency")
+        if constituency:
+            seat_type = meta.get("seat_type")
+            parts.append(f"{constituency} ({seat_type.upper()})" if seat_type else constituency)
         return " · ".join(parts) if parts else "Person"
     if meta.get("scope") == "state" and meta.get("state"):
         return f"State party · {meta['state']}"

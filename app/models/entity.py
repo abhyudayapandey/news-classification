@@ -50,6 +50,21 @@ class Entity(Base):
     # JSONB rather than fixed columns since what's worth recording differs
     # by entity type and will keep evolving - see app/data/entity_seed.py
     # for what's actually populated today.
+    #
+    # A PERSON may also carry `constituency` + `seat_type` ("mla"/"mp",
+    # matching SeatType's values) + `state` - their own home seat, set
+    # once at onboarding (app/routers/admin_ui.py's entity create/edit
+    # form), independent of app/processing/geography.py's per-article
+    # text-derived guess. The two are deliberately different signals: an
+    # article never has to say "Jodhpur" for a piece of content ABOUT this
+    # politician to be understood as relevant to their constituency - the
+    # entity match alone (already computed via aliases, no local-outlet
+    # coverage required) carries that context for free. This is display/
+    # framing metadata only, never written into ArticleEntity/SocialMention's
+    # own geography columns - those stay strictly text-derived so the
+    # public site's geo-filter keeps meaning "this story is literally
+    # about this place," not "this story mentions someone who represents
+    # this place."
     entity_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

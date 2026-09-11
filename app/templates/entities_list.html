@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Entities{% endblock %}
+{% block content %}
+<h1>Entities</h1>
+<p><a class="btn btn-primary" href="/admin/entities/new">+ New entity</a></p>
+
+{% if message %}<div class="success">{{ message }}</div>{% endif %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+{% if not rows %}
+<p class="muted">No entities yet.</p>
+{% else %}
+<div class="card" style="padding:0; overflow-x:auto;">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>Type</th><th>Details</th><th>Aliases</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.entity.name }}</td>
+        <td>{{ r.entity.type.value }}</td>
+        <td class="muted">{{ r.subtitle }}</td>
+        <td class="muted">{{ r.entity.aliases|join(", ") if r.entity.aliases else "-" }}</td>
+        <td><a href="/admin/entities/{{ r.entity.id }}/edit">Edit</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
