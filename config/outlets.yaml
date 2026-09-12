@@ -77,3 +77,9 @@
 - name: Rajasthan Patrika (Udaipur)
   rss_feed_url: https://cms.patrika.com/googlefeed/blog/location/udaipur-news
   is_active: true
+
+# Independent Udaipur-only outlet (not part of the Patrika/Bhaskar
+# networks above) - confirmed live by direct user verification.
+- name: Udaipur News
+  rss_feed_url: https://udaipurnews.in/feed/
+  is_active: true
