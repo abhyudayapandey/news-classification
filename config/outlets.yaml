@@ -83,3 +83,32 @@
 - name: Udaipur News
   rss_feed_url: https://udaipurnews.in/feed/
   is_active: true
+
+- name: Udaipur News Channel
+  rss_feed_url: https://udaipurnewschannel.in/feed/
+  is_active: true
+
+# City News Rajasthan - a single WordPress site covering multiple
+# Rajasthan cities via per-category feeds. Its URL structure is
+# inconsistent across cities though: some are WordPress category pages
+# (/category/<city>/feed/, confirmed for these four), others are
+# top-level custom slugs instead (e.g. Baran is /baran-news/, not
+# /category/baran/ - that guess returned a validly-formed but empty
+# feed, confirmed by direct user verification, not this site's real
+# Baran feed). Don't assume the /category/ pattern for any city not
+# confirmed here - check each one individually.
+- name: City News Rajasthan (Ajmer)
+  rss_feed_url: https://citynewsrajasthan.com/category/ajmer/feed/
+  is_active: true
+
+- name: City News Rajasthan (Udaipur)
+  rss_feed_url: https://citynewsrajasthan.com/category/udaipur/feed/
+  is_active: true
+
+- name: City News Rajasthan (Bikaner)
+  rss_feed_url: https://citynewsrajasthan.com/category/bikaner/feed/
+  is_active: true
+
+- name: City News Rajasthan (Sikar)
+  rss_feed_url: https://citynewsrajasthan.com/category/sikar/feed/
+  is_active: true
