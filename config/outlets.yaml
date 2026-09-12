@@ -88,27 +88,18 @@
   rss_feed_url: https://udaipurnewschannel.in/feed/
   is_active: true
 
-# City News Rajasthan - a single WordPress site covering multiple
-# Rajasthan cities via per-category feeds. Its URL structure is
-# inconsistent across cities though: some are WordPress category pages
-# (/category/<city>/feed/, confirmed for these four), others are
-# top-level custom slugs instead (e.g. Baran is /baran-news/, not
-# /category/baran/ - that guess returned a validly-formed but empty
-# feed, confirmed by direct user verification, not this site's real
-# Baran feed). Don't assume the /category/ pattern for any city not
-# confirmed here - check each one individually.
-- name: City News Rajasthan (Ajmer)
-  rss_feed_url: https://citynewsrajasthan.com/category/ajmer/feed/
-  is_active: true
-
-- name: City News Rajasthan (Udaipur)
-  rss_feed_url: https://citynewsrajasthan.com/category/udaipur/feed/
-  is_active: true
-
-- name: City News Rajasthan (Bikaner)
-  rss_feed_url: https://citynewsrajasthan.com/category/bikaner/feed/
-  is_active: true
-
-- name: City News Rajasthan (Sikar)
-  rss_feed_url: https://citynewsrajasthan.com/category/sikar/feed/
+# City News Rajasthan - a single WordPress site covering many Rajasthan
+# cities. Originally added as separate per-city category feeds, but per
+# direct instruction consolidated into the one site-wide feed instead:
+# every article's <description> reliably opens with "{City}। ..." (Hindi
+# danda) or "{City}. ..." right in the CDATA, confirmed by direct user
+# inspection - a much more reliable and complete per-article city signal
+# than guessing per-city URL slugs one at a time (which aren't even
+# consistently structured - Ajmer/Udaipur/Bikaner/Sikar/Baran are all
+# /category/<city>/feed/, confirmed individually, but nothing guarantees
+# every city on the site follows that pattern). See
+# app/processing/geography.py for where this leading-city-name text is
+# actually read and mapped to a district.
+- name: City News Rajasthan
+  rss_feed_url: https://citynewsrajasthan.com/feed/
   is_active: true
