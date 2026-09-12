@@ -62,7 +62,8 @@ class Article(Base):
     # operator is fast enough and needs no index maintenance.
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM), nullable=True)
     # Which model produced `embedding`, e.g. "local:sentence-transformers/
-    # all-MiniLM-L6-v2" - recorded for provenance/debugging. Only one
+    # paraphrase-multilingual-MiniLM-L12-v2" - recorded for provenance/
+    # debugging. Only one
     # embedding provider is active at a time (see EMBEDDING_PROVIDER in
     # config), so clustering never actually compares embeddings from two
     # different models today; if a second provider is ever added, this

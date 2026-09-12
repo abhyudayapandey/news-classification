@@ -32,8 +32,15 @@ services:
         value: local
       - key: LLM_PROVIDER
         value: local
+      # Multilingual (includes Hindi) as of this swap from all-MiniLM-L6-v2
+      # - see app/llm/local_embedding.py's docstring for why, and its
+      # unverified memory footprint on this exact free tier: watch this
+      # service's memory graph after the next deploy, since ~0.09GB to
+      # ~0.22GB of ONNX weights may or may not still fit alongside the
+      # rest of the app in 512MB. If it doesn't, fall back to
+      # EMBEDDING_PROVIDER=openai or =gemini instead of shrinking further.
       - key: LOCAL_EMBEDDING_MODEL
-        value: sentence-transformers/all-MiniLM-L6-v2
+        value: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
       - key: OPENAI_API_KEY
         sync: false
       - key: GEMINI_API_KEY
