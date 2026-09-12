@@ -33,18 +33,35 @@ class Settings(BaseSettings):
 
     # Provider selection - "local" costs nothing and needs no key. "openai"/
     # "gemini" require the matching *_api_key below and will make billed API
-    # calls once selected - never flip these without meaning to.
+    # calls once selected - never flip these without meaning to. Whichever
+    # is chosen, app/llm/factory.py always wraps it with the local
+    # classifier as a fallback (app/llm/fallback.py) - a paid-provider
+    # failure (billing, rate limit, outage) degrades classification
+    # quality, it never loses it outright.
     embedding_provider: str = "local"
     llm_provider: str = "local"
-    # Multilingual (~50 languages, includes Hindi) as of the swap from
-    # all-MiniLM-L6-v2 - see app/llm/local_embedding.py's docstring for
-    # why, the memory-footprint tradeoff this made, and its unverified
-    # status in this build environment.
-    local_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    # Reverted to the original English-only model - see
+    # app/llm/local_embedding.py's docstring for the full swap-then-revert
+    # history (a multilingual model was tried to fix Hindi classification
+    # quality, confirmed OOM on Render's 512MB free tier, reverted here;
+    # Hindi (and other non-English) classification now goes through
+    # LLM_PROVIDER=openai/gemini instead, which has no embedding-model
+    # dependency at all).
+    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
+    # gpt-5-nano: cheapest OpenAI model as of this choice, and per OpenAI's
+    # own docs explicitly positioned for summarization/classification
+    # tasks like this one - see render.yaml's OPENAI_MODEL comment for the
+    # full reasoning and pricing caveat.
+    openai_model: str = "gpt-5-nano"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-1.5-flash"
+    # gemini-1.5-flash (the prior default) is retired - the whole Gemini
+    # 1.5 family now 404s on Google's API as of this writing. Not
+    # independently verified against Google's own pricing/model-lifecycle
+    # page, which this build environment's egress proxy blocks; if this
+    # provider is ever actually selected, double check gemini_model is
+    # still current before relying on it.
+    gemini_model: str = "gemini-2.5-flash-lite"
 
     # Clustering (Section 7 stage 3). Both are starting points, not
     # validated thresholds - this build environment can't download the

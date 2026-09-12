@@ -44,6 +44,44 @@ class ClassificationProvider(ABC):
     """Establishment pre-filter + pro/anti/apolitical classification
     (Section 7 stages 4-5) in one call, matching how a single LLM prompt
     naturally does both at once.
+
+    WHY classify() ISN'T BATCHED (unlike EntitySentimentProvider's
+    classify_subject_sentiment_batch below) - a deliberate decision, not
+    an oversight, worth checking against real numbers before revisiting:
+
+    Entity-sentiment batching earned its complexity because the *same*
+    article text was being re-sent once per entity mentioned in it - a
+    real, multiplicative duplication (N entities = N full re-sends of the
+    same headline+body). Article classification has no equivalent waste:
+    each call already sends *different* content (a different article),
+    so batching would only amortize the fixed system-prompt overhead
+    (~275 tokens for CLASSIFICATION_INSTRUCTIONS, measured directly) across
+    N articles - roughly 20-25% of one call's input tokens, nothing on the
+    output side. At gpt-5-nano pricing ($0.05/$0.40 per 1M in/out tokens),
+    that's the difference between about $0.21/month and maybe $0.15/month
+    at 100 articles/day, or $4.20 vs ~$3.30/month even at a generous
+    2000/day - real, but nowhere near enough to justify restructuring
+    app/processing/pipeline.py's currently-sequential (embed → cluster →
+    classify → geography → entities), one-article-at-a-time control flow
+    into a two-pass batch-then-continue pipeline, or the reliability risk
+    that comes with it: a large batched response is where a model is
+    likeliest to drop or miscount an entry (the same reasoning behind
+    ENTITY_SENTIMENT_BATCH_SIZE=25 below), and a dropped ARTICLE (unlike a
+    dropped entity-sentiment score, which just waits for next time) has no
+    obvious safe default - it would need to fall out of "unprocessed" and
+    get picked up again, which is new state-machine territory this
+    pipeline doesn't have today. OpenAI's automatic prompt caching doesn't
+    rescue this either: the ~275-token shared prefix is under the
+    documented 1,024-token minimum for a prefix to be cache-eligible at
+    all, so there's no free lunch waiting to be claimed there.
+
+    This isn't a one-time guess: app/processing/pipeline.py's
+    ProcessResult.classification_calls_by_provider counts real classify()
+    calls per provider on every run, logged at the end of
+    process_articles(). If that count is consistently running well past
+    the volumes above, the math changes and batching is worth
+    reconsidering - build it then, against real numbers, not now against
+    a guess.
     """
 
     #: Value stored in SystemTag.provider, e.g. "local", "openai:gpt-4o-mini".

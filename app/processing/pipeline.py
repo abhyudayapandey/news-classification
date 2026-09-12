@@ -52,6 +52,15 @@ class ProcessResult:
     entity_mentions_found: int = 0
     entity_sentiments_classified: int = 0
     remaining_unprocessed: int = 0
+    # Keyed by classification_provider.name AFTER each call (see
+    # app/llm/fallback.py's docstring on why that reflects whichever
+    # provider actually served that call, not just the configured one) -
+    # e.g. {"openai:gpt-5-nano": 41, "local": 2} means 2 of this run's 43
+    # classifications fell back to local. This is what turns "should we
+    # batch classification calls" (see ClassificationProvider's own
+    # docstring for why that isn't done today) from a guess into
+    # something checkable against real volume.
+    classification_calls_by_provider: dict[str, int] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
 
 
@@ -146,6 +155,14 @@ def _process_one(
     # SystemTag's own docstring for why these are a separate axis.
     geography = guess_geography(text)
 
+    # See ProcessResult.classification_calls_by_provider's own docstring -
+    # this is the one accounting point for "which provider actually
+    # produced this article's classification", read at the same moment
+    # as the identical value written to SystemTag.provider just below.
+    result.classification_calls_by_provider[classification_provider.name] = (
+        result.classification_calls_by_provider.get(classification_provider.name, 0) + 1
+    )
+
     db.add(
         SystemTag(
             article_id=article.id,
@@ -236,5 +253,8 @@ def process_articles(
             result.errors.append(f"article {article.id}: {exc}")
 
     result.remaining_unprocessed = len(_unprocessed_articles(db, limit=None))
+
+    if result.classification_calls_by_provider:
+        logger.info("Classification calls this run by provider: %s", result.classification_calls_by_provider)
 
     return result
