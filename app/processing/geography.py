@@ -50,6 +50,7 @@ from dataclasses import dataclass
 
 from app.data.constituency_seed import CONSTITUENCIES
 from app.data.district_seed import DISTRICTS
+from app.data.hindi_district_names import HINDI_DISTRICT_NAMES
 from app.models.enums import SeatType
 from app.processing.jurisdiction import DELHI_STATE_MARKERS, INDIAN_STATES
 
@@ -60,6 +61,25 @@ from app.processing.jurisdiction import DELHI_STATE_MARKERS, INDIAN_STATES
 _PLACE = r"(?!(?:The|A|An|This|That|Its|In|On|At|Of)\b)[A-Z][a-zA-Z\.]+(?:\s[A-Z][a-zA-Z\.]+){0,2}"
 
 _DISTRICT_RE = re.compile(rf"\b({_PLACE})\s+[Dd]istrict\b")
+
+# Hindi-language local outlets (e.g. City News Rajasthan) conventionally
+# open an article's body with a dateline-style lead: the district name in
+# Hindi, then a danda ("।") or a period, then the rest of the sentence -
+# e.g. "बूंदी। जिला प्रशासन ने..." ("Bundi. The district administration
+# has..."). This is a distinct convention from the bare-name/explicit-
+# phrase matching below (which is entirely Latin-script and can't match
+# Devanagari text at all), so it gets its own regex and its own resolver,
+# checked first in guess_district() - a deliberate lede naming its own
+# district is at least as trustworthy as an explicit "X district" phrase.
+_HINDI_DISTRICT_BY_NAME: dict[str, str] = dict(HINDI_DISTRICT_NAMES)
+_HINDI_DISTRICT_LEAD_RE = (
+    re.compile(
+        r"^\s*(" + "|".join(re.escape(n) for n in sorted(_HINDI_DISTRICT_BY_NAME, key=len, reverse=True)) + r")\s*[।.]",
+        re.MULTILINE,
+    )
+    if _HINDI_DISTRICT_BY_NAME
+    else None
+)
 
 # Two common orders in real news text: "Baramati Lok Sabha seat" (name
 # first) and "the Lok Sabha seat of Baramati" (name after "of").
@@ -142,6 +162,13 @@ SEAT_COLLISION_BARE_NAME: dict[str, str] = {
 }
 
 
+def _resolve_hindi_district_lead(text: str) -> str | None:
+    if _HINDI_DISTRICT_LEAD_RE is None:
+        return None
+    match = _HINDI_DISTRICT_LEAD_RE.search(text)
+    return _HINDI_DISTRICT_BY_NAME[match.group(1)] if match else None
+
+
 def _resolve_bare_district(text: str) -> str | None:
     if _BARE_DISTRICT_RE is None:
         return None
@@ -221,6 +248,9 @@ def guess_state(text: str) -> str | None:
 
 
 def guess_district(text: str) -> str | None:
+    hindi_lead = _resolve_hindi_district_lead(text)
+    if hindi_lead:
+        return hindi_lead
     match = _DISTRICT_RE.search(text)
     if match:
         return match.group(1).strip()

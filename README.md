@@ -440,15 +440,22 @@ puts a human and a UI in front of them.
 
 - **Local embedding provider**: `app/llm/local_embedding.py`, via
   [fastembed](https://github.com/qdrant/fastembed) running
-  `sentence-transformers/all-MiniLM-L6-v2` (384-dim) through **onnxruntime,
-  not PyTorch**. This is the one deliberate substitution from what was
-  asked: `sentence-transformers`-the-library pulls in PyTorch, which alone
-  needs several hundred MB of RAM even for a small model — tight to
-  nonviable inside Render's free-tier 512MB web service. fastembed runs the
-  *exact same model weights* through a much lighter runtime (onnxruntime is
-  ~66MB installed, no PyTorch at all) — same model, same output vectors,
-  different execution engine. `LOCAL_EMBEDDING_MODEL` in `.env` still names
-  the model in the usual Hugging Face format.
+  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384-dim,
+  ~50 languages including Hindi) through **onnxruntime, not PyTorch**.
+  Originally `all-MiniLM-L6-v2` (English-only); swapped once local Hindi
+  outlets were added to `config/outlets.yaml` and the English-only model
+  was giving their content near-random classification. This is the one
+  deliberate substitution from what was asked: `sentence-transformers`-the-
+  library pulls in PyTorch, which alone needs several hundred MB of RAM
+  even for a small model — tight to nonviable inside Render's free-tier
+  512MB web service. fastembed runs the *exact same model weights* through
+  a much lighter runtime (onnxruntime, no PyTorch at all) — same model,
+  same output vectors, different execution engine. The multilingual
+  model's memory footprint on this exact free tier is **not yet verified**
+  (see that file's own docstring) — if it doesn't fit, fall back to
+  `EMBEDDING_PROVIDER=openai` or `=gemini` rather than shrinking further.
+  `LOCAL_EMBEDDING_MODEL` in `.env` still names the model in the usual
+  Hugging Face format.
 - **Storage**: `articles.embedding` (`pgvector`, fixed at 384 dimensions —
   see `app/constants.py`) plus `articles.embedding_model` recording which
   model produced it. Not indexed (no ivfflat/hnsw) — at POC scale, a full

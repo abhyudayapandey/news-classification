@@ -79,9 +79,10 @@
       </div>
     </div>
     <p class="text-[13px] text-ink-faint mb-5">Click a {{ '' }}<span id="map-view-noun">district</span> to see coverage there, pooled across your tracked subjects.</p>
-    <div class="bg-surface border border-line rounded-2xl p-4 sm:p-6">
+    <div class="bg-surface border border-line rounded-2xl p-4 sm:p-6 relative" style="position: relative;">
       <svg id="map-svg" class="w-full h-auto" style="max-height: 640px;" viewBox="0 0 100 100"></svg>
       <p id="map-empty" class="text-sm text-ink-faint italic text-center py-10" hidden>Map data unavailable for this state.</p>
+      <div id="map-tooltip" class="pointer-events-none px-2.5 py-1 rounded-lg text-[12.5px] font-semibold whitespace-nowrap" style="position: absolute; background: var(--ink); color: var(--paper); transform: translate(-50%, -130%); z-index: 10; pointer-events: none;" hidden></div>
     </div>
   </div>
   {% endif %}
@@ -103,6 +104,8 @@
   var viewNoun = document.getElementById("map-view-noun");
   var svg = document.getElementById("map-svg");
   var emptyMsg = document.getElementById("map-empty");
+  var tooltip = document.getElementById("map-tooltip");
+  var mapBox = svg.parentElement;
   var view = "districts"; // "districts" | "seats"
   var cache = {};
 
@@ -149,11 +152,22 @@
       // a not-yet-clickable area still tells you what it is; a shape with
       // no name at all (a handful of unlabeled island/exclave polygons in
       // the source geometry - see build_maps.py) gets no tooltip since
-      // there's nothing real to show.
+      // there's nothing real to show. A custom tooltip div (not SVG's
+      // native <title>) shows instantly on hover, rather than relying on
+      // the browser's default hover-title delay.
       if (shape.name) {
-        var title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-        title.textContent = shape.name;
-        path.appendChild(title);
+        path.addEventListener("mouseenter", function () {
+          tooltip.textContent = shape.name;
+          tooltip.hidden = false;
+        });
+        path.addEventListener("mousemove", function (e) {
+          var boxRect = mapBox.getBoundingClientRect();
+          tooltip.style.left = (e.clientX - boxRect.left) + "px";
+          tooltip.style.top = (e.clientY - boxRect.top) + "px";
+        });
+        path.addEventListener("mouseleave", function () {
+          tooltip.hidden = true;
+        });
       }
       if (shape.matched) {
         path.classList.add("map-shape-clickable");

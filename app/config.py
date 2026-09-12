@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     # calls once selected - never flip these without meaning to.
     embedding_provider: str = "local"
     llm_provider: str = "local"
-    local_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Multilingual (~50 languages, includes Hindi) as of the swap from
+    # all-MiniLM-L6-v2 - see app/llm/local_embedding.py's docstring for
+    # why, the memory-footprint tradeoff this made, and its unverified
+    # status in this build environment.
+    local_embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str | None = None

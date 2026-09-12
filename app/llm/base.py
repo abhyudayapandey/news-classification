@@ -17,7 +17,7 @@ class EmbeddingProvider(ABC):
     """Turns article text into a vector for story-cluster similarity search."""
 
     #: Value stored in Article.embedding_model / SystemTag.provider for
-    #: whatever this provider produces, e.g. "local:sentence-transformers/all-MiniLM-L6-v2".
+    #: whatever this provider produces, e.g. "local:sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2".
     name: str
 
     @abstractmethod
