@@ -3,13 +3,17 @@ code should get a provider from - never import a concrete provider class
 directly outside this module and app/cli.py's compare-providers utility.
 """
 
+import logging
 from functools import lru_cache
 
 from app.config import settings
 from app.llm.base import ClassificationProvider, EmbeddingProvider, EntitySentimentProvider
+from app.llm.fallback import FallbackClassificationProvider, FallbackEntitySentimentProvider
 from app.llm.local_classification import EmbeddingSimilarityClassifier
 from app.llm.local_embedding import LocalEmbeddingProvider
 from app.llm.local_entity_sentiment import EmbeddingSimilarityEntitySentimentClassifier
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -47,18 +51,45 @@ def get_embedding_provider() -> EmbeddingProvider:
     )
 
 
+def _local_classification_fallback() -> EmbeddingSimilarityClassifier:
+    return EmbeddingSimilarityClassifier(embedding_provider=get_embedding_provider())
+
+
 def get_classification_provider() -> ClassificationProvider:
+    """A paid provider (openai/gemini) is always wrapped with the local
+    classifier as a fallback - see app/llm/fallback.py's own docstring for
+    why, and why this is safe with the mutable `.name` it uses for
+    provenance. Covers both a construction-time failure (e.g. the API key
+    isn't actually set despite LLM_PROVIDER naming a paid provider) and a
+    per-call failure (billing, rate limit, outage, malformed response) -
+    per direct instruction: a paid-provider problem should degrade
+    classification quality, never lose it outright.
+    """
     if settings.llm_provider == "local":
-        return EmbeddingSimilarityClassifier(embedding_provider=get_embedding_provider())
+        return _local_classification_fallback()
     if settings.llm_provider == "openai":
         from app.llm.openai_provider import OpenAIClassificationProvider
 
-        return OpenAIClassificationProvider()
+        try:
+            primary = OpenAIClassificationProvider()
+        except Exception:
+            logger.exception("Could not construct OpenAIClassificationProvider - using the local classifier only")
+            return _local_classification_fallback()
+        return FallbackClassificationProvider(primary, _local_classification_fallback())
     if settings.llm_provider == "gemini":
         from app.llm.gemini_provider import GeminiClassificationProvider
 
-        return GeminiClassificationProvider()
+        try:
+            primary = GeminiClassificationProvider()
+        except Exception:
+            logger.exception("Could not construct GeminiClassificationProvider - using the local classifier only")
+            return _local_classification_fallback()
+        return FallbackClassificationProvider(primary, _local_classification_fallback())
     raise ValueError(f"Unknown LLM_PROVIDER={settings.llm_provider!r}. Expected 'local', 'openai', or 'gemini'.")
+
+
+def _local_entity_sentiment_fallback() -> EmbeddingSimilarityEntitySentimentClassifier:
+    return EmbeddingSimilarityEntitySentimentClassifier(embedding_provider=get_embedding_provider())
 
 
 def get_entity_sentiment_provider() -> EntitySentimentProvider:
@@ -69,15 +100,33 @@ def get_entity_sentiment_provider() -> EntitySentimentProvider:
     together; there's no supported way to run one axis local and the other
     paid today, which is a reasonable POC-scale simplification, not an
     oversight - split it out into its own setting if that's ever needed.
+    This also means YouTube/X entity-sentiment (app/social/pipeline.py,
+    app/social/backfill.py both call this same factory function) gets the
+    same paid-provider-with-local-fallback treatment as article
+    classification below, automatically, with no separate wiring.
+
+    A paid provider is always wrapped with the local classifier as a
+    fallback - see get_classification_provider()'s own docstring
+    (identical reasoning) and app/llm/fallback.py.
     """
     if settings.llm_provider == "local":
-        return EmbeddingSimilarityEntitySentimentClassifier(embedding_provider=get_embedding_provider())
+        return _local_entity_sentiment_fallback()
     if settings.llm_provider == "openai":
         from app.llm.openai_provider import OpenAIEntitySentimentProvider
 
-        return OpenAIEntitySentimentProvider()
+        try:
+            primary = OpenAIEntitySentimentProvider()
+        except Exception:
+            logger.exception("Could not construct OpenAIEntitySentimentProvider - using the local classifier only")
+            return _local_entity_sentiment_fallback()
+        return FallbackEntitySentimentProvider(primary, _local_entity_sentiment_fallback())
     if settings.llm_provider == "gemini":
         from app.llm.gemini_provider import GeminiEntitySentimentProvider
 
-        return GeminiEntitySentimentProvider()
+        try:
+            primary = GeminiEntitySentimentProvider()
+        except Exception:
+            logger.exception("Could not construct GeminiEntitySentimentProvider - using the local classifier only")
+            return _local_entity_sentiment_fallback()
+        return FallbackEntitySentimentProvider(primary, _local_entity_sentiment_fallback())
     raise ValueError(f"Unknown LLM_PROVIDER={settings.llm_provider!r}. Expected 'local', 'openai', or 'gemini'.")

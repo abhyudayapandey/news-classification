@@ -8,56 +8,44 @@ model weights through onnxruntime instead (no PyTorch needed), which
 comfortably fit alongside the rest of this app in a 512MB container for
 the original model.
 
-MODEL CHOICE - swapped from all-MiniLM-L6-v2 (English-only, ~0.09GB
-quantized ONNX weights) to paraphrase-multilingual-MiniLM-L12-v2
-(~50 languages including Hindi, ~0.22GB quantized ONNX weights - both
-sizes per fastembed's own TextEmbedding.list_supported_models(), not
-independently verified). Per direct instruction: local outlets added to
-config/outlets.yaml (e.g. City News Rajasthan) publish in Hindi, and the
-English-only model was giving every Hindi article a near-random pro/anti
-classification (comparing its embedding against the English reference
-phrases in app/llm/local_classification.py) rather than a real one - the
-embedding model itself couldn't represent Hindi text meaningfully, wholly
-separate from the reference phrases' language.
+MODEL CHOICE - HISTORY, READ BEFORE CHANGING THIS AGAIN: this was
+all-MiniLM-L6-v2 (English-only, ~0.09GB quantized ONNX weights), then
+briefly paraphrase-multilingual-MiniLM-L12-v2 (~50 languages including
+Hindi, ~0.22GB), then reverted back to all-MiniLM-L6-v2. The multilingual
+swap was to fix Hindi local outlets (config/outlets.yaml, e.g. City News
+Rajasthan) getting near-random pro/anti classification - the English-only
+model couldn't represent Hindi text meaningfully at all, wholly separate
+from local_classification.py's (also English) reference phrases. That
+swap was then CONFIRMED to exceed Render's 512MB free-tier memory during
+ingestion (real production OOM, not the theoretical risk described
+below when this swap was made) and was reverted here for that reason.
 
-Deliberately kept the reference phrases in local_classification.py
-English rather than translating them per language: "paraphrase-
-multilingual" models are specifically trained (via parallel-sentence
-distillation from an English teacher model) so that semantically
-equivalent sentences in *different* languages land close together in
-the same vector space - that cross-lingual alignment is the entire point
-of this model family, so an English reference phrase should still compare
-sensibly against a Hindi article's embedding. This is the documented
-design intent of the model, not verified against this app's actual
-Hindi content in this build environment (see below).
+Hindi (and any other non-English) classification is now handled at a
+different layer instead: LLM_PROVIDER=openai/gemini (see
+app/llm/factory.py, app/llm/openai_provider.py). A real LLM API call
+sends raw article text directly to the model, with no embedding-model
+dependency at all - so classification quality for any language no longer
+depends on which model this file loads. This file's model only affects
+clustering/dedup quality now (finding the same story across outlets),
+which stays on the smaller English-only model rather than paying its
+memory cost for a problem this file no longer needs to solve. Real,
+smaller, separate residual gap: cross-outlet duplicate-detection for
+Hindi articles is weaker than for English ones (exact wire-copy is
+lexically similar enough to likely still cluster fine; more paraphrased
+duplicates might not) - not fixed by this revert, not blocking either.
 
-Same output dimension as the old model (384 - see app.constants.
-EMBEDDING_DIM), so no migration is needed to resize articles.embedding.
+Same output dimension either way (384 - see app.constants.EMBEDDING_DIM),
+so neither swap needed a migration to resize articles.embedding.
 
-MEMORY - NOT VERIFIED, THIS IS THE OPEN QUESTION THIS SWAP EXISTS TO
-ANSWER: going from ~0.09GB to ~0.22GB of ONNX weights (per fastembed's
-own reported size, not confirmed by actually loading it) may or may not
-still fit Render's 512MB free-tier web service alongside the rest of the
-app - there was headroom at the smaller size, but nobody has measured
-how much. This has to be checked on the actual deployment (or any
-machine with normal internet access - this sandbox's egress proxy blocks
-huggingface.co, so the model weights can't even be downloaded here,
-let alone memory-profiled). If it doesn't fit, per direct instruction
-the fallback is routing to OpenAI/Gemini (already-supported providers,
-see app/llm/factory.py) instead of trying to shrink this further.
-
-Not verified end-to-end in this build environment for the ORIGINAL
-reason either: the model weights download from Hugging Face Hub on
-first use, and this sandbox has no outbound access to huggingface.co
-(confirmed via direct test - a 403 from the network's egress proxy).
-Verify with:
+Not verified end-to-end in this build environment: the model weights
+download from Hugging Face Hub on first use, and this sandbox has no
+outbound access to huggingface.co (confirmed via direct test - a 403
+from the network's egress proxy). Verify with:
 
     python -m app.cli verify-local-models
 
 from a machine with normal internet access (or via the Render deployment)
-before relying on this in production - and specifically watch Render's
-memory graph after deploying this change, since that's the actual
-question at hand.
+before relying on this in production.
 """
 
 import logging

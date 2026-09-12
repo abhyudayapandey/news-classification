@@ -440,22 +440,22 @@ puts a human and a UI in front of them.
 
 - **Local embedding provider**: `app/llm/local_embedding.py`, via
   [fastembed](https://github.com/qdrant/fastembed) running
-  `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384-dim,
-  ~50 languages including Hindi) through **onnxruntime, not PyTorch**.
-  Originally `all-MiniLM-L6-v2` (English-only); swapped once local Hindi
-  outlets were added to `config/outlets.yaml` and the English-only model
-  was giving their content near-random classification. This is the one
-  deliberate substitution from what was asked: `sentence-transformers`-the-
-  library pulls in PyTorch, which alone needs several hundred MB of RAM
-  even for a small model — tight to nonviable inside Render's free-tier
-  512MB web service. fastembed runs the *exact same model weights* through
-  a much lighter runtime (onnxruntime, no PyTorch at all) — same model,
-  same output vectors, different execution engine. The multilingual
-  model's memory footprint on this exact free tier is **not yet verified**
-  (see that file's own docstring) — if it doesn't fit, fall back to
-  `EMBEDDING_PROVIDER=openai` or `=gemini` rather than shrinking further.
-  `LOCAL_EMBEDDING_MODEL` in `.env` still names the model in the usual
-  Hugging Face format.
+  `sentence-transformers/all-MiniLM-L6-v2` (384-dim, English-only) through
+  **onnxruntime, not PyTorch**. This is the one deliberate substitution
+  from what was asked: `sentence-transformers`-the-library pulls in
+  PyTorch, which alone needs several hundred MB of RAM even for a small
+  model — tight to nonviable inside Render's free-tier 512MB web service.
+  fastembed runs the *exact same model weights* through a much lighter
+  runtime (onnxruntime, no PyTorch at all) — same model, same output
+  vectors, different execution engine. Briefly swapped to a multilingual
+  model to fix Hindi classification quality once local Hindi outlets
+  were added to `config/outlets.yaml`, then reverted after that swap was
+  confirmed to exceed the 512MB budget in production - see that file's
+  own docstring for the full history. Non-English classification is
+  handled by `LLM_PROVIDER=openai`/`=gemini` instead now (§9.3 below),
+  which has no embedding-model dependency at all; this file's model only
+  affects clustering/dedup quality today. `LOCAL_EMBEDDING_MODEL` in
+  `.env` still names the model in the usual Hugging Face format.
 - **Storage**: `articles.embedding` (`pgvector`, fixed at 384 dimensions —
   see `app/constants.py`) plus `articles.embedding_model` recording which
   model produced it. Not indexed (no ivfflat/hnsw) — at POC scale, a full
@@ -544,9 +544,29 @@ output via each SDK's native schema support (`chat.completions.parse` /
 `GenerateContentConfig(response_schema=...)`), same prompt and output
 shape for both so results are directly comparable. Neither is called
 unless `LLM_PROVIDER=openai` or `gemini` **and** the matching API key is
-set — with `LLM_PROVIDER=local` (the default), no code path can reach
-either SDK, so there's no risk of an accidental charge. Every call once
-enabled is billed by your account.
+set — `LLM_PROVIDER=local` is still `app/config.py`'s own Python default
+(no code path can reach either SDK unless this is deliberately changed),
+though the actual Render deployment (`render.yaml`) currently sets
+`LLM_PROVIDER=openai` with `OPENAI_MODEL=gpt-5-nano` (cheapest current
+OpenAI model as of that choice, and per OpenAI's own docs explicitly
+positioned for classification tasks - not independently verified against
+OpenAI's own pricing page, which this build environment's egress proxy
+blocks). Every call once enabled is billed by your account.
+
+**Fallback on paid-provider failure**: `app/llm/factory.py` always wraps
+a paid provider with the local embedding-similarity classifier as a
+fallback (`app/llm/fallback.py`) - a billing issue, rate limit, outage,
+or any other OpenAI/Gemini API failure degrades that article/mention to
+the free classifier's (weaker, per the tradeoff above) result rather than
+losing its classification entirely. This covers both a construction-time
+failure (e.g. the API key isn't actually set despite `LLM_PROVIDER`
+naming a paid provider) and a per-call failure. `SystemTag.provider` /
+`ArticleEntity.subject_sentiment_provider` records whichever provider
+actually produced each result, so a fallback happening is visible in the
+data, not silent. This same mechanism covers YouTube/X entity-sentiment
+classification too (`get_entity_sentiment_provider()` shares the same
+`LLM_PROVIDER` setting - see that function's own docstring), with no
+separate wiring needed.
 
 **Comparing providers**: `system_tags` stays strictly one row per article
 (the planning doc's Section 6 specifies `system_tag` as singular, not an

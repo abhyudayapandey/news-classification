@@ -28,19 +28,48 @@ services:
         value: production
       - key: LOG_LEVEL
         value: INFO
+      # EMBEDDING_PROVIDER stays "local" (embedding is only used for
+      # clustering/dedup, and no paid embedding provider is implemented -
+      # see app/llm/factory.py's get_embedding_provider()). The
+      # multilingual local embedding model (paraphrase-multilingual-
+      # MiniLM-L12-v2) confirmed OOM on this free tier's 512MB during
+      # ingestion - reverted to the original English-only all-MiniLM-L6-v2
+      # to fix that. This does mean clustering/dedup quality for non-
+      # English articles is weaker than for English ones (a real, smaller,
+      # separate limitation from classification - exact wire-copy is
+      # lexically similar enough to likely still cluster fine; more
+      # paraphrased duplicates might not). See app/llm/local_embedding.py's
+      # docstring for the full history of this back-and-forth.
       - key: EMBEDDING_PROVIDER
         value: local
-      - key: LLM_PROVIDER
-        value: local
-      # Multilingual (includes Hindi) as of this swap from all-MiniLM-L6-v2
-      # - see app/llm/local_embedding.py's docstring for why, and its
-      # unverified memory footprint on this exact free tier: watch this
-      # service's memory graph after the next deploy, since ~0.09GB to
-      # ~0.22GB of ONNX weights may or may not still fit alongside the
-      # rest of the app in 512MB. If it doesn't, fall back to
-      # EMBEDDING_PROVIDER=openai or =gemini instead of shrinking further.
       - key: LOCAL_EMBEDDING_MODEL
-        value: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+        value: sentence-transformers/all-MiniLM-L6-v2
+      # LLM_PROVIDER (establishment classification AND entity sentiment -
+      # see get_entity_sentiment_provider()'s own docstring on why they
+      # share this one setting, which is also why this same switch covers
+      # YouTube/X sentiment classification, not just article
+      # classification) switched from "local" to "openai": the local
+      # embedding-similarity classifier was giving Hindi-language local
+      # outlets (config/outlets.yaml) near-random classification, since
+      # embedding quality for classification purposes needs the SAME
+      # model that's now reverted to English-only above for memory
+      # reasons. Routing classification through a real LLM API instead
+      # sidesteps that entirely - OpenAIClassificationProvider sends raw
+      # text directly to the API, with no embedding-model dependency at
+      # all, so it isn't affected by whichever (smaller, English-only)
+      # model handles clustering.
+      - key: LLM_PROVIDER
+        value: openai
+      # gpt-5-nano: cheapest OpenAI model as of this choice ($0.05/$0.40
+      # per 1M input/output tokens - not independently verified against
+      # OpenAI's own pricing page, which this build environment's egress
+      # proxy blocks; cross-referenced from third-party pricing
+      # aggregators instead), and per OpenAI's own docs explicitly
+      # positioned for summarization/classification tasks like this one -
+      # re-check openai.com/api/pricing before assuming this is still
+      # optimal, model pricing shifts often.
+      - key: OPENAI_MODEL
+        value: gpt-5-nano
       - key: OPENAI_API_KEY
         sync: false
       - key: GEMINI_API_KEY
