@@ -34,7 +34,13 @@ on:
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Raised from 60: switching classification to OpenAI (gpt-5-nano) added
+    # a real network round-trip per article (plus a second one for articles
+    # with tracked entities), replacing what used to be pure in-process CPU
+    # inference - noticeably slower per article than the local model ever
+    # was. 180 still leaves an hour of buffer before the next 4-hourly
+    # cron fires, so a still-running job can't overlap with the next one.
+    timeout-minutes: 180
     env:
       # Set a repository variable named RENDER_APP_URL (Settings -> Secrets
       # and variables -> Actions -> Variables) if the deployed URL ever
