@@ -828,6 +828,20 @@ turnaround, not the news' own age. Queue *display* order is newest
 original oldest-first wording — but that's independent of the SLA clock,
 which is unaffected by this change either way.
 
+Separately from display order: which unprocessed/unassigned articles get
+*selected* under a per-call `limit` (`_unprocessed_articles()` in
+app/processing/pipeline.py, `_pending_articles()` in
+app/review/assignment.py) was oldest-`published_at`-first until a real
+incident showed why that's wrong for a news product - an RSS-feed
+expansion plus a run of OOM/billing outages built up a backlog of ~1,600
+unprocessed articles, and under oldest-first, every subsequent run spent
+its whole `limit` working through that backlog before touching anything
+newly published - same-day news was invisible in any admin's queue for
+days. Both now select newest-`published_at`-first too, so today's news
+always gets today's processing/assignment budget first; only leftover
+budget works backward into the old backlog, draining it opportunistically
+instead of blocking on it indefinitely.
+
 ### 12.3 Blinding (Section 5)
 
 `app/review/blinding.py` redacts two things to the same
