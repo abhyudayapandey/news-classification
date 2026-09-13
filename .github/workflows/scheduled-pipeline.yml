@@ -7,6 +7,20 @@ name: Scheduled ingestion pipeline
 # are NOT free (minimum ~$1/month per job as of writing) - this keeps the
 # $0 infrastructure constraint intact using GitHub Actions' free minutes.
 #
+# Once daily, not every 4 hours (its original cadence): this repo is
+# private, and GitHub Free only includes 2,000 Actions minutes/month for
+# private repos (public repos are unmetered). Switching classification to
+# OpenAI (gpt-5-nano) made each run take far longer than the old pure-local
+# classifier ever did - a single "Cluster + classify" step has taken 55+
+# minutes - and at 6 runs/day that exhausted the entire month's quota by
+# day 13, blocking every further run until the monthly reset ("recent
+# account payments have failed or your spending limit needs to be
+# increased" is GitHub's error for this, not a real payment problem).
+# Once/day is this project's real long-term cadence - see if it holds up
+# against the 2,000-minute budget before considering shrinking the
+# per-call `limit` values below too, since total monthly minutes track
+# total articles processed, not how many runs they're split across.
+#
 # process/run and queue/assign are both capped per call (network- and
 # CPU-bound work per article on a free-tier instance), so each is looped
 # until its own response says there's nothing left to do, rather than
@@ -17,18 +31,18 @@ name: Scheduled ingestion pipeline
 # several minutes on Render's free-tier CPU running a local embedding
 # model, and process_articles()/assign_pending_articles() both commit
 # per article, so a slow-but-still-working call isn't wasted work even
-# if it does eventually time out - the next call (or the next 4-hour
-# cycle) just continues from wherever the DB actually is.
+# if it does eventually time out - the next call (or tomorrow's cycle)
+# just continues from wherever the DB actually is.
 #
 # Every call also goes through scripts/ci_curl_retry.sh's post_with_retry,
 # which retries specifically on 502/503/504 - the free tier sleeps after
-# ~15 minutes idle, so the app is asleep every time this 4-hour cron
-# fires, and Render's own gateway returns 502 while it wakes rather than
-# waiting for it. See that script for why retrying is safe here.
+# ~15 minutes idle, so the app is asleep every time this daily cron fires,
+# and Render's own gateway returns 502 while it wakes rather than waiting
+# for it. See that script for why retrying is safe here.
 
 on:
   schedule:
-    - cron: "0 */4 * * *" # every 4 hours, UTC
+    - cron: "0 2 * * *" # once daily, 2 AM UTC
   workflow_dispatch: {} # allows a manual "Run workflow" trigger from the Actions tab
 
 jobs:
@@ -38,8 +52,8 @@ jobs:
     # a real network round-trip per article (plus a second one for articles
     # with tracked entities), replacing what used to be pure in-process CPU
     # inference - noticeably slower per article than the local model ever
-    # was. 180 still leaves an hour of buffer before the next 4-hourly
-    # cron fires, so a still-running job can't overlap with the next one.
+    # was. Comfortable margin before tomorrow's cron fires now that this
+    # only runs once a day.
     timeout-minutes: 180
     env:
       # Set a repository variable named RENDER_APP_URL (Settings -> Secrets
