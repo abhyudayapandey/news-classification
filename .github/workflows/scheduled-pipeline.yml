@@ -32,10 +32,14 @@ name: Scheduled ingestion pipeline
 # model, and process_articles()/assign_pending_articles() both commit
 # per article, so a slow-but-still-working call isn't wasted work even
 # if it does eventually time out - the next call (or tomorrow's cycle)
-# just continues from wherever the DB actually is.
+# just continues from wherever the DB actually is. /ingest/run gets 600s
+# too (raised from 300s) - it fetches all configured outlets sequentially,
+# each with up to a 20s worst-case timeout of its own, and that adds up
+# fast as more outlets get added.
 #
 # Every call also goes through scripts/ci_curl_retry.sh's post_with_retry,
-# which retries specifically on 502/503/504 - the free tier sleeps after
+# which retries on 502/503/504 and on curl itself failing outright (see
+# that script for a real incident this caught) - the free tier sleeps after
 # ~15 minutes idle, so the app is asleep every time this daily cron fires,
 # and Render's own gateway returns 502 while it wakes rather than waiting
 # for it. See that script for why retrying is safe here.
@@ -72,7 +76,7 @@ jobs:
       - name: Ingest new articles from RSS feeds
         run: |
           source scripts/ci_curl_retry.sh
-          resp=$(post_with_retry "$APP_URL/ingest/run" 300)
+          resp=$(post_with_retry "$APP_URL/ingest/run" 600)
           body=$(echo "$resp" | sed '$d')
           code=$(echo "$resp" | tail -n1)
           echo "$body"

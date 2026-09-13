@@ -122,8 +122,15 @@ def _needs_manual_review(article: Article) -> bool:
 def _pending_articles(db: Session, limit: int | None) -> list[Article]:
     """Classified, not-yet-assigned, not-a-duplicate, not-already-diverted
     articles - all three tags, apolitical included (Phase 4 update - see
-    this module's docstring) - oldest published first, matching Section
-    5's queue order.
+    this module's docstring).
+
+    Newest-published-first, matching app/processing/pipeline.py's
+    _unprocessed_articles() - a real backlog incident showed oldest-first
+    starving same-day news out of an admin's queue behind an ever-growing
+    old pile under a per-call `limit`. Newest-first guarantees today's
+    classified articles get assigned today; leftover budget then works
+    backward through older unassigned articles, draining that backlog
+    over time instead of blocking on it forever.
     """
     stmt = (
         select(Article)
@@ -133,7 +140,7 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
             Article.duplicate_of_id.is_(None),
             Article.needs_manual_link_review.is_(False),
         )
-        .order_by(Article.published_at.asc())
+        .order_by(Article.published_at.desc())
     )
     if limit is not None:
         stmt = stmt.limit(limit)

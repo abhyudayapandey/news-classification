@@ -68,15 +68,24 @@ def _unprocessed_articles(db: Session, limit: int | None) -> list[Article]:
     """Articles not yet embedded/clustered/classified. Duplicates
     (duplicate_of_id set) are excluded - Phase 1's dedup already marks them
     as non-canonical, so they never enter clustering/classification, per
-    Section 5's "before it reaches clustering/review". Oldest-first so a
-    long backlog processes in publish order, and so a `limit` always
-    finishes the oldest, longest-waiting articles first rather than an
-    arbitrary subset.
+    Section 5's "before it reaches clustering/review".
+
+    Newest-published-first, not oldest-first: this is a news product, and a
+    real backlog (RSS-feed expansion + OOM/billing outages piled up ~1,600
+    unprocessed articles in one incident) demonstrated the failure mode of
+    oldest-first under `limit` - freshly-published articles queue up behind
+    a growing pile of old ones and never reach an admin same-day, no matter
+    how large the backlog gets. Newest-first means today's news always gets
+    today's processing budget first; only once it's caught up does any
+    per-run budget left over start working backward through the old
+    backlog (newest-of-the-old first), which drains it opportunistically
+    without a separate cleanup mechanism - see this same choice mirrored in
+    app/review/assignment.py's _pending_articles().
     """
     stmt = (
         select(Article)
         .where(Article.embedding.is_(None), Article.duplicate_of_id.is_(None))
-        .order_by(Article.published_at.asc())
+        .order_by(Article.published_at.desc())
     )
     if limit is not None:
         stmt = stmt.limit(limit)
