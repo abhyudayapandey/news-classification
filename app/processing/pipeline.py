@@ -64,7 +64,7 @@ class ProcessResult:
     errors: list[str] = field(default_factory=list)
 
 
-def _unprocessed_articles(db: Session, limit: int | None) -> list[Article]:
+def _unprocessed_articles(db: Session, limit: int | None, for_update: bool = False) -> list[Article]:
     """Articles not yet embedded/clustered/classified. Duplicates
     (duplicate_of_id set) are excluded - Phase 1's dedup already marks them
     as non-canonical, so they never enter clustering/classification, per
@@ -81,6 +81,20 @@ def _unprocessed_articles(db: Session, limit: int | None) -> list[Article]:
     backlog (newest-of-the-old first), which drains it opportunistically
     without a separate cleanup mechanism - see this same choice mirrored in
     app/review/assignment.py's _pending_articles().
+
+    `for_update`: locks the returned rows (`FOR UPDATE SKIP LOCKED`) so two
+    concurrent process_articles() calls (a manual /process/run while the
+    scheduled workflow is also mid-run, say) can never both select the same
+    not-yet-committed article - confirmed live: two overlapping calls both
+    picked the same newest article, both tried to INSERT its SystemTag, and
+    the second hit "duplicate key value violates unique constraint
+    system_tags_pkey" - a real UniqueViolation, not a hypothetical one.
+    SKIP LOCKED means the loser just doesn't see that row at all rather
+    than blocking on it, so it picks the next one up instead - exactly the
+    standard Postgres "worker pool pulling from one queue" pattern. Only
+    the actual processing call opts into this; the remaining_unprocessed
+    count at the end of process_articles() stays a plain read (locking
+    every unprocessed row just to count them would be its own new bug).
     """
     stmt = (
         select(Article)
@@ -89,6 +103,8 @@ def _unprocessed_articles(db: Session, limit: int | None) -> list[Article]:
     )
     if limit is not None:
         stmt = stmt.limit(limit)
+    if for_update:
+        stmt = stmt.with_for_update(skip_locked=True)
     return list(db.scalars(stmt))
 
 
@@ -248,7 +264,17 @@ def process_articles(
     entities = list(db.scalars(select(Entity)))
 
     result = ProcessResult()
-    for article in _unprocessed_articles(db, limit):
+    for article in _unprocessed_articles(db, limit, for_update=True):
+        # Captured before the try, not read from `article` inside except:
+        # a failure below leaves the session in SQLAlchemy's "pending
+        # rollback" state, and `article.id` is a PK attribute that this ORM
+        # config re-fetches from the DB rather than serving from memory -
+        # touching it before db.rollback() runs raises PendingRollbackError
+        # right there, which propagates out uncaught and turns "log one bad
+        # article and keep going" into a 500 for the whole request. Confirmed
+        # live: a UniqueViolation on one article's SystemTag insert escalated
+        # into exactly that during logger.exception(..., article.id).
+        article_id = article.id
         try:
             _process_one(
                 db, article, embedding_provider, classification_provider,
@@ -257,9 +283,9 @@ def process_articles(
             db.commit()
             result.processed += 1
         except Exception as exc:  # noqa: BLE001 - one bad article shouldn't kill the run
-            logger.exception("Failed to process article %s", article.id)
             db.rollback()
-            result.errors.append(f"article {article.id}: {exc}")
+            logger.exception("Failed to process article %s", article_id)
+            result.errors.append(f"article {article_id}: {exc}")
 
     result.remaining_unprocessed = len(_unprocessed_articles(db, limit=None))
 

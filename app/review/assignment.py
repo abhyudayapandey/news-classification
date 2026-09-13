@@ -131,6 +131,14 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
     classified articles get assigned today; leftover budget then works
     backward through older unassigned articles, draining that backlog
     over time instead of blocking on it forever.
+
+    FOR UPDATE SKIP LOCKED for the same reason _unprocessed_articles()
+    uses it: two concurrent /queue/assign calls (manual + scheduled
+    overlapping) could otherwise both select the same not-yet-committed
+    article and assign it to two different admins - no unique-constraint
+    crash like the process_articles() case (assigned_admin_id isn't a PK),
+    just a silently wrong double-assignment, which is worse to leave in
+    place precisely because nothing would ever surface it as an error.
     """
     stmt = (
         select(Article)
@@ -141,6 +149,7 @@ def _pending_articles(db: Session, limit: int | None) -> list[Article]:
             Article.needs_manual_link_review.is_(False),
         )
         .order_by(Article.published_at.desc())
+        .with_for_update(skip_locked=True)
     )
     if limit is not None:
         stmt = stmt.limit(limit)
