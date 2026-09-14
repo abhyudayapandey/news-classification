@@ -166,37 +166,41 @@ Delhi (70 MLA + 7 MP) is seeded below too, with one important
 difference from every other entry in this file: "Delhi" is NOT one of
 the 28 states in jurisdiction.py's INDIAN_STATES - guess_state() only
 recognizes it via specific DELHI_STATE_MARKERS phrases ("Delhi
-government", "Delhi assembly", etc.), never from a bare "Delhi"
-mention, since "New Delhi" is also the dateline/seat of the central
-government and a bare mention isn't a reliable state-government signal
-the way every other state's own name is (see jurisdiction.py's own
-comment on this). Practically: a Delhi seat name that collides with
-another state's seat (several do - "Badli" with Haryana's own,
-"Chhatarpur" with Jharkhand's and Madhya Pradesh's, among others) can
-still be disambiguated by the OTHER state's name, but a bare "Delhi"
-mention alone will NOT resolve it - only one of the specific marker
-phrases will. A uniquely-named Delhi seat is unaffected and resolves
-with no state context at all, same as everywhere else in this file.
-This table also embedded reservation tags in the Name column for some
-rows (e.g. "Mangol Puri (SC)"), same as Karnataka's - stripped the same
-way. No within-state collisions.
+government", "Delhi assembly", etc.) or the "Delhi's <a specific Delhi
+seat name>" possessive pattern (see _DELHI_POSSESSIVE_RE in
+geography.py), never from a bare "Delhi" mention, since "New Delhi" is
+also the dateline/seat of the central government and a bare mention
+isn't a reliable state-government signal the way every other state's
+own name is (see jurisdiction.py's own comment on this). Practically: a
+Delhi seat name that collides with another state's seat (several do -
+"Badli" with Haryana's own, "Chhatarpur" with Jharkhand's and Madhya
+Pradesh's, among others) can be disambiguated by the OTHER state's
+name, by one of the marker phrases, or by "Delhi's <that seat name>"
+itself - but a bare "Delhi" mention alone still will NOT resolve it. A
+uniquely-named Delhi seat is unaffected and resolves with no state
+context at all, same as everywhere else in this file. This table also
+embedded reservation tags in the Name column for some rows (e.g.
+"Mangol Puri (SC)"), same as Karnataka's - stripped the same way. No
+within-state collisions.
 
 Jammu and Kashmir (90 elected MLA seats + 5 MP) and Puducherry (30 MLA
 + 1 MP) are seeded below, both Union Territories - same primary-source
-MLA provenance as the rest of this file. Neither is in jurisdiction.py's
-INDIAN_STATES, and unlike Delhi, neither has any DELHI_STATE_MARKERS-
-style fallback at all: guess_state() cannot return "Jammu and Kashmir"
-or "Puducherry" under any phrasing today. This is moot for Puducherry
-(zero of its 30 seats collide with anything else seeded), but real for
-J&K: several of its seat names collide with already-seeded states
-("Ramnagar" is now a 5-way collision, "Ramgarh" a 4-way, plus "Devsar",
-"Vijaypur", "Nagrota", and the MP seat "Srinagar") and J&K's own version
-of each can never be resolved via state-context matching until
-jurisdiction.py is extended - a real, flagged gap, not silently worked
-around. J&K's official constituency numbering runs 1-114; seats 91-114
-are reserved for Pakistan-administered Kashmir and have never been
-contested or held by anyone, so only the 90 actually-elected seats are
-seeded here.
+MLA provenance as the rest of this file. J&K IS now in jurisdiction.py's
+INDIAN_STATES (added alongside this batch, since - unlike Delhi - it
+has no central-government-dateline ambiguity: J&K has its own real
+Assembly and CM, so a bare "Jammu and Kashmir" mention is a normal
+state signal, resolved the same simple way as any other state). It's
+also covered by STATE_ALIASES ("J&K" and "Kashmir" both map to "Jammu
+and Kashmir"), so several of its seat names that collide with
+already-seeded states ("Ramnagar" is now a 5-way collision, "Ramgarh" a
+4-way, plus "Devsar", "Vijaypur", "Nagrota", and the MP seat "Srinagar")
+resolve correctly once any of those names appears. Puducherry has no
+equivalent handling (it's still not in INDIAN_STATES or STATE_ALIASES),
+but that's moot in practice - zero of its 30 seats collide with
+anything else seeded. J&K's official constituency numbering runs
+1-114; seats 91-114 are reserved for Pakistan-administered Kashmir and
+have never been contested or held by anyone, so only the 90
+actually-elected seats are seeded here.
 
 Maharashtra (288 MLA + 48 MP) is seeded below, same primary-source MLA
 provenance as the rest of this file - the last of India's 28
@@ -5045,24 +5049,25 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Karawal Nagar", "Delhi", SeatType.MLA),
 
     # Jammu and Kashmir - Lok Sabha (5) - post-2022-delimitation list
-    # (Anantnag and Rajouri now one seat, "Anantnag-Rajouri"). NOTE:
-    # J&K is a Union Territory, not one of the 28 states in
-    # jurisdiction.py's INDIAN_STATES, and - unlike Delhi - has no
-    # DELHI_STATE_MARKERS-style fallback either: guess_state() cannot
-    # currently return "Jammu and Kashmir" under ANY phrasing. Practical
-    # effect, worse than Delhi's case: a J&K seat name that collides
-    # with an already-seeded state's seat (several do - "Ramnagar" is
-    # now a 5-way collision including J&K's own, "Ramgarh" a 4-way,
-    # plus "Devsar", "Vijaypur", "Nagrota", and the MP seat
-    # "Srinagar") can NEVER be disambiguated as J&K's own seat via bare
-    # state-context matching - only the OTHER state's name resolves
-    # anything, and even explicitly naming "Jammu and Kashmir"/"J&K"
-    # in the text does nothing today. This is a real, pre-existing gap
-    # this batch surfaces rather than silently working around - fixing
-    # it means extending jurisdiction.py, a broader decision (that file
-    # also drives pro/anti-establishment jurisdiction tagging elsewhere,
-    # not just this gazetteer) left for a deliberate follow-up rather
-    # than bundled into a data-seeding pass.
+    # (Anantnag and Rajouri now one seat, "Anantnag-Rajouri"). J&K is a
+    # Union Territory, but IS in jurisdiction.py's INDIAN_STATES (added
+    # alongside this data) since, unlike Delhi, it has no central-
+    # government-dateline ambiguity - it has its own real Assembly and
+    # CM, so a bare "Jammu and Kashmir" mention is a normal state signal.
+    # STATE_ALIASES also maps "J&K" and "Kashmir" to it. This resolves
+    # every collision this batch introduced ("Ramnagar" a 5-way including
+    # J&K's own, "Ramgarh" a 4-way, plus "Devsar", "Vijaypur", "Nagrota",
+    # and the MP seat "Srinagar") once any of those names is mentioned -
+    # see guess_state()'s STATE_ALIASES check and jurisdiction.py's own
+    # comment on why "J&K" is a safe exception to the "full names only,
+    # no abbreviations" rule (it doesn't collide with an ordinary English
+    # word or unrelated acronym the way "UP"/"MP" would). One caveat:
+    # spelling out the full "Jammu and Kashmir" in text self-collides
+    # with J&K's own uniquely-resolvable "Jammu" MP seat name below,
+    # which wins the candidate-matching race before a later name in the
+    # same sentence (e.g. "Ramgarh") is reached - a pre-existing quirk of
+    # how multiple named places in one sentence are handled, not
+    # specific to J&K; "Kashmir" or "J&K" alone don't have this problem.
     ("Baramulla", "Jammu and Kashmir", SeatType.MP),
     ("Srinagar", "Jammu and Kashmir", SeatType.MP),
     ("Anantnag-Rajouri", "Jammu and Kashmir", SeatType.MP),
@@ -5172,10 +5177,11 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     # source table's own per-row "Lok Sabha constituency" column
     # labeling Mahe/Yanam separately is that column reused as a
     # region label (Puducherry has no real districts either), not a
-    # sign of separate real LS seats. Same INDIAN_STATES gap as Jammu
-    # and Kashmir above (Puducherry isn't in that list, and guess_state()
-    # has no fallback for it either) - moot in practice here, since
-    # zero of Puducherry's seats collide with anything else seeded.
+    # sign of separate real LS seats. Puducherry, unlike Jammu and
+    # Kashmir above, is NOT in jurisdiction.py's INDIAN_STATES or
+    # STATE_ALIASES, and guess_state() has no fallback for it either -
+    # moot in practice here, since zero of Puducherry's seats collide
+    # with anything else seeded.
     ("Puducherry", "Puducherry", SeatType.MP),
     # Puducherry - Vidhan Sabha (30) - transcribed directly from a
     # user-supplied Wikipedia constituency table (1 screenshot, all 30
@@ -5215,7 +5221,10 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
 
     # Maharashtra - Lok Sabha (48) - standard/stable list per the 2008
     # delimitation, same lower-risk tier as above. The last of India's
-    # 28 INDIAN_STATES to be seeded in this file.
+    # 28 constitutionally-recognized states to be seeded in this file
+    # (jurisdiction.py's INDIAN_STATES constant also includes Jammu and
+    # Kashmir, a Union Territory, added for the practical reasons noted
+    # above - so it has 29 entries, not 28).
     ("Nandurbar", "Maharashtra", SeatType.MP),
     ("Dhule", "Maharashtra", SeatType.MP),
     ("Jalgaon", "Maharashtra", SeatType.MP),

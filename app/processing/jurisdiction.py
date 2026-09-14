@@ -29,6 +29,7 @@ INDIAN_STATES = [
     "Gujarat",
     "Haryana",
     "Himachal Pradesh",
+    "Jammu and Kashmir",
     "Jharkhand",
     "Karnataka",
     "Kerala",
@@ -63,6 +64,22 @@ DELHI_STATE_MARKERS = [
     "chief minister of delhi",
 ]
 
+# Jammu and Kashmir is in INDIAN_STATES like any other state (its own
+# Assembly and CM make it a normal state-jurisdiction target, unlike
+# Delhi's central-government ambiguity), but it's also commonly referred to
+# by three names that are NOT its own full name. "Kashmir" and "Jammu" are
+# real place names (not abbreviations - they don't fall under the "full
+# names only" rule above), and "J&K" is an abbreviation but, unlike "UP" or
+# "MP", doesn't collide with an ordinary English word or an unrelated
+# political acronym, so the collision risk that rule exists for doesn't
+# apply here. Keys are matched lowercase, same as everything else in this
+# module.
+STATE_ALIASES: dict[str, str] = {
+    "j&k": "Jammu and Kashmir",
+    "kashmir": "Jammu and Kashmir",
+    "jammu": "Jammu and Kashmir",
+}
+
 
 def guess_jurisdiction_keyword(text: str) -> str:
     """Cheap heuristic for the local provider: first state name mentioned
@@ -77,6 +94,10 @@ def guess_jurisdiction_keyword(text: str) -> str:
 
     for state in INDIAN_STATES:
         if state.lower() in lowered:
+            return f"state:{state}"
+
+    for alias, state in STATE_ALIASES.items():
+        if alias in lowered:
             return f"state:{state}"
 
     return "centre"
