@@ -49,6 +49,23 @@ Kannauj, Mohanlalganj, Ghosi, Dhaurahra, Misrikh, Robertsganj,
 Domariyaganj, Pratapgarh) - all handled the same way, via SeatType, no
 new code needed.
 
+Assam's 126 MLA seats and Arunachal Pradesh's 60 MLA seats (plus both
+states' Lok Sabha seats - Assam's 14, Arunachal Pradesh's 2) are the
+highest-confidence tier in this file, above even the cross-referenced-
+search states: seeded directly from a primary source the user supplied -
+an ECI-style official assembly-constituency list (PDF) for Assam, and a
+screenshot of the actual Wikipedia constituency table (with district and
+reservation columns) for Arunachal Pradesh - transcribed, not
+reconstructed from search snippets or memory. This was the fallback this
+module's own docstring anticipated when this build's network egress
+turned out to block Wikipedia/ECI directly (see app/data/district_seed.py's
+docstring for the same block affecting district data): asking for a
+primary source instead of guessing. Both reconcile exactly to their
+official totals with no gaps (Assam's 126 numbered 1-126, Arunachal
+Pradesh's 60 numbered 1-60) and reservation tags (SC/ST) were stripped
+from the transcribed names - irrelevant to text-matching, which is all
+this file is for.
+
 Goa's 40 MLA seats and Himachal Pradesh's 68 MLA seats are seeded below,
 same cross-referenced-search provenance, both reconciling cleanly to
 their official totals (Goa: 20+20 across its two Lok Sabha groupings;
@@ -1599,4 +1616,757 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Kaprada", "Gujarat", SeatType.MLA),
     ("Pardi", "Gujarat", SeatType.MLA),
     ("Valsad", "Gujarat", SeatType.MLA),
+
+    # Assam - Lok Sabha (14) - from the same source PDF as the MLA seats below
+    ("Karimganj", "Assam", SeatType.MP),
+    ("Silchar", "Assam", SeatType.MP),
+    ("Autonomous District", "Assam", SeatType.MP),
+    ("Dhubri", "Assam", SeatType.MP),
+    ("Kokrajhar", "Assam", SeatType.MP),
+    ("Barpeta", "Assam", SeatType.MP),
+    ("Gauhati", "Assam", SeatType.MP),
+    ("Mangaldoi", "Assam", SeatType.MP),
+    ("Tezpur", "Assam", SeatType.MP),
+    ("Nowgong", "Assam", SeatType.MP),
+    ("Kaliabor", "Assam", SeatType.MP),
+    ("Jorhat", "Assam", SeatType.MP),
+    ("Dibrugarh", "Assam", SeatType.MP),
+    ("Lakhimpur", "Assam", SeatType.MP),
+
+    # Assam - Vidhan Sabha / MLA (126) - see module docstring: transcribed
+    # directly from a user-supplied primary source (an official ECI-style
+    # assembly-constituency list, PC-wise breakdown), not search or memory.
+    # Grouped below by Parliamentary constituency, matching how the source
+    # document itself groups them (it doesn't give a district breakdown,
+    # unlike Arunachal Pradesh's block further below) - reconciles exactly
+    # to 126 seats, numbered 1-126 in the source with no gaps. Ten names
+    # here (Silchar, Dhubri, Barpeta, Tezpur, Nowgong, Kaliabor, Jorhat,
+    # Dibrugarh, Lakhimpur, Mangaldoi) are real same-name MP/MLA overlaps
+    # with the Lok Sabha list above - same SeatType-distinguishes-them
+    # handling as every other state's MP/MLA overlaps in this file, no new
+    # code needed (see the module docstring's Uttar Pradesh paragraph).
+    # Karimganj PC (8)
+    ("Ratabari", "Assam", SeatType.MLA),
+    ("Patharkandi", "Assam", SeatType.MLA),
+    ("Karimganj North", "Assam", SeatType.MLA),
+    ("Karimganj South", "Assam", SeatType.MLA),
+    ("Badarpur", "Assam", SeatType.MLA),
+    ("Hailakandi", "Assam", SeatType.MLA),
+    ("Katlichera", "Assam", SeatType.MLA),
+    ("Algapur", "Assam", SeatType.MLA),
+    # Silchar PC (7)
+    ("Silchar", "Assam", SeatType.MLA),
+    ("Sonai", "Assam", SeatType.MLA),
+    ("Dholai", "Assam", SeatType.MLA),
+    ("Udharbond", "Assam", SeatType.MLA),
+    ("Lakhipur", "Assam", SeatType.MLA),
+    ("Barkhola", "Assam", SeatType.MLA),
+    ("Katigora", "Assam", SeatType.MLA),
+    # Autonomous District PC (5)
+    ("Halflong", "Assam", SeatType.MLA),
+    ("Bokajan", "Assam", SeatType.MLA),
+    ("Howraghat", "Assam", SeatType.MLA),
+    ("Diphu", "Assam", SeatType.MLA),
+    ("Baithalangso", "Assam", SeatType.MLA),
+    # Dhubri PC (10)
+    ("Mankachar", "Assam", SeatType.MLA),
+    ("Salmara South", "Assam", SeatType.MLA),
+    ("Dhubri", "Assam", SeatType.MLA),
+    ("Gauripur", "Assam", SeatType.MLA),
+    ("Golakganj", "Assam", SeatType.MLA),
+    ("Bilasipara West", "Assam", SeatType.MLA),
+    ("Bilasipara East", "Assam", SeatType.MLA),
+    ("Goalpara East", "Assam", SeatType.MLA),
+    ("Goalpara West", "Assam", SeatType.MLA),
+    ("Jaleswar", "Assam", SeatType.MLA),
+    # Kokrajhar PC (10)
+    ("Gossaigaon", "Assam", SeatType.MLA),
+    ("Kokrajhar West", "Assam", SeatType.MLA),
+    ("Kokrajhar East", "Assam", SeatType.MLA),
+    ("Sidli", "Assam", SeatType.MLA),
+    ("Bijni", "Assam", SeatType.MLA),
+    ("Sorbhog", "Assam", SeatType.MLA),
+    ("Bhabanipur", "Assam", SeatType.MLA),
+    ("Tamulpur", "Assam", SeatType.MLA),
+    ("Barama", "Assam", SeatType.MLA),
+    ("Chapaguri", "Assam", SeatType.MLA),
+    # Barpeta PC (10)
+    ("Bongaigaon", "Assam", SeatType.MLA),
+    ("Abhayapuri North", "Assam", SeatType.MLA),
+    ("Abhayapuri South", "Assam", SeatType.MLA),
+    ("Patacharkuchi", "Assam", SeatType.MLA),
+    ("Barpeta", "Assam", SeatType.MLA),
+    ("Jania", "Assam", SeatType.MLA),
+    ("Baghbar", "Assam", SeatType.MLA),
+    ("Sarukhetri", "Assam", SeatType.MLA),
+    ("Chenga", "Assam", SeatType.MLA),
+    ("Dharmapur", "Assam", SeatType.MLA),
+    # Gauhati PC (10)
+    ("Dudhnai", "Assam", SeatType.MLA),
+    ("Boko", "Assam", SeatType.MLA),
+    ("Chaygaon", "Assam", SeatType.MLA),
+    ("Palasbari", "Assam", SeatType.MLA),
+    ("Jalukbari", "Assam", SeatType.MLA),
+    ("Dispur", "Assam", SeatType.MLA),
+    ("Gauhati East", "Assam", SeatType.MLA),
+    ("Gauhati West", "Assam", SeatType.MLA),
+    ("Hajo", "Assam", SeatType.MLA),
+    ("Barkhetry", "Assam", SeatType.MLA),
+    # Mangaldoi PC (10)
+    ("Kamalpur", "Assam", SeatType.MLA),
+    ("Rangiya", "Assam", SeatType.MLA),
+    ("Nalbari", "Assam", SeatType.MLA),
+    ("Panery", "Assam", SeatType.MLA),
+    ("Kalaigaon", "Assam", SeatType.MLA),
+    ("Sipajhar", "Assam", SeatType.MLA),
+    ("Mangaldoi", "Assam", SeatType.MLA),
+    ("Dalgaon", "Assam", SeatType.MLA),
+    ("Udalguri", "Assam", SeatType.MLA),
+    ("Majbat", "Assam", SeatType.MLA),
+    # Tezpur PC (9)
+    ("Dhekiajuli", "Assam", SeatType.MLA),
+    ("Barchalla", "Assam", SeatType.MLA),
+    ("Tezpur", "Assam", SeatType.MLA),
+    ("Rangapara", "Assam", SeatType.MLA),
+    ("Sootea", "Assam", SeatType.MLA),
+    ("Biswanath", "Assam", SeatType.MLA),
+    ("Behali", "Assam", SeatType.MLA),
+    ("Gohpur", "Assam", SeatType.MLA),
+    ("Bihpuria", "Assam", SeatType.MLA),
+    # Nowgong PC (9)
+    ("Jagiroad", "Assam", SeatType.MLA),
+    ("Marigaon", "Assam", SeatType.MLA),
+    ("Laharighat", "Assam", SeatType.MLA),
+    ("Raha", "Assam", SeatType.MLA),
+    ("Nowgong", "Assam", SeatType.MLA),
+    ("Barhampur", "Assam", SeatType.MLA),
+    ("Jamunamukh", "Assam", SeatType.MLA),
+    ("Hojai", "Assam", SeatType.MLA),
+    ("Lumding", "Assam", SeatType.MLA),
+    # Kaliabor PC (10)
+    ("Dhing", "Assam", SeatType.MLA),
+    ("Batadroba", "Assam", SeatType.MLA),
+    ("Rupohihat", "Assam", SeatType.MLA),
+    ("Samaguri", "Assam", SeatType.MLA),
+    ("Kaliabor", "Assam", SeatType.MLA),
+    ("Bokakhat", "Assam", SeatType.MLA),
+    ("Sarupathar", "Assam", SeatType.MLA),
+    ("Golaghat", "Assam", SeatType.MLA),
+    ("Khumtai", "Assam", SeatType.MLA),
+    ("Dergaon", "Assam", SeatType.MLA),
+    # Jorhat PC (10)
+    ("Jorhat", "Assam", SeatType.MLA),
+    ("Titabor", "Assam", SeatType.MLA),
+    ("Mariani", "Assam", SeatType.MLA),
+    ("Teok", "Assam", SeatType.MLA),
+    ("Amguri", "Assam", SeatType.MLA),
+    ("Nazira", "Assam", SeatType.MLA),
+    ("Mahmara", "Assam", SeatType.MLA),
+    ("Sonari", "Assam", SeatType.MLA),
+    ("Thowra", "Assam", SeatType.MLA),
+    ("Sibsagar", "Assam", SeatType.MLA),
+    # Dibrugarh PC (9)
+    ("Moran", "Assam", SeatType.MLA),
+    ("Dibrugarh", "Assam", SeatType.MLA),
+    ("Lahowal", "Assam", SeatType.MLA),
+    ("Duliajan", "Assam", SeatType.MLA),
+    ("Tingkhong", "Assam", SeatType.MLA),
+    ("Naharkatia", "Assam", SeatType.MLA),
+    ("Tinsukia", "Assam", SeatType.MLA),
+    ("Digboi", "Assam", SeatType.MLA),
+    ("Margherita", "Assam", SeatType.MLA),
+    # Lakhimpur PC (9)
+    ("Majuli", "Assam", SeatType.MLA),
+    ("Naoboicha", "Assam", SeatType.MLA),
+    ("Lakhimpur", "Assam", SeatType.MLA),
+    ("Dhakuakhana", "Assam", SeatType.MLA),
+    ("Dhemaji", "Assam", SeatType.MLA),
+    ("Jonai", "Assam", SeatType.MLA),
+    ("Chabua", "Assam", SeatType.MLA),
+    ("Doom Dooma", "Assam", SeatType.MLA),
+    ("Sadiya", "Assam", SeatType.MLA),
+
+    # Arunachal Pradesh - Lok Sabha (2)
+    ("Arunachal West", "Arunachal Pradesh", SeatType.MP),
+    ("Arunachal East", "Arunachal Pradesh", SeatType.MP),
+
+    # Arunachal Pradesh - Vidhan Sabha / MLA (60) - see module docstring:
+    # transcribed directly from a user-supplied screenshot of the actual
+    # Wikipedia constituency table (district + reservation columns
+    # visible), not search or memory. Grouped below by district, per that
+    # table. Reconciles exactly to 60 seats, numbered 1-60 with no gaps.
+    # Tawang district (3)
+    ("Lumla", "Arunachal Pradesh", SeatType.MLA),
+    ("Tawang", "Arunachal Pradesh", SeatType.MLA),
+    ("Mukto", "Arunachal Pradesh", SeatType.MLA),
+    # West Kameng district (4)
+    ("Dirang", "Arunachal Pradesh", SeatType.MLA),
+    ("Kalaktang", "Arunachal Pradesh", SeatType.MLA),
+    ("Thrizino-Buragaon", "Arunachal Pradesh", SeatType.MLA),
+    ("Bomdila", "Arunachal Pradesh", SeatType.MLA),
+    # Bichom district (1)
+    ("Bameng", "Arunachal Pradesh", SeatType.MLA),
+    # East Kameng district (2)
+    ("Chayangtajo", "Arunachal Pradesh", SeatType.MLA),
+    ("Seppa East", "Arunachal Pradesh", SeatType.MLA),
+    ("Seppa West", "Arunachal Pradesh", SeatType.MLA),
+    # Pakke-Kessang district (1)
+    ("Pakke-Kessang", "Arunachal Pradesh", SeatType.MLA),
+    # Papum Pare district (3)
+    ("Itanagar", "Arunachal Pradesh", SeatType.MLA),
+    ("Doimukh", "Arunachal Pradesh", SeatType.MLA),
+    ("Sagalee", "Arunachal Pradesh", SeatType.MLA),
+    # Keyi Panyor district (1)
+    ("Yachuli", "Arunachal Pradesh", SeatType.MLA),
+    # Lower Subansiri district (1)
+    ("Ziro-Hapoli", "Arunachal Pradesh", SeatType.MLA),
+    # Kra-Daadi district (2)
+    ("Palin", "Arunachal Pradesh", SeatType.MLA),
+    ("Tali", "Arunachal Pradesh", SeatType.MLA),
+    # Kurung Kumey district (2)
+    ("Nyapin", "Arunachal Pradesh", SeatType.MLA),
+    ("Koloriang", "Arunachal Pradesh", SeatType.MLA),
+    # Upper Subansiri district (3)
+    ("Nacho", "Arunachal Pradesh", SeatType.MLA),
+    ("Taliha", "Arunachal Pradesh", SeatType.MLA),
+    ("Daporijo", "Arunachal Pradesh", SeatType.MLA),
+    # Kamle district (1)
+    ("Raga", "Arunachal Pradesh", SeatType.MLA),
+    # Upper Subansiri district, second seat (1)
+    ("Dumporijo", "Arunachal Pradesh", SeatType.MLA),
+    # West Siang district (3)
+    ("Liromoba", "Arunachal Pradesh", SeatType.MLA),
+    ("Along West", "Arunachal Pradesh", SeatType.MLA),
+    ("Along East", "Arunachal Pradesh", SeatType.MLA),
+    # Lower Siang district (2)
+    ("Likabali", "Arunachal Pradesh", SeatType.MLA),
+    ("Nari-Koyu", "Arunachal Pradesh", SeatType.MLA),
+    # Lepa Rada district (1)
+    ("Basar", "Arunachal Pradesh", SeatType.MLA),
+    # Siang district (2)
+    ("Rumgong", "Arunachal Pradesh", SeatType.MLA),
+    ("Pangin", "Arunachal Pradesh", SeatType.MLA),
+    # Shi Yomi district (1)
+    ("Mechuka", "Arunachal Pradesh", SeatType.MLA),
+    # Upper Siang district (2)
+    ("Tuting-Yingkiong", "Arunachal Pradesh", SeatType.MLA),
+    ("Mariyang-Geku", "Arunachal Pradesh", SeatType.MLA),
+    # East Siang district (3)
+    ("Pasighat West", "Arunachal Pradesh", SeatType.MLA),
+    ("Pasighat East", "Arunachal Pradesh", SeatType.MLA),
+    ("Mebo", "Arunachal Pradesh", SeatType.MLA),
+    # Dibang Valley district (1)
+    ("Anini", "Arunachal Pradesh", SeatType.MLA),
+    # Lower Dibang Valley district (2)
+    ("Dambuk", "Arunachal Pradesh", SeatType.MLA),
+    ("Roing", "Arunachal Pradesh", SeatType.MLA),
+    # Lohit district (1)
+    ("Tezu", "Arunachal Pradesh", SeatType.MLA),
+    # Anjaw district (1)
+    ("Hayuliang", "Arunachal Pradesh", SeatType.MLA),
+    # Namsai district (3)
+    ("Chowkham", "Arunachal Pradesh", SeatType.MLA),
+    ("Namsai", "Arunachal Pradesh", SeatType.MLA),
+    ("Lekang", "Arunachal Pradesh", SeatType.MLA),
+    # Changlang district (5)
+    ("Bordumsa-Diyun", "Arunachal Pradesh", SeatType.MLA),
+    ("Miao", "Arunachal Pradesh", SeatType.MLA),
+    ("Nampong", "Arunachal Pradesh", SeatType.MLA),
+    ("Changlang South", "Arunachal Pradesh", SeatType.MLA),
+    ("Changlang North", "Arunachal Pradesh", SeatType.MLA),
+    # Tirap district (4)
+    ("Namsang", "Arunachal Pradesh", SeatType.MLA),
+    ("Khonsa East", "Arunachal Pradesh", SeatType.MLA),
+    ("Khonsa West", "Arunachal Pradesh", SeatType.MLA),
+    ("Borduria-Bagapani", "Arunachal Pradesh", SeatType.MLA),
+    # Longding district (3)
+    ("Kanubari", "Arunachal Pradesh", SeatType.MLA),
+    ("Longding-Pumao", "Arunachal Pradesh", SeatType.MLA),
+    ("Pongchau-Wakka", "Arunachal Pradesh", SeatType.MLA),
+
+    # Nagaland - Lok Sabha (1) - the whole state is a single LS seat,
+    # literally named "Nagaland" (same for a few other small Northeast
+    # states) - a bare mention of the state name will therefore also
+    # resolve as this constituency, which is factually correct (it really
+    # is naming Nagaland's one Lok Sabha seat), just worth flagging as an
+    # intentional name-equals-state edge case, not a seeding mistake.
+    ("Nagaland", "Nagaland", SeatType.MP),
+
+    # Nagaland - Vidhan Sabha / MLA (60) - see module docstring: transcribed
+    # directly from a user-supplied screenshot of the actual Wikipedia
+    # constituency table (district + reservation columns visible), not
+    # search or memory. Reconciles exactly to 60 seats, numbered 1-60 with
+    # no gaps. District groupings below are reconstructed from the table's
+    # merged cells across two overlapping screenshots - a couple of
+    # district boundaries (Zünheboto and Mon each appear as two
+    # non-contiguous row ranges) required inference from that layout, so
+    # the grouping comments carry slightly more uncertainty than the
+    # names themselves; the 60 names/order are a direct transcription and
+    # don't depend on getting that grouping exactly right (this file
+    # doesn't store district per seat at all).
+    # Dimapur district (3)
+    ("Dimapur I", "Nagaland", SeatType.MLA),
+    ("Dimapur II", "Nagaland", SeatType.MLA),
+    ("Dimapur III", "Nagaland", SeatType.MLA),
+    # Chümoukedima and Niuland (1)
+    ("Ghaspani I", "Nagaland", SeatType.MLA),
+    # Chümoukedima district (1)
+    ("Ghaspani II", "Nagaland", SeatType.MLA),
+    # Peren district (2)
+    ("Tening", "Nagaland", SeatType.MLA),
+    ("Peren", "Nagaland", SeatType.MLA),
+    # Kohima district (4)
+    ("Western Angami", "Nagaland", SeatType.MLA),
+    ("Kohima Town", "Nagaland", SeatType.MLA),
+    ("Northern Angami I", "Nagaland", SeatType.MLA),
+    ("Northern Angami II", "Nagaland", SeatType.MLA),
+    # Tseminyü district (1)
+    ("Tseminyu", "Nagaland", SeatType.MLA),
+    # Zünheboto district, first seat (1)
+    ("Pughoboto", "Nagaland", SeatType.MLA),
+    # Kohima district, second group (2)
+    ("Southern Angami I", "Nagaland", SeatType.MLA),
+    ("Southern Angami II", "Nagaland", SeatType.MLA),
+    # Phek district (5)
+    ("Pfutsero", "Nagaland", SeatType.MLA),
+    ("Chizami", "Nagaland", SeatType.MLA),
+    ("Chozuba", "Nagaland", SeatType.MLA),
+    ("Phek", "Nagaland", SeatType.MLA),
+    ("Meluri", "Nagaland", SeatType.MLA),
+    # Mokokchung district (10)
+    ("Tuli", "Nagaland", SeatType.MLA),
+    ("Arkakong", "Nagaland", SeatType.MLA),
+    ("Impur", "Nagaland", SeatType.MLA),
+    ("Angetyongpang", "Nagaland", SeatType.MLA),
+    ("Mongoya", "Nagaland", SeatType.MLA),
+    ("Aonglenden", "Nagaland", SeatType.MLA),
+    ("Mokokchung Town", "Nagaland", SeatType.MLA),
+    ("Koridang", "Nagaland", SeatType.MLA),
+    ("Jangpetkong", "Nagaland", SeatType.MLA),
+    ("Alongtaki", "Nagaland", SeatType.MLA),
+    # Zünheboto district, second group (6)
+    ("Akuluto", "Nagaland", SeatType.MLA),
+    ("Atoizu", "Nagaland", SeatType.MLA),
+    ("Suruhoto", "Nagaland", SeatType.MLA),
+    ("Aghunato", "Nagaland", SeatType.MLA),
+    ("Zunheboto", "Nagaland", SeatType.MLA),
+    ("Satakha", "Nagaland", SeatType.MLA),
+    # Wokha district (4)
+    ("Tyui", "Nagaland", SeatType.MLA),
+    ("Wokha", "Nagaland", SeatType.MLA),
+    ("Sanis", "Nagaland", SeatType.MLA),
+    ("Bhandari", "Nagaland", SeatType.MLA),
+    # Mon district, first group (8)
+    ("Tizit", "Nagaland", SeatType.MLA),
+    ("Wakching", "Nagaland", SeatType.MLA),
+    ("Tapi", "Nagaland", SeatType.MLA),
+    ("Phomching", "Nagaland", SeatType.MLA),
+    ("Tehok", "Nagaland", SeatType.MLA),
+    ("Mon Town", "Nagaland", SeatType.MLA),
+    ("Aboi", "Nagaland", SeatType.MLA),
+    ("Moka", "Nagaland", SeatType.MLA),
+    # Longleng district (2)
+    ("Tamlu", "Nagaland", SeatType.MLA),
+    ("Longleng", "Nagaland", SeatType.MLA),
+    # Tuensang district (4)
+    ("Noksen", "Nagaland", SeatType.MLA),
+    ("Longkhim Chare", "Nagaland", SeatType.MLA),
+    ("Tuensang Sadar I", "Nagaland", SeatType.MLA),
+    ("Tuensang Sadar II", "Nagaland", SeatType.MLA),
+    # Mon district, second seat (1)
+    ("Tobu", "Nagaland", SeatType.MLA),
+    # Noklak district (2)
+    ("Noklak", "Nagaland", SeatType.MLA),
+    ("Thonoknyu", "Nagaland", SeatType.MLA),
+    # Shamator district (1)
+    ("Shamator-Chessore", "Nagaland", SeatType.MLA),
+    # Kiphire district (2)
+    ("Seyochung-Sitimi", "Nagaland", SeatType.MLA),
+    ("Pungro-Kiphire", "Nagaland", SeatType.MLA),
+
+    # Manipur - Lok Sabha (2)
+    ("Inner Manipur", "Manipur", SeatType.MP),
+    ("Outer Manipur", "Manipur", SeatType.MP),
+
+    # Manipur - Vidhan Sabha / MLA (60) - see module docstring: transcribed
+    # directly from a user-supplied screenshot of the actual Wikipedia
+    # constituency table (district + reservation columns visible), not
+    # search or memory. Reconciles exactly to 60 seats, numbered 1-60 with
+    # no gaps. Imphal East and Imphal West each appear as three
+    # non-contiguous row ranges in the source table - same caveat as
+    # Nagaland's Zünheboto/Mon groups: the grouping comments below are
+    # reconstructed from merged table cells and carry more uncertainty
+    # than the 60 names/order themselves, which this file doesn't need
+    # district groupings to be correct for anyway (district isn't stored
+    # per seat here).
+    # Imphal East district, first group (8)
+    ("Khundrakpam", "Manipur", SeatType.MLA),
+    ("Heingang", "Manipur", SeatType.MLA),
+    ("Khurai", "Manipur", SeatType.MLA),
+    ("Kshetrigao", "Manipur", SeatType.MLA),
+    ("Thongju", "Manipur", SeatType.MLA),
+    ("Keirao", "Manipur", SeatType.MLA),
+    ("Andro", "Manipur", SeatType.MLA),
+    ("Lamlai", "Manipur", SeatType.MLA),
+    # Imphal West district, first group (5)
+    ("Thangmeiband", "Manipur", SeatType.MLA),
+    ("Uripok", "Manipur", SeatType.MLA),
+    ("Sagolband", "Manipur", SeatType.MLA),
+    ("Keishamthong", "Manipur", SeatType.MLA),
+    ("Singjamei", "Manipur", SeatType.MLA),
+    # Imphal East district, second group (2)
+    ("Yaiskul", "Manipur", SeatType.MLA),
+    ("Wangkhei", "Manipur", SeatType.MLA),
+    # Imphal West district, second group (8)
+    ("Sekmai", "Manipur", SeatType.MLA),
+    ("Lamsang", "Manipur", SeatType.MLA),
+    ("Konthoujam", "Manipur", SeatType.MLA),
+    ("Patsoi", "Manipur", SeatType.MLA),
+    ("Langthabal", "Manipur", SeatType.MLA),
+    ("Naoriya Pakhanglakpa", "Manipur", SeatType.MLA),
+    ("Wangoi", "Manipur", SeatType.MLA),
+    ("Mayang Imphal", "Manipur", SeatType.MLA),
+    # Bishnupur district (6)
+    ("Nambol", "Manipur", SeatType.MLA),
+    ("Oinam", "Manipur", SeatType.MLA),
+    ("Bishnupur", "Manipur", SeatType.MLA),
+    ("Moirang", "Manipur", SeatType.MLA),
+    ("Thanga", "Manipur", SeatType.MLA),
+    ("Kumbi", "Manipur", SeatType.MLA),
+    # Thoubal district (10)
+    ("Lilong", "Manipur", SeatType.MLA),
+    ("Thoubal", "Manipur", SeatType.MLA),
+    ("Wangkhem", "Manipur", SeatType.MLA),
+    ("Heirok", "Manipur", SeatType.MLA),
+    ("Wangjing Tentha", "Manipur", SeatType.MLA),
+    ("Khangabok", "Manipur", SeatType.MLA),
+    ("Wabgai", "Manipur", SeatType.MLA),
+    ("Kakching", "Manipur", SeatType.MLA),
+    ("Hiyanglam", "Manipur", SeatType.MLA),
+    ("Sugnu", "Manipur", SeatType.MLA),
+    # Imphal East district, third seat (1)
+    ("Jiribam", "Manipur", SeatType.MLA),
+    # Chandel district (2)
+    ("Chandel", "Manipur", SeatType.MLA),
+    ("Tengnoupal", "Manipur", SeatType.MLA),
+    # Ukhrul district (3)
+    ("Phungyar", "Manipur", SeatType.MLA),
+    ("Ukhrul", "Manipur", SeatType.MLA),
+    ("Chingai", "Manipur", SeatType.MLA),
+    # Senapati district (6)
+    ("Saikul", "Manipur", SeatType.MLA),
+    ("Karong", "Manipur", SeatType.MLA),
+    ("Mao", "Manipur", SeatType.MLA),
+    ("Tadubi", "Manipur", SeatType.MLA),
+    ("Kangpokpi", "Manipur", SeatType.MLA),
+    ("Saitu", "Manipur", SeatType.MLA),
+    # Tamenglong district (3)
+    ("Tamei", "Manipur", SeatType.MLA),
+    ("Tamenglong", "Manipur", SeatType.MLA),
+    ("Nungba", "Manipur", SeatType.MLA),
+    # Churachandpur district (6)
+    ("Tipaimukh", "Manipur", SeatType.MLA),
+    ("Thanlon", "Manipur", SeatType.MLA),
+    ("Henglep", "Manipur", SeatType.MLA),
+    ("Churachandpur", "Manipur", SeatType.MLA),
+    ("Saikot", "Manipur", SeatType.MLA),
+    ("Singhat", "Manipur", SeatType.MLA),
+
+    # Meghalaya - Lok Sabha (2)
+    ("Shillong", "Meghalaya", SeatType.MP),
+    ("Tura", "Meghalaya", SeatType.MP),
+
+    # Meghalaya - Vidhan Sabha / MLA (60) - see module docstring:
+    # transcribed directly from a user-supplied screenshot of the actual
+    # Wikipedia constituency table (district + reservation + LS columns
+    # visible), not search or memory. Reconciles exactly to 60 seats,
+    # numbered 1-60 with no gaps, and the district sub-counts below sum
+    # to exactly the 12 districts already seeded in district_seed.py.
+    # West Garo Hills appears as two non-contiguous row ranges in the
+    # source table (same caveat as other Northeast states' grouping
+    # comments above) - the 60 names/order don't depend on that boundary
+    # being exactly right.
+    # West Jaintia Hills district, first group (4)
+    ("Nartiang", "Meghalaya", SeatType.MLA),
+    ("Jowai", "Meghalaya", SeatType.MLA),
+    ("Raliang", "Meghalaya", SeatType.MLA),
+    ("Mowkaiaw", "Meghalaya", SeatType.MLA),
+    # East Jaintia Hills district (2)
+    ("Sutnga Saipung", "Meghalaya", SeatType.MLA),
+    ("Khliehriat", "Meghalaya", SeatType.MLA),
+    # West Jaintia Hills district, second seat (1)
+    ("Amlarem", "Meghalaya", SeatType.MLA),
+    # Ri Bhoi district (5)
+    ("Mawhati", "Meghalaya", SeatType.MLA),
+    ("Nongpoh", "Meghalaya", SeatType.MLA),
+    ("Jirang", "Meghalaya", SeatType.MLA),
+    ("Umsning", "Meghalaya", SeatType.MLA),
+    ("Umroi", "Meghalaya", SeatType.MLA),
+    # East Khasi Hills district (17)
+    ("Mawrengkneng", "Meghalaya", SeatType.MLA),
+    ("Pynthorumkhrah", "Meghalaya", SeatType.MLA),
+    ("Mawlai", "Meghalaya", SeatType.MLA),
+    ("East Shillong", "Meghalaya", SeatType.MLA),
+    ("North Shillong", "Meghalaya", SeatType.MLA),
+    ("West Shillong", "Meghalaya", SeatType.MLA),
+    ("South Shillong", "Meghalaya", SeatType.MLA),
+    ("Mylliem", "Meghalaya", SeatType.MLA),
+    ("Nongthymmai", "Meghalaya", SeatType.MLA),
+    ("Nongkrem", "Meghalaya", SeatType.MLA),
+    ("Sohiong", "Meghalaya", SeatType.MLA),
+    ("Mawphlang", "Meghalaya", SeatType.MLA),
+    ("Mawsynram", "Meghalaya", SeatType.MLA),
+    ("Shella", "Meghalaya", SeatType.MLA),
+    ("Pynursla", "Meghalaya", SeatType.MLA),
+    ("Sohra", "Meghalaya", SeatType.MLA),
+    ("Mawkynrew", "Meghalaya", SeatType.MLA),
+    # Eastern West Khasi Hills district (2)
+    ("Mairang", "Meghalaya", SeatType.MLA),
+    ("Mawthadraishan", "Meghalaya", SeatType.MLA),
+    # West Khasi Hills district (3)
+    ("Nongstoin", "Meghalaya", SeatType.MLA),
+    ("Rambrai-Jyrngam", "Meghalaya", SeatType.MLA),
+    ("Mawshynrut", "Meghalaya", SeatType.MLA),
+    # South West Khasi Hills district (2)
+    ("Ranikor", "Meghalaya", SeatType.MLA),
+    ("Mawkyrwat", "Meghalaya", SeatType.MLA),
+    # North Garo Hills district (4)
+    ("Kharkutta", "Meghalaya", SeatType.MLA),
+    ("Mendipathar", "Meghalaya", SeatType.MLA),
+    ("Resubelpara", "Meghalaya", SeatType.MLA),
+    ("Bajengdoba", "Meghalaya", SeatType.MLA),
+    # East Garo Hills district (3)
+    ("Songsak", "Meghalaya", SeatType.MLA),
+    ("Rongjeng", "Meghalaya", SeatType.MLA),
+    ("Williamnagar", "Meghalaya", SeatType.MLA),
+    # West Garo Hills district, first group (10)
+    ("Raksamgre", "Meghalaya", SeatType.MLA),
+    ("Tikrikilla", "Meghalaya", SeatType.MLA),
+    ("Phulbari", "Meghalaya", SeatType.MLA),
+    ("Rajabala", "Meghalaya", SeatType.MLA),
+    ("Selsella", "Meghalaya", SeatType.MLA),
+    ("Dadenggre", "Meghalaya", SeatType.MLA),
+    ("North Tura", "Meghalaya", SeatType.MLA),
+    ("South Tura", "Meghalaya", SeatType.MLA),
+    ("Rangsakona", "Meghalaya", SeatType.MLA),
+    ("Ampati", "Meghalaya", SeatType.MLA),
+    # South West Garo Hills district (2)
+    ("Mahendraganj", "Meghalaya", SeatType.MLA),
+    ("Salmanpara", "Meghalaya", SeatType.MLA),
+    # West Garo Hills district, second group (2)
+    ("Gambegre", "Meghalaya", SeatType.MLA),
+    ("Dalu", "Meghalaya", SeatType.MLA),
+    # South Garo Hills district (3)
+    ("Rongara Siju", "Meghalaya", SeatType.MLA),
+    ("Chokpot", "Meghalaya", SeatType.MLA),
+    ("Baghmara", "Meghalaya", SeatType.MLA),
+
+    # Tripura - Lok Sabha (2)
+    ("Tripura West", "Tripura", SeatType.MP),
+    ("Tripura East", "Tripura", SeatType.MP),
+
+    # Tripura - Vidhan Sabha / MLA (60) - see module docstring: transcribed
+    # directly from a user-supplied screenshot of the actual Wikipedia
+    # constituency table (district + reservation + LS columns visible),
+    # not search or memory. Reconciles exactly to 60 seats, numbered 1-60
+    # with no gaps. West Tripura, Sipahijala, and Gomati each appear as
+    # multiple non-contiguous row ranges in the source table - same
+    # caveat as the other Northeast states' grouping comments above,
+    # doesn't affect the 60 names/order themselves. Note: the source
+    # table spells this state's Sipahijala district differently from the
+    # "Sepahijala" spelling used in district_seed.py's Tripura entry -
+    # fixed there to match this verified source, since they're the same
+    # district under two common transliterations.
+    # West Tripura district, first group (10)
+    ("Simna", "Tripura", SeatType.MLA),
+    ("Mohanpur", "Tripura", SeatType.MLA),
+    ("Bamutia", "Tripura", SeatType.MLA),
+    ("Barjala", "Tripura", SeatType.MLA),
+    ("Khayerpur", "Tripura", SeatType.MLA),
+    ("Agartala", "Tripura", SeatType.MLA),
+    ("Ramnagar", "Tripura", SeatType.MLA),
+    ("Town Bordowali", "Tripura", SeatType.MLA),
+    ("Banamalipur", "Tripura", SeatType.MLA),
+    ("Majlishpur", "Tripura", SeatType.MLA),
+    # Sipahijala district, first group (2)
+    ("Mandaibazar", "Tripura", SeatType.MLA),
+    ("Takarjala", "Tripura", SeatType.MLA),
+    # West Tripura district, second group (2)
+    ("Pratapgarh", "Tripura", SeatType.MLA),
+    ("Badharghat", "Tripura", SeatType.MLA),
+    # Sipahijala district, second group (3)
+    ("Kamalasagar", "Tripura", SeatType.MLA),
+    ("Bishalgarh", "Tripura", SeatType.MLA),
+    ("Golaghati", "Tripura", SeatType.MLA),
+    # West Tripura district, third seat (1)
+    ("Suryamaninagar", "Tripura", SeatType.MLA),
+    # Sipahijala district, third group (5)
+    ("Charilam", "Tripura", SeatType.MLA),
+    ("Boxanagar", "Tripura", SeatType.MLA),
+    ("Nalchar", "Tripura", SeatType.MLA),
+    ("Sonamura", "Tripura", SeatType.MLA),
+    ("Dhanpur", "Tripura", SeatType.MLA),
+    # Khowai district (6)
+    ("Ramchandraghat", "Tripura", SeatType.MLA),
+    ("Khowai", "Tripura", SeatType.MLA),
+    ("Asharambari", "Tripura", SeatType.MLA),
+    ("Kalyanpur-Pramodenagar", "Tripura", SeatType.MLA),
+    ("Teliamura", "Tripura", SeatType.MLA),
+    ("Krishnapur", "Tripura", SeatType.MLA),
+    # Gomati district, first group (4)
+    ("Bagma", "Tripura", SeatType.MLA),
+    ("Radhakishorpur", "Tripura", SeatType.MLA),
+    ("Matarbari", "Tripura", SeatType.MLA),
+    ("Kakraban-Salgarh", "Tripura", SeatType.MLA),
+    # South Tripura district (7)
+    ("Rajnagar", "Tripura", SeatType.MLA),
+    ("Belonia", "Tripura", SeatType.MLA),
+    ("Santirbazar", "Tripura", SeatType.MLA),
+    ("Hrishyamukh", "Tripura", SeatType.MLA),
+    ("Jolaibari", "Tripura", SeatType.MLA),
+    ("Manu", "Tripura", SeatType.MLA),
+    ("Sabroom", "Tripura", SeatType.MLA),
+    # Gomati district, second group (3)
+    ("Ampinagar", "Tripura", SeatType.MLA),
+    ("Amarpur", "Tripura", SeatType.MLA),
+    ("Karbook", "Tripura", SeatType.MLA),
+    # Dhalai district (6)
+    ("Raima Valley", "Tripura", SeatType.MLA),
+    ("Kamalpur", "Tripura", SeatType.MLA),
+    ("Surma", "Tripura", SeatType.MLA),
+    ("Ambassa", "Tripura", SeatType.MLA),
+    ("Karamcherra", "Tripura", SeatType.MLA),
+    ("Chawamanu", "Tripura", SeatType.MLA),
+    # Unakoti district (4)
+    ("Pabiachhara", "Tripura", SeatType.MLA),
+    ("Fatikroy", "Tripura", SeatType.MLA),
+    ("Chandipur", "Tripura", SeatType.MLA),
+    ("Kailashahar", "Tripura", SeatType.MLA),
+    # North Tripura district (7)
+    ("Kadamtala-Kurti", "Tripura", SeatType.MLA),
+    ("Bagbassa", "Tripura", SeatType.MLA),
+    ("Dharmanagar", "Tripura", SeatType.MLA),
+    ("Jubarajnagar", "Tripura", SeatType.MLA),
+    ("Panisagar", "Tripura", SeatType.MLA),
+    ("Pencharthal", "Tripura", SeatType.MLA),
+    ("Kanchanpur", "Tripura", SeatType.MLA),
+
+    # Mizoram - Lok Sabha (1) - single at-large seat, literally named
+    # "Mizoram" (same edge case as Nagaland's sole LS seat above).
+    ("Mizoram", "Mizoram", SeatType.MP),
+
+    # Mizoram - Vidhan Sabha / MLA (40) - see module docstring: transcribed
+    # directly from a user-supplied screenshot of the actual Wikipedia
+    # constituency table (district + reservation columns visible), not
+    # search or memory. Reconciles exactly to 40 seats, numbered 1-40 with
+    # no gaps, and the district sub-counts sum to exactly the 11 districts
+    # already seeded in district_seed.py.
+    # Mamit district (3)
+    ("Hachhek", "Mizoram", SeatType.MLA),
+    ("Dampa", "Mizoram", SeatType.MLA),
+    ("Mamit", "Mizoram", SeatType.MLA),
+    # Kolasib district (3)
+    ("Tuirial", "Mizoram", SeatType.MLA),
+    ("Kolasib", "Mizoram", SeatType.MLA),
+    ("Serlui", "Mizoram", SeatType.MLA),
+    # Aizawl district, first seat (1)
+    ("Tuivawl", "Mizoram", SeatType.MLA),
+    # Saitual district, first group (2)
+    ("Chalfilh", "Mizoram", SeatType.MLA),
+    ("Tawi", "Mizoram", SeatType.MLA),
+    # Aizawl district, second group (11)
+    ("Aizawl North 1", "Mizoram", SeatType.MLA),
+    ("Aizawl North 2", "Mizoram", SeatType.MLA),
+    ("Aizawl North 3", "Mizoram", SeatType.MLA),
+    ("Aizawl East 1", "Mizoram", SeatType.MLA),
+    ("Aizawl East 2", "Mizoram", SeatType.MLA),
+    ("Aizawl West 1", "Mizoram", SeatType.MLA),
+    ("Aizawl West 2", "Mizoram", SeatType.MLA),
+    ("Aizawl West 3", "Mizoram", SeatType.MLA),
+    ("Aizawl South 1", "Mizoram", SeatType.MLA),
+    ("Aizawl South 2", "Mizoram", SeatType.MLA),
+    ("Aizawl South 3", "Mizoram", SeatType.MLA),
+    # Saitual district, second seat (1)
+    ("Lengteng", "Mizoram", SeatType.MLA),
+    # Khawzawl district (1)
+    ("Tuichang", "Mizoram", SeatType.MLA),
+    # Champhai district (3)
+    ("Champhai North", "Mizoram", SeatType.MLA),
+    ("Champhai South", "Mizoram", SeatType.MLA),
+    ("East Tuipui", "Mizoram", SeatType.MLA),
+    # Serchhip district (3)
+    ("Serchhip", "Mizoram", SeatType.MLA),
+    ("Tuikum", "Mizoram", SeatType.MLA),
+    ("Hrangturzo", "Mizoram", SeatType.MLA),
+    # Hnahthial district (1)
+    ("South Tuipui", "Mizoram", SeatType.MLA),
+    # Lunglei district (6)
+    ("Lunglei North", "Mizoram", SeatType.MLA),
+    ("Lunglei East", "Mizoram", SeatType.MLA),
+    ("Lunglei West", "Mizoram", SeatType.MLA),
+    ("Lunglei South", "Mizoram", SeatType.MLA),
+    ("Thorang", "Mizoram", SeatType.MLA),
+    ("West Tuipui", "Mizoram", SeatType.MLA),
+    # Lawngtlai district (3)
+    ("Tuichawng", "Mizoram", SeatType.MLA),
+    ("Lawngtlai West", "Mizoram", SeatType.MLA),
+    ("Lawngtlai East", "Mizoram", SeatType.MLA),
+    # Saiha district (2)
+    ("Saiha", "Mizoram", SeatType.MLA),
+    ("Palak", "Mizoram", SeatType.MLA),
+
+    # Sikkim - Lok Sabha (1) - single at-large seat, literally named
+    # "Sikkim" (same edge case as Nagaland's and Mizoram's sole LS seats).
+    ("Sikkim", "Sikkim", SeatType.MP),
+
+    # Sikkim - Vidhan Sabha / MLA (32) - see module docstring: transcribed
+    # directly from a user-supplied screenshot of the actual Wikipedia
+    # constituency table (district + reservation columns visible - Sikkim
+    # uniquely reserves seats for "BL" (Bhutia-Lepcha) and one exclusively
+    # for "Sangha" (Buddhist monasteries), not just SC/ST), not search or
+    # memory. Reconciles exactly to 32 seats, numbered 1-32 with no gaps,
+    # matching the 6 districts already seeded in district_seed.py (the
+    # Sangha seat has no territorial district, listed as "Buddhist
+    # Monasteries" in the source table - not added to district_seed.py,
+    # since it isn't a geographic district at all).
+    # Gyalshing district (4)
+    ("Yoksam-Tashiding", "Sikkim", SeatType.MLA),
+    ("Yangthang", "Sikkim", SeatType.MLA),
+    ("Maneybong-Dentam", "Sikkim", SeatType.MLA),
+    ("Gyalshing-Barnyak", "Sikkim", SeatType.MLA),
+    # Soreng district (4)
+    ("Rinchenpong", "Sikkim", SeatType.MLA),
+    ("Daramdin", "Sikkim", SeatType.MLA),
+    ("Soreng-Chakung", "Sikkim", SeatType.MLA),
+    ("Salghari-Zoom", "Sikkim", SeatType.MLA),
+    # Namchi district (7)
+    ("Barfung", "Sikkim", SeatType.MLA),
+    ("Poklok-Kamrang", "Sikkim", SeatType.MLA),
+    ("Namchi-Singhithang", "Sikkim", SeatType.MLA),
+    ("Melli", "Sikkim", SeatType.MLA),
+    ("Namthang-Rateypani", "Sikkim", SeatType.MLA),
+    ("Temi-Namphing", "Sikkim", SeatType.MLA),
+    ("Rangang-Yangang", "Sikkim", SeatType.MLA),
+    # Gangtok district, first group (2)
+    ("Tumin-Lingee", "Sikkim", SeatType.MLA),
+    ("Khamdong-Singtam", "Sikkim", SeatType.MLA),
+    # Pakyong district (5)
+    ("West Pendam", "Sikkim", SeatType.MLA),
+    ("Rhenock", "Sikkim", SeatType.MLA),
+    ("Chujachen", "Sikkim", SeatType.MLA),
+    ("Gnathang-Machong", "Sikkim", SeatType.MLA),
+    ("Namchaybong", "Sikkim", SeatType.MLA),
+    # Gangtok district, second group (6)
+    ("Shyari", "Sikkim", SeatType.MLA),
+    ("Martam-Rumtek", "Sikkim", SeatType.MLA),
+    ("Upper Tadong", "Sikkim", SeatType.MLA),
+    ("Arithang", "Sikkim", SeatType.MLA),
+    ("Gangtok", "Sikkim", SeatType.MLA),
+    ("Upper Burtuk", "Sikkim", SeatType.MLA),
+    # Mangan district (3)
+    ("Kabi-Lungchok", "Sikkim", SeatType.MLA),
+    ("Djongu", "Sikkim", SeatType.MLA),
+    ("Lachen-Mangan", "Sikkim", SeatType.MLA),
+    # Sangha - reserved for Buddhist monasteries, no territorial district (1)
+    ("Sangha", "Sikkim", SeatType.MLA),
 ]
