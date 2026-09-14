@@ -180,6 +180,23 @@ with no state context at all, same as everywhere else in this file.
 This table also embedded reservation tags in the Name column for some
 rows (e.g. "Mangol Puri (SC)"), same as Karnataka's - stripped the same
 way. No within-state collisions.
+
+Jammu and Kashmir (90 elected MLA seats + 5 MP) and Puducherry (30 MLA
++ 1 MP) are seeded below, both Union Territories - same primary-source
+MLA provenance as the rest of this file. Neither is in jurisdiction.py's
+INDIAN_STATES, and unlike Delhi, neither has any DELHI_STATE_MARKERS-
+style fallback at all: guess_state() cannot return "Jammu and Kashmir"
+or "Puducherry" under any phrasing today. This is moot for Puducherry
+(zero of its 30 seats collide with anything else seeded), but real for
+J&K: several of its seat names collide with already-seeded states
+("Ramnagar" is now a 5-way collision, "Ramgarh" a 4-way, plus "Devsar",
+"Vijaypur", "Nagrota", and the MP seat "Srinagar") and J&K's own version
+of each can never be resolved via state-context matching until
+jurisdiction.py is extended - a real, flagged gap, not silently worked
+around. J&K's official constituency numbering runs 1-114; seats 91-114
+are reserved for Pakistan-administered Kashmir and have never been
+contested or held by anyone, so only the 90 actually-elected seats are
+seeded here.
 """
 
 from app.models.enums import SeatType
@@ -5017,4 +5034,173 @@ CONSTITUENCIES: list[tuple[str, str, SeatType]] = [
     ("Gokalpur", "Delhi", SeatType.MLA),
     ("Mustafabad", "Delhi", SeatType.MLA),
     ("Karawal Nagar", "Delhi", SeatType.MLA),
+
+    # Jammu and Kashmir - Lok Sabha (5) - post-2022-delimitation list
+    # (Anantnag and Rajouri now one seat, "Anantnag-Rajouri"). NOTE:
+    # J&K is a Union Territory, not one of the 28 states in
+    # jurisdiction.py's INDIAN_STATES, and - unlike Delhi - has no
+    # DELHI_STATE_MARKERS-style fallback either: guess_state() cannot
+    # currently return "Jammu and Kashmir" under ANY phrasing. Practical
+    # effect, worse than Delhi's case: a J&K seat name that collides
+    # with an already-seeded state's seat (several do - "Ramnagar" is
+    # now a 5-way collision including J&K's own, "Ramgarh" a 4-way,
+    # plus "Devsar", "Vijaypur", "Nagrota", and the MP seat
+    # "Srinagar") can NEVER be disambiguated as J&K's own seat via bare
+    # state-context matching - only the OTHER state's name resolves
+    # anything, and even explicitly naming "Jammu and Kashmir"/"J&K"
+    # in the text does nothing today. This is a real, pre-existing gap
+    # this batch surfaces rather than silently working around - fixing
+    # it means extending jurisdiction.py, a broader decision (that file
+    # also drives pro/anti-establishment jurisdiction tagging elsewhere,
+    # not just this gazetteer) left for a deliberate follow-up rather
+    # than bundled into a data-seeding pass.
+    ("Baramulla", "Jammu and Kashmir", SeatType.MP),
+    ("Srinagar", "Jammu and Kashmir", SeatType.MP),
+    ("Anantnag-Rajouri", "Jammu and Kashmir", SeatType.MP),
+    ("Udhampur", "Jammu and Kashmir", SeatType.MP),
+    ("Jammu", "Jammu and Kashmir", SeatType.MP),
+    # Jammu and Kashmir - Vidhan Sabha (90 elected seats) - transcribed
+    # directly from a user-supplied Wikipedia constituency table (3
+    # screenshots). The official numbering runs 1-114, but seats 91-114
+    # are reserved for Pakistan-administered Kashmir and have never been
+    # contested or held by anyone - correctly excluded here as not real,
+    # fillable constituencies. Reservation tags stripped. No
+    # within-state collisions. 90 actually-elected seats, 90 rows.
+    ("Karnah", "Jammu and Kashmir", SeatType.MLA),
+    ("Trehgam", "Jammu and Kashmir", SeatType.MLA),
+    ("Kupwara", "Jammu and Kashmir", SeatType.MLA),
+    ("Lolab", "Jammu and Kashmir", SeatType.MLA),
+    ("Handwara", "Jammu and Kashmir", SeatType.MLA),
+    ("Langate", "Jammu and Kashmir", SeatType.MLA),
+    ("Sopore", "Jammu and Kashmir", SeatType.MLA),
+    ("Rafiabad", "Jammu and Kashmir", SeatType.MLA),
+    ("Uri", "Jammu and Kashmir", SeatType.MLA),
+    ("Baramulla", "Jammu and Kashmir", SeatType.MLA),
+    ("Gulmarg", "Jammu and Kashmir", SeatType.MLA),
+    ("Wagoora–Kreeri", "Jammu and Kashmir", SeatType.MLA),
+    ("Pattan", "Jammu and Kashmir", SeatType.MLA),
+    ("Sonawari", "Jammu and Kashmir", SeatType.MLA),
+    ("Bandipora", "Jammu and Kashmir", SeatType.MLA),
+    ("Gurez", "Jammu and Kashmir", SeatType.MLA),
+    ("Kangan", "Jammu and Kashmir", SeatType.MLA),
+    ("Ganderbal", "Jammu and Kashmir", SeatType.MLA),
+    ("Hazratbal", "Jammu and Kashmir", SeatType.MLA),
+    ("Khanyar", "Jammu and Kashmir", SeatType.MLA),
+    ("Habba Kadal", "Jammu and Kashmir", SeatType.MLA),
+    ("Lal Chowk", "Jammu and Kashmir", SeatType.MLA),
+    ("Chanapora", "Jammu and Kashmir", SeatType.MLA),
+    ("Zadibal", "Jammu and Kashmir", SeatType.MLA),
+    ("Eidgah", "Jammu and Kashmir", SeatType.MLA),
+    ("Central Shalteng", "Jammu and Kashmir", SeatType.MLA),
+    ("Budgam", "Jammu and Kashmir", SeatType.MLA),
+    ("Beerwah", "Jammu and Kashmir", SeatType.MLA),
+    ("Khan Sahib", "Jammu and Kashmir", SeatType.MLA),
+    ("Chrar-i-Sharief", "Jammu and Kashmir", SeatType.MLA),
+    ("Chadoora", "Jammu and Kashmir", SeatType.MLA),
+    ("Pampore", "Jammu and Kashmir", SeatType.MLA),
+    ("Tral", "Jammu and Kashmir", SeatType.MLA),
+    ("Pulwama", "Jammu and Kashmir", SeatType.MLA),
+    ("Rajpora", "Jammu and Kashmir", SeatType.MLA),
+    ("Zainapora", "Jammu and Kashmir", SeatType.MLA),
+    ("Shopian", "Jammu and Kashmir", SeatType.MLA),
+    ("D. H. Pora", "Jammu and Kashmir", SeatType.MLA),
+    ("Kulgam", "Jammu and Kashmir", SeatType.MLA),
+    ("Devsar", "Jammu and Kashmir", SeatType.MLA),
+    ("Dooru", "Jammu and Kashmir", SeatType.MLA),
+    ("Kokernag", "Jammu and Kashmir", SeatType.MLA),
+    ("Anantnag West", "Jammu and Kashmir", SeatType.MLA),
+    ("Anantnag", "Jammu and Kashmir", SeatType.MLA),
+    ("Srigufwara–Bijbehara", "Jammu and Kashmir", SeatType.MLA),
+    ("Shangus–Anantnag East", "Jammu and Kashmir", SeatType.MLA),
+    ("Pahalgam", "Jammu and Kashmir", SeatType.MLA),
+    ("Inderwal", "Jammu and Kashmir", SeatType.MLA),
+    ("Kishtwar", "Jammu and Kashmir", SeatType.MLA),
+    ("Padder–Nagseni", "Jammu and Kashmir", SeatType.MLA),
+    ("Bhadarwah", "Jammu and Kashmir", SeatType.MLA),
+    ("Doda", "Jammu and Kashmir", SeatType.MLA),
+    ("Doda West", "Jammu and Kashmir", SeatType.MLA),
+    ("Ramban", "Jammu and Kashmir", SeatType.MLA),
+    ("Banihal", "Jammu and Kashmir", SeatType.MLA),
+    ("Gulabgarh", "Jammu and Kashmir", SeatType.MLA),
+    ("Reasi", "Jammu and Kashmir", SeatType.MLA),
+    ("Shri Mata Vaishno Devi", "Jammu and Kashmir", SeatType.MLA),
+    ("Udhampur West", "Jammu and Kashmir", SeatType.MLA),
+    ("Udhampur East", "Jammu and Kashmir", SeatType.MLA),
+    ("Chenani", "Jammu and Kashmir", SeatType.MLA),
+    ("Ramnagar", "Jammu and Kashmir", SeatType.MLA),
+    ("Bani", "Jammu and Kashmir", SeatType.MLA),
+    ("Billawar", "Jammu and Kashmir", SeatType.MLA),
+    ("Basohli", "Jammu and Kashmir", SeatType.MLA),
+    ("Jasrota", "Jammu and Kashmir", SeatType.MLA),
+    ("Kathua", "Jammu and Kashmir", SeatType.MLA),
+    ("Hiranagar", "Jammu and Kashmir", SeatType.MLA),
+    ("Ramgarh", "Jammu and Kashmir", SeatType.MLA),
+    ("Samba", "Jammu and Kashmir", SeatType.MLA),
+    ("Vijaypur", "Jammu and Kashmir", SeatType.MLA),
+    ("Bishnah", "Jammu and Kashmir", SeatType.MLA),
+    ("Suchetgarh", "Jammu and Kashmir", SeatType.MLA),
+    ("R. S. Pura–Jammu South", "Jammu and Kashmir", SeatType.MLA),
+    ("Bahu", "Jammu and Kashmir", SeatType.MLA),
+    ("Jammu East", "Jammu and Kashmir", SeatType.MLA),
+    ("Nagrota", "Jammu and Kashmir", SeatType.MLA),
+    ("Jammu West", "Jammu and Kashmir", SeatType.MLA),
+    ("Jammu North", "Jammu and Kashmir", SeatType.MLA),
+    ("Marh", "Jammu and Kashmir", SeatType.MLA),
+    ("Akhnoor", "Jammu and Kashmir", SeatType.MLA),
+    ("Chhamb", "Jammu and Kashmir", SeatType.MLA),
+    ("Kalakote–Sunderbani", "Jammu and Kashmir", SeatType.MLA),
+    ("Nowshera", "Jammu and Kashmir", SeatType.MLA),
+    ("Rajouri", "Jammu and Kashmir", SeatType.MLA),
+    ("Budhal", "Jammu and Kashmir", SeatType.MLA),
+    ("Thannamandi", "Jammu and Kashmir", SeatType.MLA),
+    ("Surankote", "Jammu and Kashmir", SeatType.MLA),
+    ("Poonch Haveli", "Jammu and Kashmir", SeatType.MLA),
+    ("Mendhar", "Jammu and Kashmir", SeatType.MLA),
+
+    # Puducherry - Lok Sabha (1) - the whole Union Territory (all four
+    # disjoint regions: Puducherry, Karaikal, Mahe, Yanam) elects a
+    # single MP from one seat, officially named "Puducherry" - the
+    # source table's own per-row "Lok Sabha constituency" column
+    # labeling Mahe/Yanam separately is that column reused as a
+    # region label (Puducherry has no real districts either), not a
+    # sign of separate real LS seats. Same INDIAN_STATES gap as Jammu
+    # and Kashmir above (Puducherry isn't in that list, and guess_state()
+    # has no fallback for it either) - moot in practice here, since
+    # zero of Puducherry's seats collide with anything else seeded.
+    ("Puducherry", "Puducherry", SeatType.MP),
+    # Puducherry - Vidhan Sabha (30) - transcribed directly from a
+    # user-supplied Wikipedia constituency table (1 screenshot, all 30
+    # rows). Reservation tags stripped. No within-state collisions, and
+    # no new cross-state ones against anything already seeded. 30
+    # official seats, 30 rows.
+    ("Mannadipet", "Puducherry", SeatType.MLA),
+    ("Thirubuvanai", "Puducherry", SeatType.MLA),
+    ("Ossudu", "Puducherry", SeatType.MLA),
+    ("Mangalam", "Puducherry", SeatType.MLA),
+    ("Villianur", "Puducherry", SeatType.MLA),
+    ("Ozhukarai", "Puducherry", SeatType.MLA),
+    ("Kadirkamam", "Puducherry", SeatType.MLA),
+    ("Indira Nagar", "Puducherry", SeatType.MLA),
+    ("Thattanchavady", "Puducherry", SeatType.MLA),
+    ("Kamaraj Nagar", "Puducherry", SeatType.MLA),
+    ("Lawspet", "Puducherry", SeatType.MLA),
+    ("Kalapet", "Puducherry", SeatType.MLA),
+    ("Muthialpet", "Puducherry", SeatType.MLA),
+    ("Raj Bhavan", "Puducherry", SeatType.MLA),
+    ("Oupalam", "Puducherry", SeatType.MLA),
+    ("Orleampeth", "Puducherry", SeatType.MLA),
+    ("Nellithope", "Puducherry", SeatType.MLA),
+    ("Mudaliarpet", "Puducherry", SeatType.MLA),
+    ("Ariankuppam", "Puducherry", SeatType.MLA),
+    ("Manavely", "Puducherry", SeatType.MLA),
+    ("Embalam", "Puducherry", SeatType.MLA),
+    ("Nettapakkam", "Puducherry", SeatType.MLA),
+    ("Bahour", "Puducherry", SeatType.MLA),
+    ("Nedungadu", "Puducherry", SeatType.MLA),
+    ("Thirunallar", "Puducherry", SeatType.MLA),
+    ("Karaikal North", "Puducherry", SeatType.MLA),
+    ("Karaikal South", "Puducherry", SeatType.MLA),
+    ("Neravy T. R. Pattinam", "Puducherry", SeatType.MLA),
+    ("Mahe", "Puducherry", SeatType.MLA),
+    ("Yanam", "Puducherry", SeatType.MLA),
 ]
