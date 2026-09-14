@@ -20,16 +20,23 @@ every state's list here as "good faith, needs a verification pass,"
 exactly like config/outlets.yaml's feed URLs needed one - re-run
 verification whenever a state's district count is in the news.
 
-SCOPE: all 28 states in app/processing/jurisdiction.py's INDIAN_STATES are
-now seeded (the original four - Rajasthan, Uttar Pradesh, Punjab,
-Uttarakhand - plus Goa, Himachal Pradesh, and Gujarat from earlier rounds,
-and the remaining 21 added in one pass from training-data knowledge, same
-unverified caveat as above). Delhi is deliberately absent - it's handled
-separately via DELHI_STATE_MARKERS in jurisdiction.py, not through this
-state-list mechanism. The Northeast states (Arunachal Pradesh, Manipur,
-Meghalaya, Mizoram, Nagaland) and West Bengal carry extra uncertainty
-flagged inline where they're seeded below - their district boundaries are
-less stable and less documented in training data than most other states'.
+SCOPE: all 28 constitutionally-recognized states are now seeded (the
+original four - Rajasthan, Uttar Pradesh, Punjab, Uttarakhand - plus Goa,
+Himachal Pradesh, and Gujarat from earlier rounds, and the remaining 21
+added in one pass from training-data knowledge, same unverified caveat as
+above). Delhi is deliberately absent - it's handled separately via
+DELHI_STATE_MARKERS in jurisdiction.py, not through this state-list
+mechanism. Jammu and Kashmir - added to jurisdiction.py's INDIAN_STATES
+later (it's a Union Territory, not one of the 28, but has no central-
+government-dateline ambiguity like Delhi's, so it's recognized as a plain
+state name there and in geography.py's guess_state()) - is likewise absent
+from this file: its constituencies are seeded in constituency_seed.py, but
+its districts never were, a real, smaller gap left as-is since J&K news
+rarely gets referenced by district name the way most states' does. The
+Northeast states (Arunachal Pradesh, Manipur, Meghalaya, Mizoram,
+Nagaland) and West Bengal carry extra uncertainty flagged inline where
+they're seeded below - their district boundaries are less stable and less
+documented in training data than most other states'.
 """
 
 # (district name, state) - state values match app/processing/jurisdiction.py's

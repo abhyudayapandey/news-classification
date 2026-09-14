@@ -52,7 +52,7 @@ from app.data.constituency_seed import CONSTITUENCIES
 from app.data.district_seed import DISTRICTS
 from app.data.hindi_district_names import HINDI_DISTRICT_NAMES
 from app.models.enums import SeatType
-from app.processing.jurisdiction import DELHI_STATE_MARKERS, INDIAN_STATES
+from app.processing.jurisdiction import DELHI_STATE_MARKERS, INDIAN_STATES, STATE_ALIASES
 
 # Excludes common sentence-initial capitalized words that aren't place
 # names (a bare "The"/"In" preceding "Lok Sabha seat" would otherwise be
@@ -113,6 +113,23 @@ _BARE_CONSTITUENCY_RE = (
     else None
 )
 
+# Delhi isn't in INDIAN_STATES (see DELHI_STATE_MARKERS above) because a
+# bare "Delhi" is too often the central government's own dateline, not a
+# Delhi-state signal. But "Delhi's <a specific Delhi seat name>" doesn't
+# have that ambiguity - the central government has no seats named
+# "Kalkaji" or "Badli" - so it's trusted as a state signal for THIS
+# module's purposes even though a bare "Delhi" alone still isn't. Built
+# from the seeded Delhi constituency names, same as the other bare-name
+# lookups above.
+_DELHI_CONSTITUENCY_NAMES = [_name for _name, _state, _ in CONSTITUENCIES if _state == "Delhi"]
+_DELHI_POSSESSIVE_RE = (
+    re.compile(
+        r"\bDelhi'?s\s+(" + "|".join(re.escape(n) for n in sorted(_DELHI_CONSTITUENCY_NAMES, key=len, reverse=True)) + r")\b"
+    )
+    if _DELHI_CONSTITUENCY_NAMES
+    else None
+)
+
 # Some states have real MLA seats that share a name with another seat
 # elsewhere in the same state (see constituency_seed.py's module
 # docstring for the full list and provenance - Gujarat's 5, Rajasthan's
@@ -149,6 +166,13 @@ SEAT_COLLISIONS_BY_STATE: dict[str, dict[str, tuple[str, str]]] = {
     "Bihar": {
         "Kalyanpur": ("Samastipur", "Kalyanpur (Samastipur)"),
         "Pipra": ("Supaul", "Pipra (Supaul)"),
+    },
+    "Andhra Pradesh": {
+        "Gannavaram": ("Krishna", "Gannavaram (Krishna)"),
+        "Prathipadu": ("Guntur", "Prathipadu (Guntur)"),
+    },
+    "Tamil Nadu": {
+        "Tiruppattur": ("Sivaganga", "Tiruppattur (Sivaganga)"),
     },
 }
 
@@ -243,13 +267,24 @@ def guess_state(text: str) -> str | None:
     "state:<name>"/"centre" encoding - this isn't about establishment
     framing, just "what place is this about", so there's no "centre"
     fallback here: no state mentioned means no state guessed, full stop.
+
+    Also checks a geography-only extra signal jurisdiction.py's own
+    function doesn't have: "Delhi's <a specific Delhi seat name>" (see
+    _DELHI_POSSESSIVE_RE above) - unlike a bare "Delhi", this can't be the
+    central government's own dateline use, so it's trusted here even
+    though jurisdiction.py's establishment-framing guess stays stricter.
     """
     lowered = text.lower()
     for marker in DELHI_STATE_MARKERS:
         if marker in lowered:
             return "Delhi"
+    if _DELHI_POSSESSIVE_RE and _DELHI_POSSESSIVE_RE.search(text):
+        return "Delhi"
     for state in INDIAN_STATES:
         if state.lower() in lowered:
+            return state
+    for alias, state in STATE_ALIASES.items():
+        if alias in lowered:
             return state
     return None
 
