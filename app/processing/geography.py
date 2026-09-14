@@ -154,6 +154,9 @@ SEAT_COLLISIONS_BY_STATE: dict[str, dict[str, tuple[str, str]]] = {
         "Gannavaram": ("Krishna", "Gannavaram (Krishna)"),
         "Prathipadu": ("Guntur", "Prathipadu (Guntur)"),
     },
+    "Tamil Nadu": {
+        "Tiruppattur": ("Sivaganga", "Tiruppattur (Sivaganga)"),
+    },
 }
 
 # Reverse of the mapping above (disambiguated name -> its bare/default
