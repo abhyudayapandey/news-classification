@@ -789,7 +789,7 @@ DISTRICTS: list[tuple[str, str]] = [
     ("Gomati", "Tripura"),
     ("Khowai", "Tripura"),
     ("North Tripura", "Tripura"),
-    ("Sepahijala", "Tripura"),
+    ("Sipahijala", "Tripura"),
     ("South Tripura", "Tripura"),
     ("Unakoti", "Tripura"),
     ("West Tripura", "Tripura"),
