@@ -27,15 +27,28 @@ name: Scheduled ingestion pipeline
 # assuming one call drains the whole backlog.
 #
 # Both are also given a generous 600s per-call timeout and a modest
-# per-call limit (20, not 50) - a batch that size can genuinely take
-# several minutes on Render's free-tier CPU running a local embedding
-# model, and process_articles()/assign_pending_articles() both commit
-# per article, so a slow-but-still-working call isn't wasted work even
-# if it does eventually time out - the next call (or tomorrow's cycle)
-# just continues from wherever the DB actually is. /ingest/run gets 600s
-# too (raised from 300s) - it fetches all configured outlets sequentially,
-# each with up to a 20s worst-case timeout of its own, and that adds up
-# fast as more outlets get added.
+# per-call limit (5, lowered from 20 - see below) - a batch that size can
+# genuinely take several minutes on Render's free-tier CPU running a local
+# embedding model, and process_articles()/assign_pending_articles() both
+# commit per article, so a slow-but-still-working call isn't wasted work
+# even if it does eventually time out - the next call (or tomorrow's
+# cycle) just continues from wherever the DB actually is. /ingest/run gets
+# 600s too (raised from 300s) - it fetches all configured outlets
+# sequentially, each with up to a 20s worst-case timeout of its own, and
+# that adds up fast as more outlets get added.
+#
+# per-call limit lowered from 20 to 5, with the loop's own iteration cap
+# raised from 20 to 80 to match (still up to 400 articles/call total per
+# step, same as before - just spread over more, smaller calls): real
+# production OOM restarts (Render's 512MB free-tier cap) recurred even
+# with app/llm/factory.py's model caching already in place, most likely
+# from onnxruntime's per-batch inference memory scaling with how many
+# texts are embedded at once in /process/run, plus trafilatura's per-page
+# DOM parsing during /queue/assign's backfill scrapes multiplying with the
+# batch size too. Lowering the batch size directly caps that peak, with
+# zero cost and no throughput lost (the loop still drains the same total
+# backlog, just via more round trips) - the natural first fix given this
+# project's $0 infra constraint rules out just paying for more RAM.
 #
 # Every call also goes through scripts/ci_curl_retry.sh's post_with_retry,
 # which retries on 502/503/504 and on curl itself failing outright (see
@@ -88,8 +101,8 @@ jobs:
       - name: Cluster + classify unprocessed articles
         run: |
           source scripts/ci_curl_retry.sh
-          for i in $(seq 1 20); do
-            resp=$(post_with_retry "$APP_URL/process/run?limit=20" 600)
+          for i in $(seq 1 80); do
+            resp=$(post_with_retry "$APP_URL/process/run?limit=5" 600)
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"
@@ -107,8 +120,8 @@ jobs:
       - name: Assign classified articles to admin queues (and backfill scrapes)
         run: |
           source scripts/ci_curl_retry.sh
-          for i in $(seq 1 20); do
-            resp=$(post_with_retry "$APP_URL/queue/assign?limit=20" 600)
+          for i in $(seq 1 80); do
+            resp=$(post_with_retry "$APP_URL/queue/assign?limit=5" 600)
             body=$(echo "$resp" | sed '$d')
             code=$(echo "$resp" | tail -n1)
             echo "$body"

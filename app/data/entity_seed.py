@@ -35,6 +35,13 @@ ministers (Banerjee, Stalin, Vijayan) stay seeded too, as real, current,
 relevant political figures now correctly noted as predecessors rather
 than "successor unknown".
 
+**Update, user-confirmed**: Bihar's Nitish Kumar (JD(U)) was removed as CM
+on 15 April 2026 and replaced by Samrat Choudhary (BJP) - unlike the three
+above, this wasn't a change of ruling coalition (NDA stayed in power the
+whole time, see app/data/jurisdiction_seed.py), just of which party within
+it holds the CM's office. Nitish Kumar is kept seeded as "party leader,
+former Bihar CM", same pattern as Banerjee/Stalin/Vijayan above.
+
 **Kerala's ~2-week gap, flagged explicitly per direct instruction**: the
 election result (and so `jurisdiction_seed.py`'s `effective_from` for
 Congress-led UDF) landed May 4, 2026, but Satheesan's swearing-in - and
@@ -126,7 +133,7 @@ ENTITY_SEED: list[tuple[str, EntityType, list[str], dict]] = [
     # confidence the office-holder hasn't changed since my training cutoff)
     ("Yogi Adityanath", EntityType.PERSON, [], {"party": "BJP", "role": "Chief Minister, Uttar Pradesh", "confidence": "high"}),
     ("Devendra Fadnavis", EntityType.PERSON, [], {"party": "BJP", "role": "Chief Minister, Maharashtra", "confidence": "medium"}),
-    ("Nitish Kumar", EntityType.PERSON, [], {"party": "Janata Dal (United)", "role": "Chief Minister, Bihar", "confidence": "high"}),
+    ("Nitish Kumar", EntityType.PERSON, [], {"party": "Janata Dal (United)", "role": "party leader, former Bihar CM", "confidence": "high", "note": "removed as CM on 15 April 2026 - NDA (which JD(U) still leads at the party level) stayed in power, but BJP's Samrat Choudhary took over as CM"}),
     ("Mohan Yadav", EntityType.PERSON, [], {"party": "BJP", "role": "Chief Minister, Madhya Pradesh", "confidence": "medium"}),
     ("Bhajanlal Sharma", EntityType.PERSON, [], {"party": "BJP", "role": "Chief Minister, Rajasthan", "confidence": "medium"}),
     ("Siddaramaiah", EntityType.PERSON, [], {"party": "Indian National Congress", "role": "Chief Minister, Karnataka", "confidence": "high"}),
@@ -146,6 +153,7 @@ ENTITY_SEED: list[tuple[str, EntityType, list[str], dict]] = [
     ("Suvendu Adhikari", EntityType.PERSON, [], {"party": "Bharatiya Janata Party", "role": "Chief Minister, West Bengal", "confidence": "high", "note": "user-confirmed: sworn in 9 May 2026, succeeding Mamata Banerjee/TMC"}),
     ("V. D. Satheesan", EntityType.PERSON, ["Satheesan"], {"party": "Indian National Congress", "role": "Chief Minister, Kerala (Congress-led UDF coalition)", "confidence": "high", "note": "user-confirmed: sworn in 18 May 2026, succeeding Pinarayi Vijayan/LDF - see module docstring for the ~2-week post-election gap and why it doesn't affect any current downstream logic"}),
     ("Naveen Patnaik", EntityType.PERSON, [], {"party": "Biju Janata Dal", "role": "party leader, former Odisha CM", "confidence": "high", "note": "BJD lost the June 2024 Odisha election to BJP"}),
+    ("Samrat Choudhary", EntityType.PERSON, [], {"party": "Bharatiya Janata Party", "role": "Chief Minister, Bihar", "confidence": "high", "note": "user-confirmed: made CM on 15 April 2026, replacing Nitish Kumar - the ruling NDA coalition itself didn't change, only which party leads it (JD(U) to BJP)"}),
 ]
 
 
