@@ -3,15 +3,23 @@
 # block in a workflow is a fresh shell, so a function defined in one step
 # isn't visible in the next; this gets sourced fresh by each step instead.
 #
-# Retries a POST call on 502/503/504 (gateway-level errors) and on curl
-# itself failing outright (timeout, connection reset, DNS failure - no HTTP
-# response at all), not on the endpoint's own 4xx/5xx application errors -
-# those still reach the caller's normal status check and fail the step
-# immediately. Gateway errors happen because Render's free tier puts the
-# app to sleep after ~15 minutes idle, and it's always asleep by the time
-# this workflow's cron fires: Render's own edge gateway returns 502 while
-# the origin is waking up, before the app (and curl's own --max-time) ever
-# gets involved. A bare curl failure showed up for real too: /ingest/run
+# Retries a POST call on 502/503/504/520-524 (gateway/edge-level errors)
+# and on curl itself failing outright (timeout, connection reset, DNS
+# failure - no HTTP response at all), not on the endpoint's own 4xx/5xx
+# application errors - those still reach the caller's normal status check
+# and fail the step immediately. Gateway errors happen because Render's
+# free tier puts the app to sleep after ~15 minutes idle, and it's always
+# asleep by the time this workflow's cron fires: Render's edge (fronted by
+# a Cloudflare-style proxy even on the default *.onrender.com domain)
+# returns one of these while the origin is waking up or briefly
+# unreachable, before the app (and curl's own --max-time) ever gets
+# involved. 520 showed up for real in production (a single /ingest/run
+# attempt, no retry, immediate step failure) despite being the exact same
+# "origin didn't answer properly" class as 502/503/504 - it just wasn't in
+# this list yet. 521-524 are the same Cloudflare-style edge-error family
+# (web server down / connection timed out / origin unreachable / a timeout
+# occurred) and are added preemptively for the same reason, not because
+# one has been observed yet. A bare curl failure showed up for real too: /ingest/run
 # hit curl's --max-time with zero bytes received (13 outlets fetched
 # sequentially, each up to a 20s worst-case timeout, occasionally adding up
 # to more than the caller's max_time) - curl's own %{http_code} write-out
@@ -37,7 +45,7 @@ post_with_retry() {
       # curl itself failed - no HTTP response was ever received, so
       # %{http_code} above is empty/missing. Synthesize "599" (a common
       # non-standard "no real HTTP response" code) so this is treated the
-      # same as a 502/503/504 below, and so that if every retry exhausts
+      # same as the gateway/edge codes below, and so that if every retry exhausts
       # this way, the caller's own `code -ge 400` check still catches it
       # as a real failure instead of silently seeing an empty/malformed
       # response and treating it as success.
@@ -47,10 +55,13 @@ post_with_retry() {
       code=$(echo "$resp" | tail -n1)
     fi
 
-    if [ "$code" != "502" ] && [ "$code" != "503" ] && [ "$code" != "504" ] && [ "$code" != "599" ]; then
-      echo "$resp"
-      return 0
-    fi
+    case "$code" in
+      502 | 503 | 504 | 520 | 521 | 522 | 523 | 524 | 599) ;;
+      *)
+        echo "$resp"
+        return 0
+        ;;
+    esac
     echo "::warning::POST $url got HTTP $code (attempt $attempt/$max_attempts, likely a Render free-tier cold start or a curl-level network timeout) - retrying in ${delay}s" >&2
     sleep "$delay"
     delay=$((delay * 2))
