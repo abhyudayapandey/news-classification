@@ -1,10 +1,11 @@
 """Seed data for the jurisdiction -> ruling party lookup table (Section 4.2).
 
-Last updated 2026-08-28, incorporating the May 4, 2026 assembly election
-results (West Bengal, Tamil Nadu, Kerala, Assam) and confirmation of the
-Nov 2025 Bihar result - all user-verified against current sources, since my
-own training cutoff (January 2026) predates the four 2026 elections and
-falls right before the Bihar one.
+Last updated 2026-09-15, incorporating the May 4, 2026 assembly election
+results (West Bengal, Tamil Nadu, Kerala, Assam), confirmation of the
+Nov 2025 Bihar result, and the 15 April 2026 Bihar NDA leadership change
+(Nitish Kumar replaced as CM by Samrat Choudhary, JD(U)-led NDA becoming
+BJP-led NDA) - all user-verified against current sources, since my own
+training cutoff (January 2026) predates all of these.
 
 Per Section 4.2's date-ranged design, a government change gets a NEW row
 with its own effective_from, and the PRIOR row is closed out with a
@@ -38,9 +39,19 @@ JURISDICTION_SEED: list[tuple[str, str, date, date | None, str]] = [
         "state:Bihar",
         "JD(U)-led NDA",
         date(2024, 1, 28),
+        date(2026, 4, 14),
+        "closed out - NDA retained power in the Nov 2025 election (202/243 seats) with "
+        "Nitish Kumar continuing as CM, but he was then removed as CM on 15 April 2026, "
+        "with BJP taking over leadership of the same ruling NDA coalition",
+    ),
+    (
+        "state:Bihar",
+        "BJP-led NDA",
+        date(2026, 4, 15),
         None,
-        "confirmed: NDA retained power in the Nov 2025 election (202/243 seats), "
-        "Nitish Kumar continued as CM - ruling coalition unchanged, no new row needed",
+        "high confidence - Samrat Choudhary made CM on 15 April 2026, replacing Nitish "
+        "Kumar; same NDA coalition stays in power, only its leading party changes "
+        "from JD(U) to BJP",
     ),
     # West Bengal: TMC's 15-year run ended in the May 2026 election.
     (

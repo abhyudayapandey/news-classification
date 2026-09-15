@@ -620,13 +620,17 @@ outright guesses about elections I couldn't have known the outcome of.
 results**: West Bengal (BJP), Tamil Nadu (TVK — a new party, also added to
 the entity-trigger net's party list since it postdates this model's
 training data too), and Kerala (Congress-led UDF) all changed hands in the
-May 4, 2026 elections; Assam (BJP) and Bihar (JD(U)-led NDA, confirmed
-against the Nov 2025 result) did not. The old rows for the three states
-that changed were closed out with a matching `effective_to` rather than
-edited in place, per Section 4.2's date-ranged design — an article from
-2023 still correctly resolves to the government that was actually in power
-then. `seed_jurisdictions()` is idempotent and handles both inserting new
-rows and closing out existing ones automatically; re-running it is safe.
+May 4, 2026 elections; Assam (BJP) did not. Bihar's NDA coalition also
+retained power in the Nov 2025 result, but on 15 April 2026 its leadership
+changed from JD(U) to BJP — Nitish Kumar was removed as CM and replaced by
+Samrat Choudhary — so `state:Bihar` went from "JD(U)-led NDA" to "BJP-led
+NDA" (a leadership change within the same ruling coalition, not a change
+of which coalition holds power). The old rows for the four states affected
+were closed out with a matching `effective_to` rather than edited in
+place, per Section 4.2's date-ranged design — an article from 2023 still
+correctly resolves to the government that was actually in power then.
+`seed_jurisdictions()` is idempotent and handles both inserting new rows
+and closing out existing ones automatically; re-running it is safe.
 
 Every other row reflects my best knowledge as of the cutoff and is more
 likely still current (most state governments run fixed 5-year terms with
