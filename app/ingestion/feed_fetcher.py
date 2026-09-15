@@ -13,6 +13,7 @@ otherwise.
 import logging
 import socket
 from calendar import timegm
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,11 +28,19 @@ logger = logging.getLogger(__name__)
 def _bounded_socket_timeout(seconds: float):
     """feedparser has no timeout argument of its own - the documented
     workaround is scoping the process-wide socket default around the call.
-    Without this, a feed that accepts the connection but never responds (or
-    responds very slowly) hangs the fetch indefinitely, which - since
-    outlets are ingested sequentially in one request - can stall the whole
-    /ingest/run call. Not thread-safe against concurrent fetches, which is
-    fine for the POC's single-worker, one-request-at-a-time ingestion path.
+
+    IMPORTANT LIMITATION, confirmed as a real production incident (not just
+    theoretical): this bounds each individual blocking socket call (connect,
+    and each recv()) to `seconds`, not the TOTAL wall-clock time for the
+    whole fetch. A feed that trickles data slowly enough to keep every single
+    recv() under this timeout - a few bytes every 15s, say - can still take
+    several minutes in aggregate without ever tripping this limit, and since
+    outlets are ingested sequentially in one /ingest/run request, that one
+    slow feed can stall the whole call well past the caller's own timeout
+    budget. parse_feed_entries_with_deadline() below adds the real, total
+    wall-clock cap this only approximates. Not thread-safe against concurrent
+    fetches, which is fine for the POC's single-worker, one-request-at-a-time
+    ingestion path.
     """
     previous = socket.getdefaulttimeout()
     socket.setdefaulttimeout(seconds)
@@ -102,3 +111,34 @@ def parse_feed_entries(feed_url: str, timeout_seconds: int = 20) -> list[Fetched
         )
 
     return entries
+
+
+def parse_feed_entries_with_deadline(
+    feed_url: str, timeout_seconds: int = 20, wall_clock_deadline_seconds: float = 30
+) -> list[FetchedEntry]:
+    """Same as parse_feed_entries(), but enforces a real total wall-clock cap
+    on top of it - see _bounded_socket_timeout()'s docstring for exactly why
+    that alone isn't enough (a slow-but-steady feed can dodge every
+    individual per-call timeout while still taking minutes overall). Runs
+    the fetch in a throwaway single-use thread so a feed that blows the
+    deadline can be abandoned outright: raises TimeoutError immediately
+    rather than making the caller (run_ingestion(), processing outlets
+    sequentially in one /ingest/run request) wait on it. The abandoned
+    thread is not forcibly killed - Python can't do that - it just keeps
+    running in the background until it finishes or errors on its own and is
+    then discarded; parse_feed_entries() touches no DB session or other
+    shared mutable state, so an orphaned one is harmless, not a leak of
+    anything but a little memory/CPU until it naturally ends.
+    """
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(parse_feed_entries, feed_url, timeout_seconds)
+        try:
+            return future.result(timeout=wall_clock_deadline_seconds)
+        except FutureTimeoutError as exc:
+            raise TimeoutError(
+                f"Fetching {feed_url} exceeded the {wall_clock_deadline_seconds}s wall-clock deadline "
+                "(the feed was still trickling data slowly enough to dodge the per-call socket timeout)"
+            ) from exc
+    finally:
+        executor.shutdown(wait=False)

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.ingestion.dedup import compute_content_hash, find_canonical_duplicate
-from app.ingestion.feed_fetcher import parse_feed_entries
+from app.ingestion.feed_fetcher import parse_feed_entries_with_deadline
 from app.ingestion.outlets_config import sync_outlets
 from app.models import Article, Outlet
 
@@ -30,8 +30,14 @@ def _ingest_outlet(db: Session, outlet: Outlet) -> OutletIngestResult:
     result = OutletIngestResult(outlet_name=outlet.name)
 
     try:
-        entries = parse_feed_entries(outlet.rss_feed_url)
+        entries = parse_feed_entries_with_deadline(outlet.rss_feed_url)
     except Exception as exc:  # noqa: BLE001 - one bad feed shouldn't kill the run
+        # Includes a TimeoutError from the wall-clock deadline (see
+        # feed_fetcher.py's docstring) - a real production incident where a
+        # single slow-dripping feed stalled the whole /ingest/run call past
+        # its 600s caller-side timeout, with zero outlets after it ever
+        # getting a chance to run. Treated the same as any other per-outlet
+        # fetch failure: log it, skip this outlet, keep going.
         logger.exception("Failed to fetch/parse feed for outlet %s", outlet.name)
         result.error = str(exc)
         return result
